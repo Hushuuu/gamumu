@@ -4,7 +4,7 @@ import { ROOM_CAPACITY, type ClientMessage } from '../shared/protocol'
 import { useGameRoom } from './composables/useGameRoom'
 import { createRoomRequest, joinRoomRequest } from './services/api'
 import { loadRoomToken, removeRoomToken, saveRoomToken } from './services/session'
-
+//test
 const {
   snapshot,
   connectionStatus,
