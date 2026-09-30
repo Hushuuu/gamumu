@@ -14,6 +14,7 @@ export function useGameRoom() {
   const errorMessage = ref('')
   const guessFeedback = ref('')
   const playerId = ref('')
+  const removedFromRoom = ref(false)
 
   let socket: WebSocket | null = null
   let reconnectTimer: number | undefined
@@ -45,6 +46,7 @@ export function useGameRoom() {
     snapshot.value = null
     playerId.value = ''
     connectionStatus.value = 'offline'
+    removedFromRoom.value = false
     activeCode = ''
     activeToken = ''
   }
@@ -130,9 +132,15 @@ export function useGameRoom() {
             current.close(4401, 'Authentication failed')
             return
           case 'state': {
-            const previousRound = snapshot.value?.game?.round
+            const previousGame = snapshot.value?.game
+            const previousGameId = previousGame?.gameId
+            const previousRound = previousGame?.gameId === 'word-guess' ? previousGame.round : null
+            const nextGameId = payload.state.game?.gameId
+            const nextRound = payload.state.game?.gameId === 'word-guess'
+              ? payload.state.game.round
+              : null
             snapshot.value = payload.state
-            if (previousRound !== payload.state.game?.round) {
+            if (previousGameId !== nextGameId || previousRound !== nextRound) {
               guessFeedback.value = ''
             }
             return
@@ -142,6 +150,13 @@ export function useGameRoom() {
             return
           case 'action_error':
             errorMessage.value = payload.message
+            return
+          case 'kicked':
+            errorMessage.value = payload.message
+            removedFromRoom.value = true
+            snapshot.value = null
+            stopReconnecting = true
+            current.close(4403, 'Removed by host')
             return
           case 'left_room':
             pendingLeave?.()
@@ -171,6 +186,17 @@ export function useGameRoom() {
             errorMessage.value = event.code === 4404
               ? '找不到這個房間，房間可能已經結束。'
               : '房間連線憑證無效，請重新加入。'
+          }
+          return
+        }
+
+        if (event.code === 4403) {
+          stopReconnecting = true
+          removedFromRoom.value = true
+          snapshot.value = null
+          connectionStatus.value = 'offline'
+          if (!errorMessage.value) {
+            errorMessage.value = '房主已將你移出房間。'
           }
           return
         }
@@ -211,6 +237,7 @@ export function useGameRoom() {
     errorMessage,
     guessFeedback,
     playerId,
+    removedFromRoom,
     connect,
     disconnect,
     send,

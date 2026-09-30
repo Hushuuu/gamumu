@@ -1,9 +1,17 @@
 import { DurableObject } from 'cloudflare:workers'
-import { isRecord, ROOM_CAPACITY, type RoomSnapshot, type ServerMessage } from '../../../shared/protocol'
+import { AVATARS, isAvatarId, type AvatarId } from '../../../shared/avatars'
+import {
+  isGameId,
+  isRecord,
+  ROOM_CAPACITY,
+  type RoomSnapshot,
+  type ServerMessage,
+} from '../../../shared/protocol'
+import { finishBlankGame, startBlankGame } from '../games/blank'
 import { advanceWordGuess, revealWordGuess, startWordGuess, submitWordGuess } from '../games/word-guess'
 import type { Env } from '../env'
 import { hashSessionToken } from '../security'
-import type { StoredPlayer, StoredRoom } from './types'
+import type { LegacyStoredRoom, StoredPlayer, StoredRoom } from './types'
 
 const ROOM_STORAGE_KEY = 'room'
 const ROOM_IDLE_TTL_MS = 6 * 60 * 60 * 1000
@@ -22,7 +30,21 @@ export class GameRoom extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
     this.initialized = this.ctx.blockConcurrencyWhile(async () => {
-      this.room = (await this.ctx.storage.get<StoredRoom>(ROOM_STORAGE_KEY)) ?? null
+      const storedRoom = await this.ctx.storage.get<StoredRoom | LegacyStoredRoom>(ROOM_STORAGE_KEY)
+      if (!storedRoom) {
+        return
+      }
+
+      if ('schemaVersion' in storedRoom) {
+        if (storedRoom.schemaVersion !== 2) {
+          throw new Error(`Unsupported room storage schema: ${storedRoom.schemaVersion}`)
+        }
+        this.room = storedRoom
+        return
+      }
+
+      this.room = migrateLegacyRoom(storedRoom)
+      await this.ctx.storage.put(ROOM_STORAGE_KEY, this.room)
     })
   }
 
@@ -103,11 +125,29 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     switch (payload.type) {
+      case 'set_ready':
+        await this.handleSetReady(ws, player, payload.ready)
+        return
+      case 'select_avatar':
+        await this.handleSelectAvatar(ws, player, payload.avatarId)
+        return
+      case 'select_game':
+        await this.handleSelectGame(ws, player, payload.gameId)
+        return
+      case 'kick_player':
+        await this.handleKickPlayer(ws, player, payload.playerId)
+        return
       case 'start_game':
         await this.handleStartGame(ws, player)
         return
       case 'submit_answer':
         await this.handleSubmitAnswer(ws, player, payload.answer)
+        return
+      case 'finish_game':
+        await this.handleFinishGame(ws, player)
+        return
+      case 'prepare_next_game':
+        await this.handlePrepareNextGame(ws, player)
         return
       case 'leave_room':
         await this.handleLeaveRoom(ws, player)
@@ -151,7 +191,7 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     const game = this.room.game
-    if (this.room.status === 'playing' && game && game.roundEndsAt <= now) {
+    if (this.room.status === 'playing' && game?.gameId === 'word-guess' && game.roundEndsAt <= now) {
       if (game.phase === 'guessing') {
         revealWordGuess(this.room, now)
       } else {
@@ -184,9 +224,11 @@ export class GameRoom extends DurableObject<Env> {
 
     const now = Date.now()
     this.room = {
+      schemaVersion: 2,
       code,
       hostId: player.id,
       status: 'waiting',
+      selectedGameId: 'word-guess',
       players: [{ ...player, name }],
       game: null,
       createdAt: now,
@@ -222,6 +264,7 @@ export class GameRoom extends DurableObject<Env> {
 
     this.room.players.push({ ...player, name })
     await this.persist()
+    this.broadcastState()
     return jsonResponse({ ok: true }, 201)
   }
 
@@ -238,6 +281,113 @@ export class GameRoom extends DurableObject<Env> {
     this.send(server, { type: 'auth_required' })
 
     return new Response(null, { status: 101, webSocket: client })
+  }
+
+  private async handleSetReady(ws: WebSocket, player: StoredPlayer, value: unknown): Promise<void> {
+    if (typeof value !== 'boolean') {
+      this.send(ws, { type: 'action_error', code: 'INVALID_READY_STATE', message: '準備狀態不正確。' })
+      return
+    }
+
+    if (!this.room || this.room.status !== 'waiting') {
+      this.send(ws, { type: 'action_error', code: 'ROOM_NOT_WAITING', message: '目前無法更改準備狀態。' })
+      return
+    }
+
+    if (player.ready === value) {
+      return
+    }
+
+    player.ready = value
+    await this.persist()
+    this.broadcastState()
+  }
+
+  private async handleSelectAvatar(ws: WebSocket, player: StoredPlayer, value: unknown): Promise<void> {
+    if (!isAvatarId(value)) {
+      this.send(ws, { type: 'action_error', code: 'INVALID_AVATAR', message: '找不到這個頭像。' })
+      return
+    }
+
+    if (player.avatarId === value) {
+      return
+    }
+
+    player.avatarId = value
+    await this.persist()
+    this.broadcastState()
+  }
+
+  private async handleSelectGame(ws: WebSocket, player: StoredPlayer, value: unknown): Promise<void> {
+    if (!isGameId(value)) {
+      this.send(ws, { type: 'action_error', code: 'INVALID_GAME', message: '找不到這個遊戲。' })
+      return
+    }
+
+    if (!this.room || this.room.status !== 'waiting') {
+      this.send(ws, { type: 'action_error', code: 'ROOM_NOT_WAITING', message: '遊戲開始後不能更換遊戲。' })
+      return
+    }
+
+    if (player.id !== this.room.hostId) {
+      this.send(ws, { type: 'action_error', code: 'HOST_ONLY', message: '只有房主可以選擇遊戲。' })
+      return
+    }
+
+    if (this.room.selectedGameId === value) {
+      return
+    }
+
+    this.room.selectedGameId = value
+    for (const roomPlayer of this.room.players) {
+      roomPlayer.ready = false
+    }
+    await this.persist()
+    this.broadcastState()
+  }
+
+  private async handleKickPlayer(ws: WebSocket, player: StoredPlayer, value: unknown): Promise<void> {
+    if (!this.room) {
+      return
+    }
+
+    if (player.id !== this.room.hostId) {
+      this.send(ws, { type: 'action_error', code: 'HOST_ONLY', message: '只有房主可以移除玩家。' })
+      return
+    }
+
+    if (this.room.status !== 'waiting') {
+      this.send(ws, { type: 'action_error', code: 'ROOM_NOT_WAITING', message: '遊戲開始後不能移除玩家。' })
+      return
+    }
+
+    if (typeof value !== 'string' || value.length === 0) {
+      this.send(ws, { type: 'action_error', code: 'INVALID_PLAYER', message: '玩家資料不正確。' })
+      return
+    }
+
+    if (value === player.id) {
+      this.send(ws, { type: 'action_error', code: 'CANNOT_KICK_SELF', message: '房主不能移除自己。' })
+      return
+    }
+
+    const target = this.room.players.find((candidate) => candidate.id === value)
+    if (!target) {
+      this.send(ws, { type: 'action_error', code: 'PLAYER_NOT_FOUND', message: '找不到這位玩家。' })
+      return
+    }
+
+    this.room.players = this.room.players.filter((candidate) => candidate.id !== target.id)
+    await this.persist()
+
+    for (const connection of this.ctx.getWebSockets()) {
+      if (this.readAttachment(connection)?.playerId === target.id) {
+        this.send(connection, { type: 'kicked', message: '房主已將你移出房間。' })
+        connection.close(4403, 'Removed by host')
+      }
+    }
+
+    this.broadcastState()
   }
 
   private async authenticate(ws: WebSocket, token: string): Promise<void> {
@@ -288,7 +438,21 @@ export class GameRoom extends DurableObject<Env> {
       return
     }
 
-    startWordGuess(this.room, Date.now())
+    if (!this.room.players.every((roomPlayer) => roomPlayer.online && roomPlayer.ready)) {
+      this.send(ws, {
+        type: 'action_error',
+        code: 'ALL_PLAYERS_NOT_READY',
+        message: '所有玩家都必須在線且準備好後才能開始。',
+      })
+      return
+    }
+
+    const now = Date.now()
+    if (this.room.selectedGameId === 'word-guess') {
+      startWordGuess(this.room, now)
+    } else {
+      startBlankGame(this.room, now)
+    }
     await this.persist()
     this.broadcastState()
   }
@@ -300,6 +464,15 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     if (!this.room) {
+      return
+    }
+
+    if (this.room.selectedGameId !== 'word-guess') {
+      this.send(ws, {
+        type: 'action_error',
+        code: 'GAME_DOES_NOT_ACCEPT_ANSWERS',
+        message: '目前選擇的遊戲沒有猜詞作答功能。',
+      })
       return
     }
 
@@ -319,6 +492,50 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     this.send(ws, { type: 'guess_result', correct: result.correct })
+    this.broadcastState()
+  }
+
+  private async handleFinishGame(ws: WebSocket, player: StoredPlayer): Promise<void> {
+    if (!this.room) {
+      return
+    }
+
+    if (player.id !== this.room.hostId) {
+      this.send(ws, { type: 'action_error', code: 'HOST_ONLY', message: '只有房主可以結束測試遊戲。' })
+      return
+    }
+
+    if (!finishBlankGame(this.room)) {
+      this.send(ws, { type: 'action_error', code: 'GAME_NOT_RUNNING', message: '目前沒有可結束的測試遊戲。' })
+      return
+    }
+
+    await this.persist()
+    this.broadcastState()
+  }
+
+  private async handlePrepareNextGame(ws: WebSocket, player: StoredPlayer): Promise<void> {
+    if (!this.room) {
+      return
+    }
+
+    if (player.id !== this.room.hostId) {
+      this.send(ws, { type: 'action_error', code: 'HOST_ONLY', message: '只有房主可以準備下一局。' })
+      return
+    }
+
+    if (this.room.status !== 'finished') {
+      this.send(ws, { type: 'action_error', code: 'GAME_NOT_FINISHED', message: '目前沒有已結束的遊戲。' })
+      return
+    }
+
+    this.room.status = 'waiting'
+    this.room.selectedGameId = 'word-guess'
+    this.room.game = null
+    for (const roomPlayer of this.room.players) {
+      roomPlayer.ready = false
+    }
+    await this.persist()
     this.broadcastState()
   }
 
@@ -349,7 +566,8 @@ export class GameRoom extends DurableObject<Env> {
     const game = this.room.game
     if (
       this.room.status === 'playing' &&
-      game?.phase === 'guessing' &&
+      game?.gameId === 'word-guess' &&
+      game.phase === 'guessing' &&
       game.answeredPlayerIds.length >= this.room.players.length
     ) {
       revealWordGuess(this.room, Date.now())
@@ -387,6 +605,13 @@ export class GameRoom extends DurableObject<Env> {
 
     if (player.online !== stillOnline) {
       player.online = stillOnline
+      if (!stillOnline && this.room.status === 'waiting') {
+        player.ready = false
+      }
+      await this.persist()
+      this.broadcastState()
+    } else if (!stillOnline && this.room.status === 'waiting' && player.ready) {
+      player.ready = false
       await this.persist()
       this.broadcastState()
     }
@@ -412,7 +637,7 @@ export class GameRoom extends DurableObject<Env> {
     const deadlines = [this.room.updatedAt + ROOM_IDLE_TTL_MS]
     if (
       this.room.status === 'playing' &&
-      this.room.game &&
+      this.room.game?.gameId === 'word-guess' &&
       this.room.game.roundEndsAt > now
     ) {
       deadlines.push(this.room.game.roundEndsAt)
@@ -422,21 +647,26 @@ export class GameRoom extends DurableObject<Env> {
 
   private toSnapshot(room: StoredRoom): RoomSnapshot {
     const game = room.game
+    const wordGuessGame = game?.gameId === 'word-guess' ? game : null
     return {
       code: room.code,
       hostId: room.hostId,
       status: room.status,
       capacity: ROOM_CAPACITY,
+      selectedGameId: room.selectedGameId,
       players: room.players.map((player) => ({
         id: player.id,
         name: player.name,
+        avatarId: player.avatarId,
         score: player.score,
         online: player.online,
-        answered: game?.answeredPlayerIds.includes(player.id) ?? false,
-        correct: game?.correctPlayerIds.includes(player.id) ?? false,
+        ready: player.ready,
+        answered: wordGuessGame?.answeredPlayerIds.includes(player.id) ?? false,
+        correct: wordGuessGame?.correctPlayerIds.includes(player.id) ?? false,
       })),
-      game: game
+      game: game?.gameId === 'word-guess'
         ? {
+            gameId: 'word-guess',
             round: game.round,
             totalRounds: game.totalRounds,
             phase: game.phase,
@@ -444,7 +674,9 @@ export class GameRoom extends DurableObject<Env> {
             answer: game.phase === 'reveal' ? game.answer : null,
             roundEndsAt: room.status === 'finished' ? null : game.roundEndsAt,
           }
-        : null,
+        : game?.gameId === 'blank'
+          ? { gameId: 'blank', startedAt: game.startedAt }
+          : null,
     }
   }
 
@@ -505,10 +737,35 @@ export class GameRoom extends DurableObject<Env> {
     return {
       id: body.playerId,
       name: '',
+      avatarId: randomAvatarId(),
       score: 0,
       tokenHash: body.tokenHash,
       online: false,
+      ready: false,
     }
+  }
+}
+
+function randomAvatarId(): AvatarId {
+  const value = crypto.getRandomValues(new Uint32Array(1))[0] ?? 0
+  return AVATARS[value % AVATARS.length]!.id
+}
+
+function migrateLegacyRoom(room: LegacyStoredRoom): StoredRoom {
+  return {
+    schemaVersion: 2,
+    code: room.code,
+    hostId: room.hostId,
+    status: room.status,
+    selectedGameId: 'word-guess',
+    players: room.players.map((player, index) => ({
+      ...player,
+      avatarId: AVATARS[index % AVATARS.length]!.id,
+      ready: false,
+    })),
+    game: room.game ? { gameId: 'word-guess', ...room.game } : null,
+    createdAt: room.createdAt,
+    updatedAt: room.updatedAt,
   }
 }
 

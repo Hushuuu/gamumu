@@ -14,6 +14,8 @@
 
 Cloudflare、GitHub Pages、網域與 DNS 的設定步驟請見 [`CLOUDFLARE_SETUP.md`](./CLOUDFLARE_SETUP.md)。
 
+專案功能、架構分工與開發流程請見 [`DEVELOPMENT_GUIDE.md`](./DEVELOPMENT_GUIDE.md)；產品需求與後續規劃請見 [`gg_spec.md`](./gg_spec.md)。
+
 ## 架構
 
 - `src/`：Vue 3 + TypeScript 前端。

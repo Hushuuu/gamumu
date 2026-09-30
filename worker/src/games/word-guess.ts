@@ -34,6 +34,7 @@ function chooseWord(): (typeof WORDS)[number] {
 function createRound(round: number, now: number): StoredWordGuess {
   const word = chooseWord()
   return {
+    gameId: 'word-guess',
     round,
     totalRounds: TOTAL_ROUNDS,
     phase: 'guessing',
@@ -57,7 +58,7 @@ export function submitWordGuess(
   now: number,
 ): SubmitAnswerResult {
   const game = room.game
-  if (room.status !== 'playing' || !game) {
+  if (room.status !== 'playing' || !game || game.gameId !== 'word-guess') {
     return { ok: false, code: 'GAME_NOT_STARTED', message: '遊戲尚未開始。', changed: false }
   }
 
@@ -97,7 +98,7 @@ export function submitWordGuess(
 
 export function revealWordGuess(room: StoredRoom, now: number): boolean {
   const game = room.game
-  if (room.status !== 'playing' || !game || game.phase !== 'guessing') {
+  if (room.status !== 'playing' || !game || game.gameId !== 'word-guess' || game.phase !== 'guessing') {
     return false
   }
 
@@ -108,13 +109,13 @@ export function revealWordGuess(room: StoredRoom, now: number): boolean {
 
 export function advanceWordGuess(room: StoredRoom, now: number): boolean {
   const game = room.game
-  if (room.status !== 'playing' || !game || game.phase !== 'reveal') {
+  if (room.status !== 'playing' || !game || game.gameId !== 'word-guess' || game.phase !== 'reveal') {
     return false
   }
 
   if (game.round >= game.totalRounds) {
     room.status = 'finished'
-    game.roundEndsAt = 0
+    room.game = null
     return true
   }
 
