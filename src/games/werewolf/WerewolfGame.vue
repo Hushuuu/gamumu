@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { GameView } from '../../../shared/games'
 import {
   WEREWOLF_PRIVATE_EVENT,
+  WEREWOLF_ROLES,
   isWerewolfPrivateState,
   type WerewolfPhase,
   type WerewolfPrivateState,
@@ -26,13 +27,13 @@ const emit = defineEmits<{
   'game-action': [action: string, payload: Record<string, unknown>]
 }>()
 
-type PickMode = 'wolf' | 'seer' | 'witch' | 'hunter' | 'vote' | 'none'
+type PickMode = 'wolf' | 'guard' | 'seer' | 'witch' | 'hunter' | 'vote' | 'none'
 
 const PHASE_TITLES: Record<WerewolfPhase, string> = {
   'role-reveal': '查看身分',
   night: '黑夜',
   dawn: '天亮了',
-  'hunter-shot': '獵人開槍',
+  'hunter-shot': '開槍時刻',
   'day-discussion': '白天討論',
   vote: '投票放逐',
   'vote-result': '投票結果',
@@ -66,7 +67,8 @@ const mode = computed<PickMode>(() => {
     return 'none'
   }
   if (current.phase === 'night' && state.acting) {
-    if (state.role === 'werewolf') return 'wolf'
+    if (state.camp === 'wolf') return 'wolf'
+    if (state.role === 'guard') return 'guard'
     if (state.role === 'seer') return state.myTarget === null ? 'seer' : 'none'
     if (state.role === 'witch') return state.witch?.poison ? 'witch' : 'none'
   }
@@ -87,6 +89,8 @@ const selectable = computed(() => {
       return others.filter((id) => !state.teammates.includes(id))
     case 'seer':
       return others.filter((id) => !state.seerResults.some((result) => result.playerId === id))
+    case 'guard':
+      return [...aliveSet.value].filter((id) => id !== state.guard?.lastTargetId)
     case 'witch':
     case 'hunter':
     case 'vote':
@@ -100,6 +104,7 @@ const selected = computed(() => {
   const state = priv.value
   switch (mode.value) {
     case 'wolf':
+    case 'guard':
     case 'seer':
       return state?.myTarget ?? null
     case 'witch':
@@ -131,11 +136,11 @@ const seats = computed<PickerSeat[]>(() => {
     const player = props.players.find((candidate) => candidate.id === id)
     const tags: string[] = []
     if (id === props.playerId) tags.push('你')
-    if (state?.teammates.includes(id)) tags.push('狼人同伴')
+    if (current.phase === 'night' && state?.teammates.includes(id)) tags.push('狼人同伴')
     const checked = state?.seerResults.find((result) => result.playerId === id)
     if (checked) tags.push(checked.camp === 'wolf' ? '查驗：狼人' : '查驗：好人')
     if (current.phase === 'vote' && current.votedIds.includes(id)) tags.push('已投票')
-    if (state?.role === 'werewolf' && state.acting) {
+    if (state?.camp === 'wolf' && state.acting) {
       const picks = Object.values(state.wolfPicks).filter((target) => target === id).length
       if (picks > 0) tags.push(`狼人選擇 ×${picks}`)
     }
@@ -158,11 +163,13 @@ const deathText = computed(() => {
 const hunterText = computed(() => {
   const shot = view.value?.hunterShot
   if (!shot) {
-    return '獵人正在決定是否開槍…'
+    const pendingRole = view.value?.shooterRoleId
+    return `${pendingRole ? WEREWOLF_ROLES[pendingRole].name : '玩家'}正在決定是否開槍…`
   }
+  const roleName = WEREWOLF_ROLES[shot.roleId].name
   return shot.targetId === null
-    ? `${nameOf(shot.shooterId)} 是獵人，選擇不開槍。`
-    : `${nameOf(shot.shooterId)} 是獵人，開槍帶走了 ${nameOf(shot.targetId)}。`
+    ? `${nameOf(shot.shooterId)} 是${roleName}，選擇不開槍。`
+    : `${nameOf(shot.shooterId)} 是${roleName}，開槍帶走了 ${nameOf(shot.targetId)}。`
 })
 
 const voteTally = computed(() => {
@@ -184,6 +191,18 @@ const teammateNames = computed(() => (priv.value?.teammates ?? []).map(nameOf))
 const seerTonightCamp = computed(() => {
   const state = priv.value
   return state?.seerResults.find((result) => result.playerId === state.myTarget)?.camp ?? null
+})
+const speakerId = computed(() => {
+  const speech = view.value?.speech
+  return speech ? (speech.order[speech.index] ?? null) : null
+})
+const isSpeaker = computed(() => speakerId.value === props.playerId)
+const speakerProgress = computed(() => {
+  const speech = view.value?.speech
+  if (!speech) {
+    return ''
+  }
+  return `${speech.index + 1} / ${speech.order.length}`
 })
 const witchVictimName = computed(() => nameOf(priv.value?.witch?.victimId ?? null))
 
@@ -222,6 +241,9 @@ function pick(playerId: string): void {
     case 'wolf':
       act('wolf_target', { targetId: playerId })
       break
+    case 'guard':
+      act('guard_protect', { targetId: playerId })
+      break
     case 'seer':
       act('seer_check', { targetId: playerId })
       break
@@ -234,6 +256,12 @@ function pick(playerId: string): void {
     case 'vote':
       votePick.value = playerId
       break
+  }
+}
+
+function endSpeech(): void {
+  if (props.canInteract && (isSpeaker.value || props.isHost)) {
+    emit('game-action', 'end_speech', {})
   }
 }
 
@@ -272,7 +300,7 @@ function endDiscussion(): void {
       </section>
 
       <section v-else-if="phase === 'night'" class="ww-panel ww-panel-night" aria-live="polite">
-        <template v-if="priv?.acting && priv.role === 'werewolf'">
+        <template v-if="priv?.acting && priv.camp === 'wolf'">
           <h3>🐺 選擇今晚要襲擊的玩家</h3>
           <p>與同伴討論後點選目標；同伴的選擇會顯示在名單上，最高票者被襲擊。可隨時改選。</p>
           <button
@@ -282,6 +310,21 @@ function endDiscussion(): void {
             @click="act('wolf_target', { targetId: null })"
           >
             {{ priv.myTarget === null ? '目前：空刀' : '改為空刀' }}
+          </button>
+        </template>
+        <template v-else-if="priv?.acting && priv.role === 'guard'">
+          <h3>🛡️ 選擇要守護的玩家</h3>
+          <p>
+            被守護的人今晚不會被狼人殺死（可守護自己），但不能連續兩晚守護同一人。
+            若守護的人同晚被女巫救起，反而會死亡。可隨時改選。
+          </p>
+          <button
+            class="button button-secondary ww-inline-button"
+            type="button"
+            :disabled="!canAct"
+            @click="act('guard_protect', { targetId: null })"
+          >
+            {{ priv.myTarget === null ? '目前：不守護' : '改為不守護' }}
           </button>
         </template>
         <template v-else-if="priv?.acting && priv.role === 'seer'">
@@ -362,14 +405,41 @@ function endDiscussion(): void {
           </div>
         </template>
         <template v-else>
-          <h3>🏹 獵人開槍</h3>
+          <h3>🏹 開槍時刻</h3>
           <p>{{ hunterText }}</p>
         </template>
       </section>
 
       <section v-else-if="phase === 'day-discussion'" class="ww-panel" aria-live="polite">
-        <h3>💬 自由討論</h3>
-        <p>{{ deathText }}請面對面或用語音討論，找出可疑的玩家。</p>
+        <template v-if="view.speech">
+          <h3>🎤 輪流發言（{{ speakerProgress }}）</h3>
+          <p>{{ deathText }}</p>
+          <p class="ww-speaker">
+            <strong>{{ isSpeaker ? '輪到你發言了' : `${nameOf(speakerId)} 發言中` }}</strong>
+          </p>
+          <ol class="ww-speech-order">
+            <li
+              v-for="(id, index) in view.speech.order"
+              :key="id"
+              :class="{ 'is-current': index === view.speech.index, 'is-done': index < view.speech.index, 'is-dead': !aliveSet.has(id) }"
+            >
+              {{ nameOf(id) }}
+            </li>
+          </ol>
+          <button
+            v-if="isSpeaker || isHost"
+            class="button button-secondary ww-inline-button"
+            type="button"
+            :disabled="!props.canInteract"
+            @click="endSpeech"
+          >
+            {{ isSpeaker ? '結束我的發言' : '跳過目前發言者' }}
+          </button>
+        </template>
+        <template v-else>
+          <h3>💬 自由討論</h3>
+          <p>{{ deathText }}請面對面或用語音討論，找出可疑的玩家。</p>
+        </template>
         <p v-if="view.hunterShot" class="ww-hint">{{ hunterText }}</p>
         <button
           v-if="isHost"
@@ -378,7 +448,7 @@ function endDiscussion(): void {
           :disabled="!props.canInteract"
           @click="endDiscussion"
         >
-          提早進入投票
+          {{ view.speech ? '跳過全部發言，直接投票' : '提早進入投票' }}
         </button>
       </section>
 

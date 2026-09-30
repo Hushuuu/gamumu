@@ -1,29 +1,42 @@
-import { isAlive, randomInt, isTargetId } from '../helpers'
-import type { RoleDefinition, StoredWerewolf } from '../types'
+import { isAlive, isTargetId, isWolfCamp, randomInt } from '../helpers'
+import type { RoleDefinition, RoleNightAction, StoredWerewolf } from '../types'
 
 function wolfIds(game: StoredWerewolf): string[] {
-  return game.playerIds.filter((playerId) => game.roles[playerId] === 'werewolf')
+  return game.playerIds.filter((playerId) => isWolfCamp(game, playerId))
 }
+
+// 狼人陣營（含狼王）共用同一個襲擊行動；票數結算只由 werewolf 角色的 onStepEnd 執行一次。
+export const wolfPackAction: Pick<RoleNightAction, 'action' | 'handle'> = {
+  action: 'wolf_target',
+  handle(game, playerId, payload) {
+    const targetId = payload.targetId
+    if (!isTargetId(targetId)) {
+      return { ok: false, message: '襲擊目標格式不正確。' }
+    }
+    if (targetId !== null && (!isAlive(game, targetId) || isWolfCamp(game, targetId))) {
+      return { ok: false, message: '只能選擇存活的非狼人玩家。' }
+    }
+
+    game.night.wolfPicks[playerId] = targetId
+    return { ok: true }
+  },
+}
+
+export const wolfPackPrivateState: NonNullable<RoleDefinition['privateState']> = (
+  game,
+  playerId,
+  acting,
+) => ({
+  teammates: wolfIds(game).filter((wolfId) => wolfId !== playerId),
+  wolfPicks: acting ? { ...game.night.wolfPicks } : {},
+  myTarget: game.phase === 'night' ? (game.night.wolfPicks[playerId] ?? null) : null,
+})
 
 export const werewolfRole: RoleDefinition = {
   id: 'werewolf',
   camp: 'wolf',
   nightAction: {
-    action: 'wolf_target',
-    handle(game, playerId, payload) {
-      const targetId = payload.targetId
-      if (!isTargetId(targetId)) {
-        return { ok: false, message: '襲擊目標格式不正確。' }
-      }
-      if (targetId !== null) {
-        if (!isAlive(game, targetId) || game.roles[targetId] === 'werewolf') {
-          return { ok: false, message: '只能選擇存活的非狼人玩家。' }
-        }
-      }
-
-      game.night.wolfPicks[playerId] = targetId
-      return { ok: true }
-    },
+    ...wolfPackAction,
     onStepEnd(game) {
       const counts = new Map<string, number>()
       for (const [wolfId, targetId] of Object.entries(game.night.wolfPicks)) {
@@ -39,11 +52,5 @@ export const werewolfRole: RoleDefinition = {
       game.night.wolfVictimId = leaders.length > 0 ? leaders[randomInt(leaders.length)]! : null
     },
   },
-  privateState(game, playerId, acting) {
-    return {
-      teammates: wolfIds(game).filter((wolfId) => wolfId !== playerId),
-      wolfPicks: acting ? { ...game.night.wolfPicks } : {},
-      myTarget: game.phase === 'night' ? (game.night.wolfPicks[playerId] ?? null) : null,
-    }
-  },
+  privateState: wolfPackPrivateState,
 }

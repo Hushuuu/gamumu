@@ -8,6 +8,7 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "worker:dev": "wrangler dev --port 8787",
+    "dev:bots": "node scripts/dev-bots.mjs",
     "worker:deploy": "wrangler deploy",
     "worker:types": "wrangler types",
     "worker:check": "wrangler types && tsc --project tsconfig.worker.json"

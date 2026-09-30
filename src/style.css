@@ -2308,3 +2308,51 @@ a:focus-visible {
   color: #77738e;
   font-size: 10px;
 }
+
+.draw-settings-form .ww-checkbox input {
+  width: 22px;
+  height: 22px;
+}
+
+.ww-speaker {
+  margin: 8px 0;
+  font-size: 15px;
+}
+
+.ww-speech-order {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: speech;
+}
+
+.ww-speech-order li {
+  counter-increment: speech;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f1efff;
+  color: #5c5875;
+  font-size: 11px;
+}
+
+.ww-speech-order li::before {
+  content: counter(speech) '. ';
+}
+
+.ww-speech-order li.is-current {
+  background: var(--purple, #6f5cff);
+  color: #fff;
+  font-weight: 700;
+}
+
+.ww-speech-order li.is-done,
+.ww-speech-order li.is-dead {
+  opacity: 0.45;
+}
+
+.ww-speech-order li.is-dead {
+  text-decoration: line-through;
+}

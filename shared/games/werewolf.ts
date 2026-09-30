@@ -1,6 +1,13 @@
 export type WerewolfCamp = 'good' | 'wolf'
-export type WerewolfRoleId = 'werewolf' | 'villager' | 'seer' | 'witch' | 'hunter'
-export type WerewolfScriptId = 'classic'
+export type WerewolfRoleId =
+  | 'werewolf'
+  | 'wolfKing'
+  | 'villager'
+  | 'seer'
+  | 'witch'
+  | 'hunter'
+  | 'guard'
+export type WerewolfScriptId = 'classic' | 'wolf-guard'
 
 export type WerewolfPhase =
   | 'role-reveal'
@@ -27,6 +34,13 @@ export const WEREWOLF_ROLES: Record<WerewolfRoleId, WerewolfRoleInfo> = {
     camp: 'wolf',
     icon: '🐺',
     description: '每晚與同伴選擇一名玩家襲擊。殺光所有好人即可獲勝。',
+  },
+  wolfKing: {
+    id: 'wolfKing',
+    name: '狼王',
+    camp: 'wolf',
+    icon: '👑',
+    description: '與狼人同陣營並一起襲擊。被狼人殺死或被放逐時可開槍帶走一人；被毒死則不能開槍。',
   },
   villager: {
     id: 'villager',
@@ -56,6 +70,13 @@ export const WEREWOLF_ROLES: Record<WerewolfRoleId, WerewolfRoleInfo> = {
     icon: '🏹',
     description: '被狼人殺死或被放逐時可開槍帶走一人；被毒死則不能開槍。',
   },
+  guard: {
+    id: 'guard',
+    name: '守衛',
+    camp: 'good',
+    icon: '🛡️',
+    description: '每晚可守護一人（含自己），使其免於狼人襲擊；不能連續兩晚守護同一人。守護的人若同晚被解藥救起，反而會死亡。',
+  },
 }
 
 export function isWerewolfRoleId(value: unknown): value is WerewolfRoleId {
@@ -80,7 +101,21 @@ export const WEREWOLF_SCRIPTS: WerewolfScriptInfo[] = [
     maxPlayers: 12,
     roles: ['werewolf', 'villager', 'seer', 'witch', 'hunter'],
   },
+  {
+    id: 'wolf-guard',
+    name: '狼王守衛版',
+    description: '在經典版加入狼王與守衛：預言家、女巫、獵人、守衛四神對抗狼王與狼人，屠城規則。',
+    minPlayers: 10,
+    maxPlayers: 12,
+    roles: ['werewolf', 'wolfKing', 'villager', 'seer', 'witch', 'hunter', 'guard'],
+  },
 ]
+
+export function getWerewolfPlayerRange(settings: unknown): { min: number; max: number } | null {
+  const scriptId = isRecord(settings) ? settings.scriptId : undefined
+  const script = WEREWOLF_SCRIPTS.find((candidate) => candidate.id === scriptId)
+  return script ? { min: script.minPlayers, max: script.maxPlayers } : null
+}
 
 export function isWerewolfScriptId(value: unknown): value is WerewolfScriptId {
   return WEREWOLF_SCRIPTS.some((script) => script.id === value)
@@ -89,6 +124,8 @@ export function isWerewolfScriptId(value: unknown): value is WerewolfScriptId {
 export interface WerewolfSettings {
   scriptId: WerewolfScriptId
   discussionSeconds: number
+  speechMode: boolean
+  speechSeconds: number
   voteSeconds: number
   nightStepSeconds: number
 }
@@ -96,6 +133,8 @@ export interface WerewolfSettings {
 export const DEFAULT_WEREWOLF_SETTINGS: WerewolfSettings = {
   scriptId: 'classic',
   discussionSeconds: 120,
+  speechMode: false,
+  speechSeconds: 60,
   voteSeconds: 45,
   nightStepSeconds: 20,
 }
@@ -113,6 +152,8 @@ export function isWerewolfSettings(value: unknown): value is WerewolfSettings {
     isRecord(value) &&
     isWerewolfScriptId(value.scriptId) &&
     isIntegerInRange(value.discussionSeconds, 30, 600) &&
+    typeof value.speechMode === 'boolean' &&
+    isIntegerInRange(value.speechSeconds, 10, 180) &&
     isIntegerInRange(value.voteSeconds, 15, 180) &&
     isIntegerInRange(value.nightStepSeconds, 10, 60)
   )
@@ -120,7 +161,13 @@ export function isWerewolfSettings(value: unknown): value is WerewolfSettings {
 
 export interface WerewolfHunterShot {
   shooterId: string
+  roleId: WerewolfRoleId
   targetId: string | null
+}
+
+export interface WerewolfSpeech {
+  order: string[]
+  index: number
 }
 
 export interface WerewolfView {
@@ -139,7 +186,9 @@ export interface WerewolfView {
   votes: Record<string, string | null> | null
   votedIds: string[]
   shooterId: string | null
+  shooterRoleId: WerewolfRoleId | null
   hunterShot: WerewolfHunterShot | null
+  speech: WerewolfSpeech | null
   winner: WerewolfCamp | null
   roles: Record<string, WerewolfRoleId> | null
 }
@@ -174,7 +223,13 @@ export function isWerewolfView(value: unknown): value is WerewolfView {
     value.hunterShot === null ||
     (isRecord(value.hunterShot) &&
       typeof value.hunterShot.shooterId === 'string' &&
+      isWerewolfRoleId(value.hunterShot.roleId) &&
       isNullableString(value.hunterShot.targetId))
+  const speechValid =
+    value.speech === null ||
+    (isRecord(value.speech) &&
+      isStringArray(value.speech.order) &&
+      isIntegerInRange(value.speech.index, 0, 100))
   const rolesValid =
     value.roles === null ||
     (isRecord(value.roles) && Object.values(value.roles).every(isWerewolfRoleId))
@@ -194,7 +249,9 @@ export function isWerewolfView(value: unknown): value is WerewolfView {
     votesValid &&
     isStringArray(value.votedIds) &&
     isNullableString(value.shooterId) &&
+    (value.shooterRoleId === null || isWerewolfRoleId(value.shooterRoleId)) &&
     hunterShotValid &&
+    speechValid &&
     (value.winner === null || value.winner === 'good' || value.winner === 'wolf') &&
     rolesValid
   )
@@ -213,6 +270,10 @@ export interface WerewolfWitchState {
   poisonTargetId: string | null
 }
 
+export interface WerewolfGuardState {
+  lastTargetId: string | null
+}
+
 export interface WerewolfPrivateState {
   stateVersion: number
   role: WerewolfRoleId
@@ -224,6 +285,7 @@ export interface WerewolfPrivateState {
   myTarget: string | null
   seerResults: WerewolfSeerResult[]
   witch: WerewolfWitchState | null
+  guard: WerewolfGuardState | null
   canShoot: boolean
   myVote: string | null
   hasVoted: boolean
@@ -244,6 +306,7 @@ export function isWerewolfPrivateState(value: unknown): value is WerewolfPrivate
     isNullableString(value.myTarget) &&
     Array.isArray(value.seerResults) &&
     (value.witch === null || isRecord(value.witch)) &&
+    (value.guard === null || isRecord(value.guard)) &&
     typeof value.canShoot === 'boolean' &&
     isNullableString(value.myVote) &&
     typeof value.hasVoted === 'boolean'

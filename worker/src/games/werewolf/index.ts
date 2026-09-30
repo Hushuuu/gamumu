@@ -31,6 +31,7 @@ function emptyNight(): NightState {
     wolfPicks: {},
     wolfVictimId: null,
     seerTargetId: null,
+    guardTargetId: null,
     witchSave: false,
     witchPoisonId: null,
   }
@@ -109,8 +110,41 @@ function proceedAfterDeaths(
     return
   }
 
+  enterDiscussion(game, now)
+}
+
+function enterDiscussion(game: StoredWerewolf, now: number): void {
   game.phase = 'day-discussion'
-  game.phaseEndsAt = now + game.settings.discussionSeconds * 1_000
+  if (game.settings.speechMode) {
+    game.speechOrder = shuffle(aliveIds(game))
+    game.speakerIndex = 0
+    game.phaseEndsAt = now + game.settings.speechSeconds * 1_000
+  } else {
+    game.speechOrder = []
+    game.speakerIndex = 0
+    game.phaseEndsAt = now + game.settings.discussionSeconds * 1_000
+  }
+}
+
+function nextSpeaker(game: StoredWerewolf, now: number): void {
+  let index = game.speakerIndex + 1
+  while (index < game.speechOrder.length && !isAlive(game, game.speechOrder[index]!)) {
+    index += 1
+  }
+
+  if (index >= game.speechOrder.length) {
+    enterVote(game, now)
+    return
+  }
+
+  game.speakerIndex = index
+  game.phaseEndsAt = now + game.settings.speechSeconds * 1_000
+}
+
+function currentSpeakerId(game: StoredWerewolf): string | null {
+  return game.phase === 'day-discussion' && game.settings.speechMode
+    ? (game.speechOrder[game.speakerIndex] ?? null)
+    : null
 }
 
 function resolveHunterShot(game: StoredWerewolf, targetId: string | null, now: number): void {
@@ -120,7 +154,7 @@ function resolveHunterShot(game: StoredWerewolf, targetId: string | null, now: n
   }
 
   game.pendingShooterId = null
-  game.hunterShot = { shooterId, targetId }
+  game.hunterShot = { shooterId, roleId: game.roles[shooterId]!, targetId }
   if (targetId !== null) {
     killPlayer(game, targetId, 'shot')
   }
@@ -201,7 +235,11 @@ function advancePhase(room: GameRoomContext, game: StoredWerewolf, now: number):
       }
       return
     case 'day-discussion':
-      enterVote(game, now)
+      if (game.settings.speechMode) {
+        nextSpeaker(game, now)
+      } else {
+        enterVote(game, now)
+      }
       return
     case 'vote':
       tallyVotes(game, now)
@@ -282,6 +320,18 @@ function dispatchAction(
       resolveHunterShot(game, targetId, now)
       return { ok: true, changed: true }
     }
+    case 'end_speech': {
+      const speakerId = currentSpeakerId(game)
+      if (speakerId === null) {
+        return failure('NOT_SPEECH_TURN', '現在不是輪流發言階段。')
+      }
+      if (playerId !== speakerId && playerId !== room.hostId) {
+        return failure('NOT_SPEAKER', '只有發言者或房主可以結束這段發言。')
+      }
+
+      nextSpeaker(game, now)
+      return { ok: true, changed: true }
+    }
     case 'end_discussion': {
       if (playerId !== room.hostId) {
         return failure('HOST_ONLY', '只有房主可以提早結束討論。')
@@ -351,6 +401,7 @@ function buildPrivateState(game: StoredWerewolf, playerId: string): WerewolfPriv
     myTarget: null,
     seerResults: [],
     witch: null,
+    guard: null,
     canShoot: game.phase === 'hunter-shot' && game.pendingShooterId === playerId,
     myVote: game.phase === 'vote' ? (game.votes[playerId] ?? null) : null,
     hasVoted: game.phase === 'vote' && playerId in game.votes,
@@ -366,7 +417,7 @@ export const werewolfGame: GameModule = {
     if (!isWerewolfSettings(settings)) {
       return failure(
         'INVALID_GAME_SETTINGS',
-        '討論時間需為 30–600 秒、投票時間需為 15–180 秒、夜間每步驟需為 10–60 秒。',
+        '討論時間需為 30–600 秒、每人發言需為 10–180 秒、投票時間需為 15–180 秒、夜間每步驟需為 10–60 秒。',
       )
     }
 
@@ -374,6 +425,8 @@ export const werewolfGame: GameModule = {
     if (
       current.scriptId === settings.scriptId &&
       current.discussionSeconds === settings.discussionSeconds &&
+      current.speechMode === settings.speechMode &&
+      current.speechSeconds === settings.speechSeconds &&
       current.voteSeconds === settings.voteSeconds &&
       current.nightStepSeconds === settings.nightStepSeconds
     ) {
@@ -419,6 +472,9 @@ export const werewolfGame: GameModule = {
       exiledId: null,
       pendingShooterId: null,
       afterHunter: 'day-discussion',
+      lastGuardTargetId: null,
+      speechOrder: [],
+      speakerIndex: 0,
       hunterShot: null,
       winner: null,
     }
@@ -453,7 +509,11 @@ export const werewolfGame: GameModule = {
 
     let changed = false
     if (isAlive(game, playerId)) {
+      const wasSpeaking = currentSpeakerId(game) === playerId
       killPlayer(game, playerId, 'left')
+      if (wasSpeaking) {
+        nextSpeaker(game, now)
+      }
       delete game.night.wolfPicks[playerId]
       delete game.votes[playerId]
       changed = true
@@ -516,7 +576,14 @@ export const werewolfGame: GameModule = {
       votes: game.phase === 'vote-result' ? { ...game.votes } : null,
       votedIds: game.phase === 'vote' ? Object.keys(game.votes) : [],
       shooterId: game.pendingShooterId ?? game.hunterShot?.shooterId ?? null,
+      shooterRoleId: game.pendingShooterId
+        ? (game.roles[game.pendingShooterId] ?? null)
+        : (game.hunterShot?.roleId ?? null),
       hunterShot: game.hunterShot ? { ...game.hunterShot } : null,
+      speech:
+        game.phase === 'day-discussion' && game.settings.speechMode
+          ? { order: [...game.speechOrder], index: game.speakerIndex }
+          : null,
       winner: game.winner,
       roles: game.phase === 'finished' ? { ...game.roles } : null,
     }

@@ -5,6 +5,7 @@ import {
   DEFAULT_GAME_ID,
   GAME_OPTIONS,
   getGameOption,
+  getPlayerRange,
   ROOM_CAPACITY,
   type GameId,
 } from '../shared/games'
@@ -58,13 +59,16 @@ const selectedGame = computed(() => {
 const gameComponents = computed(() => {
   return GAME_COMPONENTS[snapshot.value?.selectedGameId ?? DEFAULT_GAME_ID]
 })
+const playerRange = computed(() => {
+  return getPlayerRange(selectedGame.value.id, snapshot.value?.gameSettings)
+})
 const playerCountIssue = computed(() => {
   const count = snapshot.value?.players.length ?? 0
-  if (count < selectedGame.value.minPlayers) {
-    return `此遊戲至少需要 ${selectedGame.value.minPlayers} 位玩家。`
+  if (count < playerRange.value.min) {
+    return `此遊戲至少需要 ${playerRange.value.min} 位玩家。`
   }
-  if (count > selectedGame.value.maxPlayers) {
-    return `此遊戲最多允許 ${selectedGame.value.maxPlayers} 位玩家，請房主移除多出的玩家或更換遊戲。`
+  if (count > playerRange.value.max) {
+    return `此遊戲最多允許 ${playerRange.value.max} 位玩家，請房主移除多出的玩家或更換遊戲。`
   }
   return ''
 })
@@ -543,7 +547,7 @@ function connectionLabel(): string {
               </div>
               <p class="game-choice-note">
                 {{ isHost ? '更換遊戲會清除所有人的準備狀態。' : '只有房主可以更換遊戲。' }}
-                本局人數須為 {{ selectedGame.minPlayers }}–{{ selectedGame.maxPlayers }} 位。
+                本局人數須為 {{ playerRange.min }}–{{ playerRange.max }} 位。
               </p>
             </div>
 

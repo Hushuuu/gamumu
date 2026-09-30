@@ -13,7 +13,7 @@
 | 房主管理       | 等待房間時，房主可以將其他玩家移出房間；房主不能移除自己。                                                                                      |
 | 猜詞派對       | 2–12 人；共 5 題，每題 20 秒；每位玩家每題只能回答一次，答對加 100 分。所有玩家都作答後會提早公布答案，否則時間到後公布；公布階段持續 3 秒。    |
 | 你畫我猜       | 2–12 人；房主可設定繪畫 15–180 秒、每人 1–5 輪、猜答案 10–120 秒。繪圖者可跳過或提早完成；每位猜中者及該題繪圖者各得 50 分。           |
-| 狼人殺         | 6–12 人；全自動伺服器法官，不含文字聊天（面對面／語音討論）。基本版「經典劇本」角色為狼人、村民、預言家、女巫、獵人；屠城制，勝方每位玩家 +100 分。房主可設定討論 30–600 秒、投票 15–180 秒、夜間每步驟 10–60 秒。 |
+| 狼人殺         | 6–12 人（依劇本：經典劇本 6–12 人，狼王守衛版 10–12 人）；全自動伺服器法官，不含文字聊天（面對面／語音討論）。基本版「經典劇本」角色為狼人、村民、預言家、女巫、獵人；可選「狼王守衛版」（12 人：3 狼人＋狼王＋4 村民＋預言家／女巫／獵人／守衛；11 人少 1 村民；10 人再少 1 狼人）；屠城制，勝方每位玩家 +100 分。房主可設定自由討論 30–600 秒（或改為輪流發言：每天隨機安排存活玩家依序發言，每人 10–180 秒，發言者可提早結束）、投票 15–180 秒、夜間每步驟 10–60 秒。 |
 | 空白測試遊戲   | 1–12 人；可由房主選擇並啟動，顯示擴充測試畫面；房主可結束遊戲以驗證結算流程，目前沒有實際玩法。                                               |
 | 多局與結算     | 遊戲結束後房主可開啟下一局並選擇遊戲；下一局預選猜詞派對，Ready 與本局狀態清除，玩家分數跨局累積保留。                                            |
 | 重新連線       | 玩家憑證存在瀏覽器的 `localStorage`；重新載入時可用原身分連線。等待期間斷線會清除 Ready，重連後須重新準備。玩家斷線會保留在名單中，明確離開才會移除；房主明確離開時由第一位留下的玩家接任。 |
@@ -117,7 +117,7 @@ Client game_action
 - 全員作答或回合期限到時，伺服器公布答案；公布 3 秒後開始下一題。第五題後房間進入 `finished`。
 - 你畫我猜設定預設為繪畫 60 秒、每人 1 輪、猜答案 30 秒；設定答案階段固定 30 秒，揭曉階段固定 3 秒。設定答案逾時會跳過該題；繪圖者可手動跳過或提早結束繪圖。
 - 你畫我猜依開局玩家順序輪流繪圖，總題數為開局玩家數乘以每人輪數。每位猜中的玩家各得 50 分；同一題第一次有人猜中時繪圖者得 50 分。所有在線猜題玩家都猜中會提早揭曉，否則猜題時間到才揭曉。
-- 狼人殺流程為 `role-reveal → night（依劇本步驟）→ dawn → [hunter-shot] → day-discussion → vote → vote-result → … → finished`。夜間各步驟固定等滿設定秒數、不提早結束，避免以時間洩漏誰有能力或誰已死亡；平票無人出局；玩家明確離房視為死亡（不公開身分）；分配角色使用 `crypto.getRandomValues` 洗牌。真實角色、夜間選擇與女巫藥水只存在 `room.game`，公開快照只在 `finished` 才附上全員身分與勝方；個人資訊透過私人 `private-state` 事件傳送。狼人殺結束時保留 `room.game`（`phase: 'finished'`）供結算畫面使用，`prepare_next_game` 才會清除。
+- 狼人殺流程為 `role-reveal → night（依劇本步驟）→ dawn → [hunter-shot] → day-discussion → vote → vote-result → … → finished`。夜間各步驟固定等滿設定秒數、不提早結束，避免以時間洩漏誰有能力或誰已死亡；輪流發言時每天重新隨機排序存活玩家，發言者或房主可用 `end_speech` 結束目前發言，房主仍可提早進入投票；平票無人出局；玩家明確離房視為死亡（不公開身分）；分配角色使用 `crypto.getRandomValues` 洗牌。真實角色、夜間選擇與女巫藥水只存在 `room.game`，公開快照只在 `finished` 才附上全員身分與勝方；個人資訊透過私人 `private-state` 事件傳送。狼人殺結束時保留 `room.game`（`phase: 'finished'`）供結算畫面使用，`prepare_next_game` 才會清除。
 - 繪圖筆畫以正規化座標分批透過 WebSocket 廣播給房內其他玩家，不回送給繪圖者，也不寫入房間狀態；重新連線不會重播或還原畫布。繪圖者在繪畫中斷線時仍保留本題，時間到後進入猜答案階段。
 - Durable Object 的單一 alarm 負責推進遊戲階段與處理閒置期限；前端只呈現伺服器期限，不自行裁決遊戲結果。
 - `worker/src/games/registry.ts` 將遊戲 ID 對應到獨立伺服器模組；共用房間流程透過模組介面啟動遊戲、分派操作、處理 alarm／離房及建立公開快照。
@@ -175,6 +175,9 @@ worker/src/
     werewolf/                狼人殺階段機（index.ts）、roles/ 角色定義、scripts/ 劇本定義
     blank/                   空白測試遊戲邏輯及獨立保存狀態型別
 
+scripts/
+  dev-bots.mjs               本機測試用機器人（加入房間、自動 Ready、自動玩狼人殺）
+
 wrangler.jsonc                Worker、Durable Object binding 與 migration 設定
 vite.config.ts                Vite 設定、前端 base path 與本機 API/WebSocket proxy
 ```
@@ -210,7 +213,7 @@ npm run build         # Vue TypeScript 檢查並建置前端
 npm run worker:check  # 產生 Wrangler 型別並檢查 Worker TypeScript
 ```
 
-目前 `package.json` 沒有 test 或 lint script；完成房間／遊戲變更後，除了執行上述檢查，也應以多個瀏覽器手動驗證建立、加入、選頭像、Ready、遊戲選擇、開始、作答或結束、重新載入重連及離開流程。你畫我猜另需驗證繪圖同步、多人猜中計分、跳過、每人多輪及繪圖者斷線。狼人殺另需驗證 6–12 人的角色配置、夜間行動限制、獵人開槍、平票、勝負與分數，以及私人身分不外洩。
+目前 `package.json` 沒有 test 或 lint script。多人測試技巧：開發模式（`npm run dev`）的房間憑證存在 `sessionStorage`，同一個瀏覽器的每個分頁都是獨立玩家；再用 `npm run dev:bots -- <房間代碼> [數量]`（`scripts/dev-bots.mjs`）讓機器人加入房間、自動 Ready 並自動遊玩狼人殺，就能只開一個分頁測試完整流程（Ctrl+C 讓機器人離房）。完成房間／遊戲變更後，除了執行上述檢查，也應以多個瀏覽器手動驗證建立、加入、選頭像、Ready、遊戲選擇、開始、作答或結束、重新載入重連及離開流程。你畫我猜另需驗證繪圖同步、多人猜中計分、跳過、每人多輪及繪圖者斷線。狼人殺另需驗證 6–12 人（狼王守衛版 10–12 人）的角色配置、夜間行動限制（含守衛限制、同守同救）、獵人開槍、平票、勝負與分數，以及私人身分不外洩。
 
 ## 設定與部署入口
 
@@ -288,13 +291,15 @@ npm run worker:check  # 產生 Wrangler 型別並檢查 Worker TypeScript
 
 - 新劇本：在 `worker/src/games/werewolf/scripts/` 新增 `<script-id>.ts`（人數配置表、`nightSteps`、勝負判斷），加入 `scripts/index.ts`，並在 `shared/games/werewolf.ts` 的 `WEREWOLF_SCRIPTS` 補上 metadata。
 - 新角色：在 `roles/` 新增 `<role>.ts`（陣營、夜間行動、私人資訊掛鉤），加入 `roles/index.ts`，並在 `shared/games/werewolf.ts` 的 `WEREWOLF_ROLES` 補上 metadata；前端 `WerewolfGame.vue` 需為新的夜間行動增加對應面板。
+- 劇本的人數範圍以 `WEREWOLF_SCRIPTS` 的 `minPlayers/maxPlayers` 為準，前後端透過 `shared/games` 的 `getPlayerRange(gameId, settings)` 取得（`GameRoom.handleStartGame` 與 `App.vue` 都使用），不要直接讀 catalog 的人數。
+- 「狼王守衛版」（`scripts/wolfGuard.ts`，共用邏輯在 `scripts/common.ts`）：狼王（`roles/wolfKing.ts`）屬狼陣營、與狼人共用 `wolf_target` 襲擊，被狼人殺死或被放逐時可開槍（被毒或被獵人擊殺不能）；守衛（`roles/guard.ts`）每晚可守一人（可自守、可空守），不能連續兩晚守同一人，被守者與女巫解藥同晚作用於同一人時仍會死亡（同守同救）。夜間步驟為 `[[werewolf, wolfKing, seer, guard], [witch]]`。
 - 階段機（`index.ts`）不需為個別劇本重寫；每個劇本或角色仍須遵守「真實身分不進 `toView()`」及「夜間步驟時間固定」的原則。
 
 可先參考 `worker/src/games/word-guess/` 的簡單限時猜答、`worker/src/games/draw-guess/` 的設定／多階段流程／私人狀態／暫時房間事件與離線政策，以及 `worker/src/games/blank/` 的最小遊戲模組。新增遊戲只需擴充共用目錄、公開／保存型別與前後端兩個 registry；共用 Worker、`GameRoom` Durable Object 與 `App.vue` 不應加入遊戲專屬分支。
 
 ## 實作與規格的界線
 
-- `gg_spec.md` 是產品與架構目標，不代表其中所有功能已完成。現況有猜詞派對、你畫我猜與狼人殺（基本版）三種可玩遊戲，以及一種只驗證啟動／結束流程的空白測試遊戲。
+- `gg_spec.md` 是產品與架構目標，不代表其中所有功能已完成。現況有猜詞派對、你畫我猜與狼人殺（經典版與狼王守衛版）三種可玩遊戲，以及一種只驗證啟動／結束流程的空白測試遊戲。
 - 目前 Durable Object 以六碼公開房間代碼作為 `idFromName` 名稱；規格提到的獨立內部 UUID 尚未採用。
 - 目前沒有玩家帳號或公開房間大廳；你畫我猜畫布只即時同步筆畫，不保存歷史，也不支援重連後重播。
 - 連線憑證原文由 Worker 回傳並由瀏覽器保存；房間保存的是憑證雜湊。邀請連結只含房間代碼，不要將憑證放進 URL、日誌或公開快照。

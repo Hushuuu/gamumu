@@ -15,6 +15,7 @@ export interface NightState {
   wolfPicks: Record<string, string | null>
   wolfVictimId: string | null
   seerTargetId: string | null
+  guardTargetId: string | null
   witchSave: boolean
   witchPoisonId: string | null
 }
@@ -39,6 +40,9 @@ export interface StoredWerewolf {
   exiledId: string | null
   pendingShooterId: string | null
   afterHunter: 'day-discussion' | 'night'
+  lastGuardTargetId: string | null
+  speechOrder: string[]
+  speakerIndex: number
   hunterShot: WerewolfHunterShot | null
   winner: WerewolfCamp | null
 }

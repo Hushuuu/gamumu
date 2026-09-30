@@ -1,4 +1,10 @@
+import { WEREWOLF_ROLES } from '../../../../shared/games/werewolf'
 import type { StoredWerewolf } from './types'
+
+export function isWolfCamp(game: StoredWerewolf, playerId: string): boolean {
+  const roleId = game.roles[playerId]
+  return roleId !== undefined && WEREWOLF_ROLES[roleId].camp === 'wolf'
+}
 
 export function randomInt(maxExclusive: number): number {
   if (maxExclusive <= 1) {

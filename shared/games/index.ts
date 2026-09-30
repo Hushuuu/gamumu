@@ -1,8 +1,8 @@
 import { isBlankGameView } from './blank'
-import { isGameId } from './catalog'
+import { getGameOption, isGameId } from './catalog'
 import type { GameId } from './catalog'
 import { isDrawGuessView } from './draw-guess'
-import { isWerewolfView } from './werewolf'
+import { getWerewolfPlayerRange, isWerewolfView } from './werewolf'
 import { isWordGuessView } from './word-guess'
 import type { GameView } from './types'
 
@@ -13,6 +13,7 @@ export {
   WEREWOLF_PRIVATE_EVENT,
   WEREWOLF_ROLES,
   WEREWOLF_SCRIPTS,
+  getWerewolfPlayerRange,
   isWerewolfPrivateState,
   isWerewolfRoleId,
   isWerewolfScriptId,
@@ -21,6 +22,7 @@ export {
 } from './werewolf'
 export type {
   WerewolfCamp,
+  WerewolfGuardState,
   WerewolfHunterShot,
   WerewolfPhase,
   WerewolfPrivateState,
@@ -46,6 +48,15 @@ const GAME_VIEW_VALIDATORS: Record<GameId, (value: unknown) => boolean> = {
   blank: isBlankGameView,
   'draw-guess': isDrawGuessView,
   werewolf: isWerewolfView,
+}
+
+export function getPlayerRange(
+  gameId: GameId,
+  settings: Record<string, unknown> | undefined,
+): { min: number; max: number } {
+  const option = getGameOption(gameId)
+  const range = gameId === 'werewolf' ? getWerewolfPlayerRange(settings) : null
+  return range ?? { min: option.minPlayers, max: option.maxPlayers }
 }
 
 export function isGameView(value: unknown): value is GameView {

@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers'
 import { AVATARS, isAvatarId, type AvatarId } from '../../../shared/avatars'
-import { DEFAULT_GAME_ID, getGameOption, isGameId, ROOM_CAPACITY } from '../../../shared/games'
+import { DEFAULT_GAME_ID, getGameOption, getPlayerRange, isGameId, ROOM_CAPACITY } from '../../../shared/games'
 import {
   isRecord,
   type RoomSnapshot,
@@ -491,20 +491,21 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     const gameOption = getGameOption(this.room.selectedGameId)
-    if (this.room.players.length < gameOption.minPlayers) {
+    const playerRange = getPlayerRange(this.room.selectedGameId, this.room.gameSettings)
+    if (this.room.players.length < playerRange.min) {
       this.send(ws, {
         type: 'action_error',
         code: 'NOT_ENOUGH_PLAYERS',
-        message: `${gameOption.name}至少需要 ${gameOption.minPlayers} 位玩家才能開始。`,
+        message: `${gameOption.name}至少需要 ${playerRange.min} 位玩家才能開始。`,
       })
       return
     }
 
-    if (this.room.players.length > gameOption.maxPlayers) {
+    if (this.room.players.length > playerRange.max) {
       this.send(ws, {
         type: 'action_error',
         code: 'TOO_MANY_PLAYERS',
-        message: `${gameOption.name}最多允許 ${gameOption.maxPlayers} 位玩家參加。`,
+        message: `${gameOption.name}最多允許 ${playerRange.max} 位玩家參加。`,
       })
       return
     }
