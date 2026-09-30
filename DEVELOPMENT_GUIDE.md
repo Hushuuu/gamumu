@@ -43,6 +43,37 @@ Vue 前端
 - **GameRoom Durable Object**負責單一房間的玩家、房主、連線、共用權限、狀態保存與房間期限；遊戲規則、分數及遊戲快照由註冊的遊戲模組處理。
 - **`shared/protocol.ts`** 定義前後端共用的訊息與房間快照；`shared/games/` 定義遊戲 ID、玩家人數範圍與公開遊戲狀態；`shared/avatars.ts` 定義允許使用的頭像 ID。
 
+### Worker、Durable Object 與遊戲模組的邊界
+
+- **Worker (`worker/src/index.ts`) 是入口與路由器**：處理 CORS、HTTP method、房間代碼與暱稱等共用輸入；建立／加入房間時產生玩家憑證；WebSocket 請求則轉送給房間 Durable Object。Worker 不持有房間遊戲狀態，也不應依遊戲 ID 寫分支或計分。
+- **`GameRoom` Durable Object 是單一房間的權威狀態管理者**：Worker 以 `GAME_ROOMS.idFromName(code)` 取得對應物件；同一房間的驗證後 WebSocket 操作、玩家清單、權限、狀態快照、保存與 alarm 都由這個物件協調。房主權限、Ready、人數範圍、共用房間期限等規則留在這裡。
+- **遊戲模組是被 `GameRoom` 呼叫的規則單元**：`worker/src/games/<game-id>/` 不建立另一個 Durable Object，不管理 WebSocket，也不直接呼叫 Storage API；它只依傳入的 `GameRoomContext` 驗證遊戲操作、變更遊戲／分數狀態，並回傳結果。
+
+`GameRoom` 以 `ctx.acceptWebSocket()` 接受可休眠的 WebSocket；Durable Object 閒置後可能被回收並重新建立，因此不能把遊戲真實狀態只放在模組全域變數、計時器 closure 或記憶體快取。持久狀態由 `GameRoom` 從 Storage API 還原，WebSocket 身分則由共用程式保存於 socket attachment。Cloudflare 的 Durable Object 是按房間分區的協調單位，不代表可以信任用戶端：每個 action 仍須在伺服器驗證身分、階段、操作者與 payload。
+
+一次遊戲操作的共用流程如下：
+
+```text
+Client game_action
+  → Worker 將 WebSocket 訊息交給該房間的 GameRoom
+  → GameRoom 驗證連線身分、所選遊戲 ID 與 playing 狀態
+  → 對應的 GameModule.handleAction() 驗證 phase、操作者與玩法並回傳結果
+  → changed=true 時由 GameRoom 保存 room、重排 alarm 並廣播公開 state
+  → 有 event 時由 GameRoom 私訊操作者，或廣播給其他房間玩家
+```
+
+`GameActionResult.changed` 是遊戲模組與共用房間之間的保存契約：凡是改變已保存狀態（例如階段、分數、已作答名單），必須回傳 `changed: true`，讓 `GameRoom` 保存並廣播；純即時筆畫或只回覆該玩家的提示則可保持 `changed: false`，避免把暫時事件當作房間狀態保存。`event.audience: 'room'` 會送給房內其他玩家但排除發送者；未指定 audience 時則回覆操作者。遊戲模組不要自行 broadcast，否則容易繞過共用權限或把私人資料送給全房。
+
+### Durable Object 的保存與 alarm 設計
+
+- 本專案將完整房間物件放在 DO Storage API 的 `room` key；`GameRoom.persist()` 寫入後也會統一重排 alarm。遊戲自己的可恢復資料放在 `room.game`，本局設定放在 `room.gameSettings`。狀態應是可還原的資料，不要放 WebSocket、Canvas、DOM 元素或 timer handle；若使用 `Map`／`Set` 等集合型別，先確認 Storage API 的序列化行為與讀回後的型別。
+- 每個 Durable Object 一次只有一個 alarm。本專案由 `GameRoom.scheduleAlarm()` 取「房間閒置期限」與目前遊戲 `nextAlarmAt()` 的較早時間；遊戲模組只回報自己的下一個 deadline，不能自行呼叫 `setAlarm()`，也不要用 `setTimeout`／`setInterval` 推進伺服器回合。
+- 遊戲將期限（例如 `phaseEndsAt`）存入 `room.game`；`nextAlarmAt()` 回傳下一個期限，`handleAlarm(room, now)` 在期限到達時推進階段並回傳是否有狀態變更。改變後由 `GameRoom` 保存、廣播並安排下一個 alarm。
+- Alarm 不應被當成精確到毫秒的前端倒數：它可能晚於 deadline 執行，也可能因執行失敗而重試。用傳入的 `now` 與已保存的 deadline 判斷是否逾時，讓 `handleAlarm()` 可安全重試；若遊戲有多個計時事件，將 deadlines 存在遊戲狀態，回報最早的一個，並在一次 `handleAlarm()` 處理所有已到期事件。
+- 斷線不等於離房：WebSocket close 會把玩家標記為 `online: false` 並保留在名單中；遊戲進行中，明確送出 `leave_room` 才會移除玩家並呼叫遊戲模組的 `onPlayerLeave()`（房主的踢人操作只允許在等待階段）。規劃規則時要分別決定玩家離線、明確離房和重新連線時的行為。
+
+更多 Durable Object 細節請參考 Cloudflare 官方文件：[設計 Durable Objects](https://developers.cloudflare.com/durable-objects/best-practices/rules-of-durable-objects/)、[Hibernatable WebSockets](https://developers.cloudflare.com/durable-objects/best-practices/websockets/) 與 [Alarms API](https://developers.cloudflare.com/durable-objects/api/alarms/)。
+
 猜詞答案及你畫我猜答案在猜題階段都不會放進公開快照；你畫我猜的答案只會以私人 `answer-prompt` 事件傳給繪圖者，進入 `reveal` 後才公開。分數、玩家是否已作答及回合切換也都由伺服器決定。
 
 ### HTTP 與 WebSocket 介面
@@ -86,7 +117,7 @@ Vue 前端
 - 你畫我猜設定預設為繪畫 60 秒、每人 1 輪、猜答案 30 秒；設定答案階段固定 30 秒，揭曉階段固定 3 秒。設定答案逾時會跳過該題；繪圖者可手動跳過或提早結束繪圖。
 - 你畫我猜依開局玩家順序輪流繪圖，總題數為開局玩家數乘以每人輪數。每位猜中的玩家各得 50 分；同一題第一次有人猜中時繪圖者得 50 分。所有在線猜題玩家都猜中會提早揭曉，否則猜題時間到才揭曉。
 - 繪圖筆畫以正規化座標分批透過 WebSocket 廣播給房內其他玩家，不回送給繪圖者，也不寫入房間狀態；重新連線不會重播或還原畫布。繪圖者在繪畫中斷線時仍保留本題，時間到後進入猜答案階段。
-- Durable Object 的 alarm 負責推進回合與處理閒置期限；前端只呈現伺服器狀態。
+- Durable Object 的單一 alarm 負責推進遊戲階段與處理閒置期限；前端只呈現伺服器期限，不自行裁決遊戲結果。
 - `worker/src/games/registry.ts` 將遊戲 ID 對應到獨立伺服器模組；共用房間流程透過模組介面啟動遊戲、分派操作、處理 alarm／離房及建立公開快照。
 - `worker/src/games/draw-guess/` 與 `src/games/draw-guess/` 分別實作你畫我猜的伺服器規則與獨立 Vue 畫面；`worker/src/games/blank/` 則是沒有實際玩法的擴充測試模組。
 - 結束時會清除本局的 `game` 狀態；準備下一局時會預選 `word-guess` 並清除 Ready，但保留每位玩家的 `score`。分數會跨不同遊戲累積，不會在開始新局時歸零。
@@ -198,15 +229,55 @@ npm run worker:check  # 產生 Wrangler 型別並檢查 Worker TypeScript
 
 ### 調整或新增遊戲
 
-每個遊戲的玩法與 Vue 畫面各自放在獨立資料夾。`GameRoom.ts` 僅處理共用房間規則、玩家權限、保存與廣播，不應加入針對遊戲 ID 的條件分支。
+每個遊戲的玩法與 Vue 畫面各自放在獨立資料夾。`GameRoom.ts` 僅處理共用房間規則、玩家權限、保存與廣播，不應加入針對遊戲 ID 的條件分支；Worker 也不應新增只服務某一遊戲的路由。只有當行為真的適用所有遊戲（例如新的共用房間權限或共用訊息）時，才修改共用流程。
 
-1. 在 `shared/games/catalog.ts` 加入唯一遊戲 ID、名稱、說明、最少及最多玩家數；最多玩家不可超過 `ROOM_CAPACITY`。在 `shared/games/<game-id>.ts` 定義公開狀態型別與執行期驗證，並將型別加入 `shared/games/types.ts`。
-2. 建立 `worker/src/games/<game-id>/`，在 `types.ts` 定義遊戲保存狀態，在 `index.ts` 實作遊戲模組介面：啟動、`game_action` 操作、alarm、玩家離開、玩家狀態旗標與公開快照。
-3. 將伺服器模組加入 `worker/src/games/registry.ts`。遊戲專屬計時、分數、操作授權及結束狀態都留在該模組。
-4. 建立 `src/games/<game-id>/`，以獨立 `.vue` 元件實作進行中與結算畫面，透過 `game-action` 事件送出操作，再加入 `src/games/registry.ts`。
-5. 執行 `npm run build` 和 `npm run worker:check`，並測試低於最少人數、符合範圍、超過最多人數及完整遊戲流程。
+#### 開始寫程式前先定義規則
 
-新增遊戲只需擴充共用遊戲目錄、公開／保存型別與兩個註冊表；共用房間 Durable Object 與 `App.vue` 不需要加入遊戲專屬分支。前端依遊戲註冊表載入各自的 Vue 元件，Worker 則依伺服器註冊表呼叫對應模組。
+先列清楚遊戲規則，再決定 state 和 action。至少回答：
+
+- **人數與參與者**：最少／最多人數；開始後加入是否禁止；玩家離線、明確離房及重新連線各會如何影響目前回合。
+- **階段與操作**：有哪些 phase、誰能在各階段操作、合法轉移是什麼；玩家連點、重送、送錯階段或逾時時伺服器要如何回應。
+- **時間與結果**：哪些階段有期限、逾時如何推進、誰得分、多人同時達成條件如何計分、何時提早結束、何時整局結束。
+- **資訊可見性**：哪些資料是所有人可見、只有個別玩家可見、只用來即時動畫且不用保存。秘密答案、隱藏角色或未公開選項不能放進公開 `GameView`。
+- **恢復方式**：DO 被休眠／重新建立或玩家重連後，哪些資訊需要還原；只要規則要求恢復，就必須放進持久狀態，而不能只留在瀏覽器或 Worker 記憶體。
+
+用下表決定資料應放在哪個介面：
+
+| 資料類型 | 本專案放置位置 | 用途與限制 |
+| --- | --- | --- |
+| 伺服器權威狀態 | `room.game`，型別加入 `StoredGame` | 回合、phase、答案、分數判定依據；只由伺服器規則變更，不直接整份回傳給前端。 |
+| 公開即時狀態 | `GameView` 與 `toView()` | 顯示給整個房間；只輸出 UI 必需資料，移除答案、私有選擇等秘密。 |
+| 本局設定 | `room.gameSettings`、`publicSettings()` | 等待階段供玩家查看；由模組驗證設定值，開始後不可再改。 |
+| 玩家私人資料 | `privateState(room, playerId)` | 玩家驗證／重連後，只送給該玩家，例如繪圖者自己的題目。 |
+| 暫時即時事件 | `GameActionResult.event` | 動畫、筆畫或私人操作回饋；明確指定接收者，不會因 `changed: false` 被保存或重播。 |
+
+#### Worker 與遊戲模組的實作流程
+
+1. **登錄遊戲選項**：在 `shared/games/catalog.ts` 加入唯一 `GameId`、名稱、說明與最少／最多人數（不得超過 `ROOM_CAPACITY`）。
+2. **定義前後端契約**：在 `shared/games/<game-id>.ts` 定義設定、公開 `GameView`、phase 型別與 runtime validator；將新型別加入 `shared/games/types.ts`，並在 `shared/games/index.ts` 匯出及註冊 validator。只有通用 WebSocket 封包或房間快照形狀改變時才修改 `shared/protocol.ts`；個別 action 通常使用既有的 `game_action { gameId, action, payload }`，不必為每種遊戲操作增加新的頂層訊息。
+3. **建立伺服器模組**：在 `worker/src/games/<game-id>/types.ts` 定義可序列化的 `Stored<...>` 狀態，在 `index.ts` 實作 `GameModule`。將伺服器狀態型別加入 `worker/src/games/types.ts` 的 `StoredGame` 聯集，再把模組加入 `worker/src/games/registry.ts`。
+4. **把規則放在正確的 callback**：`defaultSettings()` 提供預設；`configure()` 驗證並保存等待階段設定；`publicSettings()` 只公開安全設定；`start()` 初始化本局；`handleAction()` 驗證 phase、玩家身分、輸入與分數；`nextAlarmAt()`／`handleAlarm()` 處理期限；`onPlayerLeave()` 處理明確離房；`privateState()`、`playerFlags()`、`toView()` 分別提供個人狀態、共用玩家旗標與公開快照。
+5. **讓共用 DO 處理共用工作**：設定操作使用既有 `configure_game`，由 `GameRoom` 檢查房主與 `waiting` 狀態後呼叫模組；若設定有變更，房間會清除 Ready、保存並廣播。開始遊戲時，`GameRoom` 先檢查遊戲人數及全員在線 Ready，再呼叫模組的 `start()`。遊戲中的所有 payload 都要由 `handleAction()` 再驗證，不能只靠 Vue 的 `disabled` 屬性。
+6. **建立獨立前端資料夾**：在 `src/games/<game-id>/` 放置設定（若需要）、進行中與結算 `.vue` 元件；在 `src/games/registry.ts` 註冊元件。沿用 `useGameRoom.ts` 管理 WebSocket，畫面以 `game-action` 送出 action，接收 `GameView`／`gameEvent` 呈現結果，不直接連接 Durable Object。遊戲設定元件透過 `configure-game` 事件送出設定。
+
+#### GameModule 回傳結果時的注意事項
+
+- `handleAction()` 收到已解析的 payload 與伺服器傳入的 `now`；必須再次驗證 action 名稱、資料型別與長度、當前 phase、操作玩家及重複操作。若 action 抵達時 deadline 已過但 alarm 尚未執行，先推進逾時階段並回傳已變更，再拒絕過期 action。不要接受 client 指定的分數、勝負、目前玩家或 deadline。
+- 修改 `room.game`、玩家分數或其他持久資料時回傳 `changed: true`；只送暫時事件時回傳 `changed: false`。錯誤使用 `ok: false` 與明確 `code`／`message`，不要把錯誤偽裝成成功。
+- `toView()` 只建立公開投影，不要回傳整個 `StoredGame`；在 `shared/games/index.ts` 的 validator 也要拒絕格式錯誤的伺服器快照，避免前端收到不完整狀態。
+- WebSocket 入站訊息目前限制為 JavaScript 字串長度 2,048。大量資料應分批傳送並在伺服器驗證每批上限；不要透過一個遊戲 action 傳整張圖片、整份聊天紀錄或任意大物件。
+- 只要改動 `StoredRoom` 共用持久格式，就要檢查 `worker/src/rooms/GameRoom.ts` 的初始化／legacy migration 與 `schemaVersion`；單純新增一種遊戲狀態時，先確認不需要破壞既有房間資料，不要無故改 schema。
+
+#### 測試新遊戲的清單
+
+執行 `npm run build` 和 `npm run worker:check`，再逐項驗證：
+
+- 低於最少人數、符合人數範圍、超過最多人數，以及有玩家離線或尚未 Ready 時無法開局。
+- 非房主設定、非法設定、錯誤 `gameId`、非法 payload、非當前操作者操作、重複操作及錯誤 phase 操作都會被伺服器拒絕。
+- 正常完整流程、提早結束、各階段逾時、連續／重送 action、alarm 重試，以及遊戲結束後開下一局並確認分數保留。
+- 玩家在每個重要 phase 斷線後重連、明確離房、房主離開、私人資料不外洩；若有即時事件，確認收件人正確且沒有意外保存／重播。
+
+可先參考 `worker/src/games/word-guess/` 的簡單限時猜答、`worker/src/games/draw-guess/` 的設定／多階段流程／私人狀態／暫時房間事件與離線政策，以及 `worker/src/games/blank/` 的最小遊戲模組。新增遊戲只需擴充共用目錄、公開／保存型別與前後端兩個 registry；共用 Worker、`GameRoom` Durable Object 與 `App.vue` 不應加入遊戲專屬分支。
 
 ## 實作與規格的界線
 
