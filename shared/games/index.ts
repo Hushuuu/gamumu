@@ -2,11 +2,37 @@ import { isBlankGameView } from './blank'
 import { isGameId } from './catalog'
 import type { GameId } from './catalog'
 import { isDrawGuessView } from './draw-guess'
+import { isWerewolfView } from './werewolf'
 import { isWordGuessView } from './word-guess'
 import type { GameView } from './types'
 
 export { isBlankGameView } from './blank'
 export { isDrawGuessSettings, isDrawGuessView } from './draw-guess'
+export {
+  DEFAULT_WEREWOLF_SETTINGS,
+  WEREWOLF_PRIVATE_EVENT,
+  WEREWOLF_ROLES,
+  WEREWOLF_SCRIPTS,
+  isWerewolfPrivateState,
+  isWerewolfRoleId,
+  isWerewolfScriptId,
+  isWerewolfSettings,
+  isWerewolfView,
+} from './werewolf'
+export type {
+  WerewolfCamp,
+  WerewolfHunterShot,
+  WerewolfPhase,
+  WerewolfPrivateState,
+  WerewolfRoleId,
+  WerewolfRoleInfo,
+  WerewolfScriptId,
+  WerewolfScriptInfo,
+  WerewolfSeerResult,
+  WerewolfSettings,
+  WerewolfView,
+  WerewolfWitchState,
+} from './werewolf'
 export { DEFAULT_GAME_ID, GAME_OPTIONS, getGameOption, isGameId, ROOM_CAPACITY } from './catalog'
 export type { GameId, GameOption } from './catalog'
 export { isWordGuessView } from './word-guess'
@@ -19,6 +45,7 @@ const GAME_VIEW_VALIDATORS: Record<GameId, (value: unknown) => boolean> = {
   'word-guess': isWordGuessView,
   blank: isBlankGameView,
   'draw-guess': isDrawGuessView,
+  werewolf: isWerewolfView,
 }
 
 export function isGameView(value: unknown): value is GameView {

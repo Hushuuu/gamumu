@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PlayerView } from '../../../shared/protocol'
 
-defineProps<{ players: PlayerView[] }>()
+defineProps<{ players: PlayerView[]; game?: unknown }>()
 </script>
 
 <template>

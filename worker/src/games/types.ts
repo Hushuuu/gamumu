@@ -2,9 +2,10 @@ import type { GameId, GameView } from '../../../shared/games'
 import type { PlayerView, RoomStatus, ServerMessage } from '../../../shared/protocol'
 import type { StoredBlankGame } from './blank/types'
 import type { StoredDrawGuess } from './draw-guess/types'
+import type { StoredWerewolf } from './werewolf/types'
 import type { StoredWordGuess } from './word-guess/types'
 
-export type StoredGame = StoredWordGuess | StoredBlankGame | StoredDrawGuess
+export type StoredGame = StoredWordGuess | StoredBlankGame | StoredDrawGuess | StoredWerewolf
 
 export interface GameRoomContext {
   status: RoomStatus
@@ -27,6 +28,8 @@ export type GameActionResult =
 
 export interface GameModule {
   id: GameId
+  /** 為 true 時，房間狀態每次廣播後會再把 privateState() 重送給每位在線玩家。 */
+  pushPrivateState?: boolean
   defaultSettings(): Record<string, unknown>
   configure(
     room: GameRoomContext,

@@ -25,6 +25,14 @@ export const GAME_OPTIONS = [
     minPlayers: 2,
     maxPlayers: ROOM_CAPACITY,
   },
+  {
+    id: 'werewolf',
+    name: '狼人殺',
+    description: '伺服器擔任法官的經典社交推理，找出隱藏在村莊裡的狼人。',
+    icon: '🐺',
+    minPlayers: 6,
+    maxPlayers: ROOM_CAPACITY,
+  },
 ] as const
 
 export type GameId = (typeof GAME_OPTIONS)[number]['id']

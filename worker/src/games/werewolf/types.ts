@@ -1,0 +1,72 @@
+import type {
+  WerewolfCamp,
+  WerewolfPhase,
+  WerewolfRoleId,
+  WerewolfScriptId,
+  WerewolfSeerResult,
+  WerewolfSettings,
+  WerewolfHunterShot,
+  WerewolfPrivateState,
+} from '../../../../shared/games/werewolf'
+
+export type DeathCause = 'wolf' | 'poison' | 'vote' | 'shot' | 'left'
+
+export interface NightState {
+  wolfPicks: Record<string, string | null>
+  wolfVictimId: string | null
+  seerTargetId: string | null
+  witchSave: boolean
+  witchPoisonId: string | null
+}
+
+export interface StoredWerewolf {
+  gameId: 'werewolf'
+  settings: WerewolfSettings
+  scriptId: WerewolfScriptId
+  playerIds: string[]
+  roles: Record<string, WerewolfRoleId>
+  alive: Record<string, boolean>
+  phase: WerewolfPhase
+  day: number
+  nightStep: number
+  phaseEndsAt: number
+  stateVersion: number
+  night: NightState
+  witchPotions: { antidote: boolean; poison: boolean }
+  seerResults: WerewolfSeerResult[]
+  votes: Record<string, string | null>
+  lastDeathIds: string[]
+  exiledId: string | null
+  pendingShooterId: string | null
+  afterHunter: 'day-discussion' | 'night'
+  hunterShot: WerewolfHunterShot | null
+  winner: WerewolfCamp | null
+}
+
+export type NightActionResult = { ok: true } | { ok: false; message: string }
+
+export interface RoleNightAction {
+  action: string
+  handle(game: StoredWerewolf, playerId: string, payload: Record<string, unknown>): NightActionResult
+  onStepEnd?(game: StoredWerewolf): void
+}
+
+export interface RoleDefinition {
+  id: WerewolfRoleId
+  camp: WerewolfCamp
+  nightAction?: RoleNightAction
+  triggersShotOnDeath?(cause: DeathCause): boolean
+  privateState?(
+    game: StoredWerewolf,
+    playerId: string,
+    acting: boolean,
+  ): Partial<WerewolfPrivateState>
+}
+
+export interface ScriptDefinition {
+  id: WerewolfScriptId
+  roleSetup(playerCount: number): WerewolfRoleId[]
+  nightSteps: WerewolfRoleId[][]
+  resolveNight(game: StoredWerewolf): Array<{ playerId: string; cause: DeathCause }>
+  checkWin(game: StoredWerewolf): WerewolfCamp | null
+}

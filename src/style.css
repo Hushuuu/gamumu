@@ -2022,3 +2022,289 @@ a:focus-visible {
     width: 100%;
   }
 }
+
+/* 狼人殺 */
+.ww-state {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.ww-state.is-night {
+  margin: 0 -8px;
+  padding: 18px 8px 12px;
+  border-radius: 16px;
+  background: #24213f;
+  color: #e9e6ff;
+}
+
+.ww-state.is-night .round-heading h2,
+.ww-state.is-night .round-kicker {
+  color: #e9e6ff;
+}
+
+.ww-role-card {
+  display: flex;
+  min-height: 92px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px;
+  border: 1px dashed #cfc8fa;
+  border-radius: 14px;
+  background: #f7f5ff;
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.ww-role-card.is-revealed {
+  border-style: solid;
+  background: #eafaf3;
+}
+
+.ww-role-card.is-wolf {
+  background: #fff0ec;
+}
+
+.ww-role-card:disabled {
+  opacity: 0.6;
+}
+
+.ww-role-icon {
+  font-size: 28px;
+}
+
+.ww-role-card strong {
+  font-size: 15px;
+}
+
+.ww-role-camp {
+  color: #77738e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.ww-role-card small {
+  color: #77738e;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.ww-panel {
+  padding: 13px;
+  border: 1px solid #eae8f2;
+  border-radius: 14px;
+  background: #fcfbff;
+  color: var(--ink);
+}
+
+.ww-panel-night {
+  border-color: #3b3766;
+  background: #2f2b52;
+  color: #e9e6ff;
+}
+
+.ww-panel h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.ww-panel p {
+  margin: 4px 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.ww-hint {
+  color: #89869b;
+  font-size: 10px;
+}
+
+.ww-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ww-inline-button {
+  min-height: 38px;
+  margin-top: 6px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.ww-actions .ww-inline-button {
+  margin-top: 0;
+}
+
+.ww-notice {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.ww-notice-dead {
+  background: #f1f0f6;
+  color: #6c6982;
+}
+
+.ww-seats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ww-seat {
+  display: flex;
+  width: 100%;
+  min-height: 82px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: #f7f5ff;
+  color: var(--ink);
+  font: inherit;
+}
+
+.ww-seat img,
+.ww-seat-placeholder {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+}
+
+.ww-seat-placeholder {
+  display: grid;
+  place-items: center;
+  background: #e5e2f3;
+  color: #9895a9;
+}
+
+.ww-seat-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ww-seat.is-dead {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.ww-seat.is-selectable {
+  cursor: pointer;
+  border-color: #d9d3fb;
+}
+
+.ww-seat.is-selected {
+  border-color: var(--purple);
+  background: #eeebff;
+}
+
+.ww-seat:disabled:not(.is-dead) {
+  opacity: 1;
+}
+
+.ww-tag {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e5e1ff;
+  color: var(--purple-dark);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.ww-tag-dead {
+  background: #e7e6ee;
+  color: #6c6982;
+}
+
+.ww-tally {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ww-tally li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f1efff;
+  font-size: 11px;
+}
+
+.ww-tally span {
+  color: #77738e;
+  font-size: 10px;
+}
+
+.ww-setup-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.draw-settings-form select {
+  width: 100%;
+  height: 38px;
+  padding: 0 9px;
+  border: 1px solid #e7e4f0;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+
+.ww-results-list {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.ww-results-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #f7f5ff;
+  font-size: 12px;
+}
+
+.ww-results-list li.is-winner {
+  background: #eafaf3;
+}
+
+.ww-results-list small {
+  grid-column: 1 / -1;
+  color: #77738e;
+  font-size: 10px;
+}

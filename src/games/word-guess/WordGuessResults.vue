@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import type { PlayerView } from '../../../shared/protocol'
 
-const props = defineProps<{ players: PlayerView[] }>()
+const props = defineProps<{ players: PlayerView[]; game?: unknown }>()
 
 const winner = computed(() => {
   return [...props.players].sort((left, right) => right.score - left.score)[0] ?? null

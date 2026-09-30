@@ -21,4 +21,9 @@ export const GAME_COMPONENTS: Record<GameId, GameComponents> = {
     playing: defineAsyncComponent(() => import('./draw-guess/DrawGuessGame.vue')),
     finished: defineAsyncComponent(() => import('./draw-guess/DrawGuessResults.vue')),
   },
+  werewolf: {
+    setup: defineAsyncComponent(() => import('./werewolf/WerewolfSetup.vue')),
+    playing: defineAsyncComponent(() => import('./werewolf/WerewolfGame.vue')),
+    finished: defineAsyncComponent(() => import('./werewolf/WerewolfResults.vue')),
+  },
 }

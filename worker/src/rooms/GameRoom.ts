@@ -756,6 +756,31 @@ export class GameRoom extends DurableObject<Env> {
       return
     }
     this.broadcast({ type: 'state', state: this.toSnapshot(this.room) })
+    this.pushPrivateStates(this.room)
+  }
+
+  private pushPrivateStates(room: StoredRoom): void {
+    const gameModule = getGameModule(room.selectedGameId)
+    if (!gameModule.pushPrivateState) {
+      return
+    }
+
+    for (const ws of this.ctx.getWebSockets()) {
+      const playerId = this.readAttachment(ws)?.playerId
+      if (!playerId || ws.readyState !== WebSocket.OPEN) {
+        continue
+      }
+
+      const privateState = gameModule.privateState(room, playerId)
+      if (privateState) {
+        this.send(ws, {
+          type: 'game_event',
+          gameId: room.selectedGameId,
+          event: privateState.name,
+          payload: privateState.payload,
+        })
+      }
+    }
   }
 
   private broadcast(message: ServerMessage, excludedPlayerId?: string): void {
