@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import {
   isServerMessage,
   type ClientMessage,
+  type GameEvent,
   type RoomSnapshot,
 } from '../../shared/protocol'
 import { createWebSocketUrl } from '../services/api'
@@ -12,7 +13,7 @@ export function useGameRoom() {
   const snapshot = ref<RoomSnapshot | null>(null)
   const connectionStatus = ref<ConnectionStatus>('offline')
   const errorMessage = ref('')
-  const guessFeedback = ref('')
+  const gameEvent = ref<GameEvent | null>(null)
   const playerId = ref('')
   const removedFromRoom = ref(false)
 
@@ -44,6 +45,7 @@ export function useGameRoom() {
     socket = null
     current?.close(1000, 'Client disconnected')
     snapshot.value = null
+    gameEvent.value = null
     playerId.value = ''
     connectionStatus.value = 'offline'
     removedFromRoom.value = false
@@ -132,21 +134,13 @@ export function useGameRoom() {
             current.close(4401, 'Authentication failed')
             return
           case 'state': {
-            const previousGame = snapshot.value?.game
-            const previousGameId = previousGame?.gameId
-            const previousRound = previousGame?.gameId === 'word-guess' ? previousGame.round : null
-            const nextGameId = payload.state.game?.gameId
-            const nextRound = payload.state.game?.gameId === 'word-guess'
-              ? payload.state.game.round
-              : null
             snapshot.value = payload.state
-            if (previousGameId !== nextGameId || previousRound !== nextRound) {
-              guessFeedback.value = ''
-            }
             return
           }
+          case 'game_event':
+            gameEvent.value = payload
+            return
           case 'guess_result':
-            guessFeedback.value = payload.correct ? '答對了！獲得 100 分。' : '答案不對，下一題再試試。'
             return
           case 'action_error':
             errorMessage.value = payload.message
@@ -235,7 +229,7 @@ export function useGameRoom() {
     snapshot,
     connectionStatus,
     errorMessage,
-    guessFeedback,
+    gameEvent,
     playerId,
     removedFromRoom,
     connect,

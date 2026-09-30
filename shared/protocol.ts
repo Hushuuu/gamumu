@@ -1,28 +1,12 @@
 import { isAvatarId, type AvatarId } from './avatars'
+import { isGameId, isGameView } from './games'
+import type { GameId, GameView } from './games'
 
-export const ROOM_CAPACITY = 10
+export { GAME_OPTIONS, ROOM_CAPACITY, getGameOption, isGameId } from './games'
+export type { GameId, GameOption, GameView } from './games'
 
 export type RoomStatus = 'waiting' | 'playing' | 'finished'
 export type RoundPhase = 'guessing' | 'reveal'
-
-export const GAME_OPTIONS = [
-  {
-    id: 'word-guess',
-    name: '猜詞派對',
-    description: '五題猜詞挑戰，答對累積分數。',
-  },
-  {
-    id: 'blank',
-    name: '空白測試遊戲',
-    description: '驗證新遊戲的選擇、啟動與結束流程。',
-  },
-] as const
-
-export type GameId = (typeof GAME_OPTIONS)[number]['id']
-
-export function isGameId(value: unknown): value is GameId {
-  return typeof value === 'string' && GAME_OPTIONS.some((game) => game.id === value)
-}
 
 export interface PlayerView {
   id: string
@@ -35,31 +19,21 @@ export interface PlayerView {
   correct: boolean
 }
 
-export interface WordGuessView {
-  gameId: 'word-guess'
-  round: number
-  totalRounds: number
-  phase: RoundPhase
-  hint: string
-  answer: string | null
-  roundEndsAt: number | null
-}
-
-export interface BlankGameView {
-  gameId: 'blank'
-  startedAt: number
-}
-
-export type GameView = WordGuessView | BlankGameView
-
 export interface RoomSnapshot {
   code: string
   hostId: string
   status: RoomStatus
   capacity: number
   selectedGameId: GameId
+  gameSettings: Record<string, unknown>
   players: PlayerView[]
   game: GameView | null
+}
+
+export interface GameEvent {
+  gameId: GameId
+  event: string
+  payload: Record<string, unknown>
 }
 
 export type ClientMessage =
@@ -67,8 +41,10 @@ export type ClientMessage =
   | { type: 'set_ready'; ready: boolean }
   | { type: 'select_avatar'; avatarId: AvatarId }
   | { type: 'select_game'; gameId: GameId }
+  | { type: 'configure_game'; gameId: GameId; settings: Record<string, unknown> }
   | { type: 'kick_player'; playerId: string }
   | { type: 'start_game' }
+  | { type: 'game_action'; gameId: GameId; action: string; payload: Record<string, unknown> }
   | { type: 'submit_answer'; answer: string }
   | { type: 'finish_game' }
   | { type: 'prepare_next_game' }
@@ -80,6 +56,7 @@ export type ServerMessage =
   | { type: 'auth_error'; code: string; message: string }
   | { type: 'kicked'; message: string }
   | { type: 'state'; state: RoomSnapshot }
+  | ({ type: 'game_event' } & GameEvent)
   | { type: 'guess_result'; correct: boolean }
   | { type: 'action_error'; code: string; message: string }
   | { type: 'left_room' }
@@ -103,6 +80,7 @@ export function isRoomSnapshot(value: unknown): value is RoomSnapshot {
     !['waiting', 'playing', 'finished'].includes(String(value.status)) ||
     typeof value.capacity !== 'number' ||
     !isGameId(value.selectedGameId) ||
+    !isRecord(value.gameSettings) ||
     !Array.isArray(value.players)
   ) {
     return false
@@ -126,29 +104,9 @@ export function isRoomSnapshot(value: unknown): value is RoomSnapshot {
     return false
   }
 
-  if (value.game === null) {
-    return true
-  }
-
-  if (
-    !isRecord(value.game) ||
-    !isGameId(value.game.gameId) ||
-    value.game.gameId !== value.selectedGameId
-  ) {
-    return false
-  }
-
-  if (value.game.gameId === 'blank') {
-    return typeof value.game.startedAt === 'number'
-  }
-
-  return (
-    typeof value.game.round === 'number' &&
-    typeof value.game.totalRounds === 'number' &&
-    ['guessing', 'reveal'].includes(String(value.game.phase)) &&
-    typeof value.game.hint === 'string' &&
-    (value.game.answer === null || typeof value.game.answer === 'string') &&
-    (value.game.roundEndsAt === null || typeof value.game.roundEndsAt === 'number')
+  return value.game === null || (
+    isGameView(value.game) &&
+    value.game.gameId === value.selectedGameId
   )
 }
 
@@ -171,6 +129,12 @@ export function isServerMessage(value: unknown): value is ServerMessage {
       return typeof value.code === 'string' && typeof value.message === 'string'
     case 'state':
       return isRoomSnapshot(value.state)
+    case 'game_event':
+      return (
+        isGameId(value.gameId) &&
+        typeof value.event === 'string' &&
+        isRecord(value.payload)
+      )
     case 'guess_result':
       return typeof value.correct === 'boolean'
     default:

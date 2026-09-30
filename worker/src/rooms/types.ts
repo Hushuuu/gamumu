@@ -1,5 +1,6 @@
 import type { AvatarId } from '../../../shared/avatars'
 import type { GameId, RoomStatus, RoundPhase } from '../../../shared/protocol'
+import type { StoredGame } from '../games/types'
 
 export interface StoredPlayer {
   id: string
@@ -11,31 +12,13 @@ export interface StoredPlayer {
   ready: boolean
 }
 
-export interface StoredWordGuess {
-  gameId: 'word-guess'
-  round: number
-  totalRounds: number
-  phase: RoundPhase
-  answer: string
-  hint: string
-  roundEndsAt: number
-  answeredPlayerIds: string[]
-  correctPlayerIds: string[]
-}
-
-export interface StoredBlankGame {
-  gameId: 'blank'
-  startedAt: number
-}
-
-export type StoredGame = StoredWordGuess | StoredBlankGame
-
 export interface StoredRoom {
   schemaVersion: 2
   code: string
   hostId: string
   status: RoomStatus
   selectedGameId: GameId
+  gameSettings?: Record<string, unknown>
   players: StoredPlayer[]
   game: StoredGame | null
   createdAt: number

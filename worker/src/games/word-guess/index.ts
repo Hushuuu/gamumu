@@ -1,4 +1,6 @@
-import type { StoredRoom, StoredWordGuess } from '../rooms/types'
+import type { GameActionResult, GameModule, GameRoomContext } from '../types'
+import type { WordGuessView } from '../../../../shared/games/word-guess'
+import type { StoredWordGuess } from './types'
 
 const ROUND_DURATION_MS = 20_000
 const REVEAL_DURATION_MS = 3_000
@@ -46,13 +48,13 @@ function createRound(round: number, now: number): StoredWordGuess {
   }
 }
 
-export function startWordGuess(room: StoredRoom, now: number): void {
+export function startWordGuess(room: GameRoomContext, now: number): void {
   room.status = 'playing'
   room.game = createRound(1, now)
 }
 
 export function submitWordGuess(
-  room: StoredRoom,
+  room: GameRoomContext,
   playerId: string,
   answer: string,
   now: number,
@@ -96,7 +98,7 @@ export function submitWordGuess(
   return { ok: true, correct, changed: true }
 }
 
-export function revealWordGuess(room: StoredRoom, now: number): boolean {
+export function revealWordGuess(room: GameRoomContext, now: number): boolean {
   const game = room.game
   if (room.status !== 'playing' || !game || game.gameId !== 'word-guess' || game.phase !== 'guessing') {
     return false
@@ -107,7 +109,7 @@ export function revealWordGuess(room: StoredRoom, now: number): boolean {
   return true
 }
 
-export function advanceWordGuess(room: StoredRoom, now: number): boolean {
+export function advanceWordGuess(room: GameRoomContext, now: number): boolean {
   const game = room.game
   if (room.status !== 'playing' || !game || game.gameId !== 'word-guess' || game.phase !== 'reveal') {
     return false
@@ -121,4 +123,108 @@ export function advanceWordGuess(room: StoredRoom, now: number): boolean {
 
   room.game = createRound(game.round + 1, now)
   return true
+}
+
+function handleWordGuessAction(
+  room: GameRoomContext,
+  playerId: string,
+  action: string,
+  payload: Record<string, unknown>,
+  now: number,
+): GameActionResult {
+  if (action !== 'submit_answer') {
+    return {
+      ok: false,
+      changed: false,
+      code: 'UNKNOWN_GAME_ACTION',
+      message: '猜詞派對不支援這個操作。',
+    }
+  }
+
+  const answer = payload.answer
+  if (typeof answer !== 'string' || answer.trim().length === 0 || Array.from(answer).length > 80) {
+    return {
+      ok: false,
+      changed: false,
+      code: 'INVALID_ANSWER',
+      message: '答案請填 1 到 80 個字元。',
+    }
+  }
+
+  const result = submitWordGuess(room, playerId, answer, now)
+  if (!result.ok) {
+    return result
+  }
+
+  return {
+    ok: true,
+    changed: true,
+    event: {
+      name: 'answer-result',
+      payload: { correct: result.correct },
+      legacyMessage: { type: 'guess_result', correct: result.correct },
+    },
+  }
+}
+
+export const wordGuessGame: GameModule = {
+  id: 'word-guess',
+  defaultSettings: () => ({}),
+  configure: () => ({
+    ok: false,
+    changed: false,
+    code: 'GAME_NOT_CONFIGURABLE',
+    message: '猜詞派對沒有可調整的設定。',
+  }),
+  publicSettings: () => ({}),
+  privateState: () => null,
+  start: startWordGuess,
+  handleAction: handleWordGuessAction,
+  nextAlarmAt(room) {
+    return room.status === 'playing' && room.game?.gameId === 'word-guess'
+      ? room.game.roundEndsAt
+      : null
+  },
+  handleAlarm(room, now) {
+    const game = room.game
+    if (room.status !== 'playing' || game?.gameId !== 'word-guess' || game.roundEndsAt > now) {
+      return false
+    }
+    return game.phase === 'guessing'
+      ? revealWordGuess(room, now)
+      : advanceWordGuess(room, now)
+  },
+  onPlayerLeave(room, _playerId, now) {
+    const game = room.game
+    return (
+      room.status === 'playing' &&
+      game?.gameId === 'word-guess' &&
+      game.phase === 'guessing' &&
+      game.answeredPlayerIds.length >= room.players.length &&
+      revealWordGuess(room, now)
+    )
+  },
+  playerFlags(room, playerId) {
+    const game = room.game
+    return {
+      answered: game?.gameId === 'word-guess' && game.answeredPlayerIds.includes(playerId),
+      correct: game?.gameId === 'word-guess' && game.correctPlayerIds.includes(playerId),
+    }
+  },
+  toView(room): WordGuessView | null {
+    const game = room.game
+    if (game?.gameId !== 'word-guess') {
+      return null
+    }
+
+    return {
+      gameId: 'word-guess',
+      round: game.round,
+      totalRounds: game.totalRounds,
+      phase: game.phase,
+      hint: game.hint,
+      answer: game.phase === 'reveal' ? game.answer : null,
+      roundEndsAt: room.status === 'finished' ? null : game.roundEndsAt,
+    }
+  },
 }

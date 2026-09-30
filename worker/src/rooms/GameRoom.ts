@@ -1,15 +1,13 @@
 import { DurableObject } from 'cloudflare:workers'
 import { AVATARS, isAvatarId, type AvatarId } from '../../../shared/avatars'
+import { DEFAULT_GAME_ID, getGameOption, isGameId, ROOM_CAPACITY } from '../../../shared/games'
 import {
-  isGameId,
   isRecord,
-  ROOM_CAPACITY,
   type RoomSnapshot,
   type ServerMessage,
 } from '../../../shared/protocol'
-import { finishBlankGame, startBlankGame } from '../games/blank'
-import { advanceWordGuess, revealWordGuess, startWordGuess, submitWordGuess } from '../games/word-guess'
 import type { Env } from '../env'
+import { getGameModule } from '../games/registry'
 import { hashSessionToken } from '../security'
 import type { LegacyStoredRoom, StoredPlayer, StoredRoom } from './types'
 
@@ -134,17 +132,30 @@ export class GameRoom extends DurableObject<Env> {
       case 'select_game':
         await this.handleSelectGame(ws, player, payload.gameId)
         return
+      case 'configure_game':
+        await this.handleConfigureGame(ws, player, payload.gameId, payload.settings)
+        return
       case 'kick_player':
         await this.handleKickPlayer(ws, player, payload.playerId)
         return
       case 'start_game':
         await this.handleStartGame(ws, player)
         return
+      case 'game_action':
+        await this.handleGameAction(ws, player, payload.gameId, payload.action, payload.payload)
+        return
       case 'submit_answer':
-        await this.handleSubmitAnswer(ws, player, payload.answer)
+        await this.handleGameAction(
+          ws,
+          player,
+          this.room.selectedGameId,
+          'submit_answer',
+          { answer: payload.answer },
+          true,
+        )
         return
       case 'finish_game':
-        await this.handleFinishGame(ws, player)
+        await this.handleGameAction(ws, player, this.room.selectedGameId, 'finish_game', {}, true)
         return
       case 'prepare_next_game':
         await this.handlePrepareNextGame(ws, player)
@@ -190,13 +201,8 @@ export class GameRoom extends DurableObject<Env> {
       return
     }
 
-    const game = this.room.game
-    if (this.room.status === 'playing' && game?.gameId === 'word-guess' && game.roundEndsAt <= now) {
-      if (game.phase === 'guessing') {
-        revealWordGuess(this.room, now)
-      } else {
-        advanceWordGuess(this.room, now)
-      }
+    const gameModule = getGameModule(this.room.selectedGameId)
+    if (this.room.status === 'playing' && gameModule.handleAlarm(this.room, now)) {
       await this.persist()
       this.broadcastState()
       return
@@ -228,7 +234,8 @@ export class GameRoom extends DurableObject<Env> {
       code,
       hostId: player.id,
       status: 'waiting',
-      selectedGameId: 'word-guess',
+      selectedGameId: DEFAULT_GAME_ID,
+      gameSettings: getGameModule(DEFAULT_GAME_ID).defaultSettings(),
       players: [{ ...player, name }],
       game: null,
       createdAt: now,
@@ -339,11 +346,52 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     this.room.selectedGameId = value
+    this.room.gameSettings = getGameModule(value).defaultSettings()
     for (const roomPlayer of this.room.players) {
       roomPlayer.ready = false
     }
     await this.persist()
     this.broadcastState()
+  }
+
+  private async handleConfigureGame(
+    ws: WebSocket,
+    player: StoredPlayer,
+    gameIdValue: unknown,
+    settingsValue: unknown,
+  ): Promise<void> {
+    if (!this.room) {
+      return
+    }
+
+    if (player.id !== this.room.hostId) {
+      this.send(ws, { type: 'action_error', code: 'HOST_ONLY', message: '只有房主可以設定遊戲。' })
+      return
+    }
+
+    if (this.room.status !== 'waiting') {
+      this.send(ws, { type: 'action_error', code: 'ROOM_NOT_WAITING', message: '遊戲開始後不能修改設定。' })
+      return
+    }
+
+    if (!isGameId(gameIdValue) || gameIdValue !== this.room.selectedGameId || !isRecord(settingsValue)) {
+      this.send(ws, { type: 'action_error', code: 'INVALID_GAME_SETTINGS', message: '遊戲設定格式不正確。' })
+      return
+    }
+
+    const result = getGameModule(gameIdValue).configure(this.room, player.id, settingsValue)
+    if (!result.ok) {
+      this.send(ws, { type: 'action_error', code: result.code, message: result.message })
+      return
+    }
+
+    if (result.changed) {
+      for (const roomPlayer of this.room.players) {
+        roomPlayer.ready = false
+      }
+      await this.persist()
+      this.broadcastState()
+    }
   }
 
   private async handleKickPlayer(ws: WebSocket, player: StoredPlayer, value: unknown): Promise<void> {
@@ -416,6 +464,15 @@ export class GameRoom extends DurableObject<Env> {
     await this.persist()
     this.send(ws, { type: 'authenticated', playerId: player.id })
     this.broadcastState()
+    const privateState = getGameModule(this.room.selectedGameId).privateState(this.room, player.id)
+    if (privateState) {
+      this.send(ws, {
+        type: 'game_event',
+        gameId: this.room.selectedGameId,
+        event: privateState.name,
+        payload: privateState.payload,
+      })
+    }
   }
 
   private async handleStartGame(ws: WebSocket, player: StoredPlayer): Promise<void> {
@@ -433,8 +490,22 @@ export class GameRoom extends DurableObject<Env> {
       return
     }
 
-    if (this.room.players.length < 2) {
-      this.send(ws, { type: 'action_error', code: 'NEED_TWO_PLAYERS', message: '至少需要兩位玩家才能開始。' })
+    const gameOption = getGameOption(this.room.selectedGameId)
+    if (this.room.players.length < gameOption.minPlayers) {
+      this.send(ws, {
+        type: 'action_error',
+        code: 'NOT_ENOUGH_PLAYERS',
+        message: `${gameOption.name}至少需要 ${gameOption.minPlayers} 位玩家才能開始。`,
+      })
+      return
+    }
+
+    if (this.room.players.length > gameOption.maxPlayers) {
+      this.send(ws, {
+        type: 'action_error',
+        code: 'TOO_MANY_PLAYERS',
+        message: `${gameOption.name}最多允許 ${gameOption.maxPlayers} 位玩家參加。`,
+      })
       return
     }
 
@@ -447,36 +518,59 @@ export class GameRoom extends DurableObject<Env> {
       return
     }
 
-    const now = Date.now()
-    if (this.room.selectedGameId === 'word-guess') {
-      startWordGuess(this.room, now)
-    } else {
-      startBlankGame(this.room, now)
-    }
+    getGameModule(this.room.selectedGameId).start(this.room, Date.now())
     await this.persist()
     this.broadcastState()
   }
 
-  private async handleSubmitAnswer(ws: WebSocket, player: StoredPlayer, value: unknown): Promise<void> {
-    if (typeof value !== 'string' || value.trim().length === 0 || Array.from(value).length > 80) {
-      this.send(ws, { type: 'action_error', code: 'INVALID_ANSWER', message: '答案請填 1 到 80 個字元。' })
-      return
-    }
-
+  private async handleGameAction(
+    ws: WebSocket,
+    player: StoredPlayer,
+    gameIdValue: unknown,
+    actionValue: unknown,
+    payloadValue: unknown,
+    isLegacyAction = false,
+  ): Promise<void> {
     if (!this.room) {
       return
     }
 
-    if (this.room.selectedGameId !== 'word-guess') {
+    if (
+      !isGameId(gameIdValue) ||
+      typeof actionValue !== 'string' ||
+      actionValue.length === 0 ||
+      actionValue.length > 80 ||
+      !isRecord(payloadValue)
+    ) {
       this.send(ws, {
         type: 'action_error',
-        code: 'GAME_DOES_NOT_ACCEPT_ANSWERS',
-        message: '目前選擇的遊戲沒有猜詞作答功能。',
+        code: 'INVALID_GAME_ACTION',
+        message: '遊戲操作格式不正確。',
       })
       return
     }
 
-    const result = submitWordGuess(this.room, player.id, value, Date.now())
+    if (gameIdValue !== this.room.selectedGameId) {
+      this.send(ws, {
+        type: 'action_error',
+        code: 'GAME_NOT_SELECTED',
+        message: '這個操作不屬於目前選擇的遊戲。',
+      })
+      return
+    }
+
+    if (this.room.status !== 'playing') {
+      this.send(ws, { type: 'action_error', code: 'GAME_NOT_STARTED', message: '遊戲尚未開始。' })
+      return
+    }
+
+    const result = getGameModule(gameIdValue).handleAction(
+      this.room,
+      player.id,
+      actionValue,
+      payloadValue,
+      Date.now(),
+    )
     if (result.changed) {
       await this.persist()
       this.broadcastState()
@@ -491,27 +585,25 @@ export class GameRoom extends DurableObject<Env> {
       return
     }
 
-    this.send(ws, { type: 'guess_result', correct: result.correct })
-    this.broadcastState()
-  }
-
-  private async handleFinishGame(ws: WebSocket, player: StoredPlayer): Promise<void> {
-    if (!this.room) {
-      return
+    if (result.event) {
+      if (isLegacyAction && result.event.legacyMessage) {
+        this.send(ws, result.event.legacyMessage)
+      } else if (!isLegacyAction && result.event.audience === 'room') {
+        this.broadcast({
+          type: 'game_event',
+          gameId: gameIdValue,
+          event: result.event.name,
+          payload: result.event.payload,
+        }, player.id)
+      } else if (!isLegacyAction) {
+        this.send(ws, {
+          type: 'game_event',
+          gameId: gameIdValue,
+          event: result.event.name,
+          payload: result.event.payload,
+        })
+      }
     }
-
-    if (player.id !== this.room.hostId) {
-      this.send(ws, { type: 'action_error', code: 'HOST_ONLY', message: '只有房主可以結束測試遊戲。' })
-      return
-    }
-
-    if (!finishBlankGame(this.room)) {
-      this.send(ws, { type: 'action_error', code: 'GAME_NOT_RUNNING', message: '目前沒有可結束的測試遊戲。' })
-      return
-    }
-
-    await this.persist()
-    this.broadcastState()
   }
 
   private async handlePrepareNextGame(ws: WebSocket, player: StoredPlayer): Promise<void> {
@@ -530,7 +622,8 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     this.room.status = 'waiting'
-    this.room.selectedGameId = 'word-guess'
+    this.room.selectedGameId = DEFAULT_GAME_ID
+    this.room.gameSettings = getGameModule(DEFAULT_GAME_ID).defaultSettings()
     this.room.game = null
     for (const roomPlayer of this.room.players) {
       roomPlayer.ready = false
@@ -563,14 +656,8 @@ export class GameRoom extends DurableObject<Env> {
       this.room.hostId = this.room.players[0]!.id
     }
 
-    const game = this.room.game
-    if (
-      this.room.status === 'playing' &&
-      game?.gameId === 'word-guess' &&
-      game.phase === 'guessing' &&
-      game.answeredPlayerIds.length >= this.room.players.length
-    ) {
-      revealWordGuess(this.room, Date.now())
+    if (this.room.status === 'playing') {
+      getGameModule(this.room.selectedGameId).onPlayerLeave(this.room, player.id, Date.now())
     }
 
     await this.persist()
@@ -635,25 +722,22 @@ export class GameRoom extends DurableObject<Env> {
 
     const now = Date.now()
     const deadlines = [this.room.updatedAt + ROOM_IDLE_TTL_MS]
-    if (
-      this.room.status === 'playing' &&
-      this.room.game?.gameId === 'word-guess' &&
-      this.room.game.roundEndsAt > now
-    ) {
-      deadlines.push(this.room.game.roundEndsAt)
+    const gameDeadline = getGameModule(this.room.selectedGameId).nextAlarmAt(this.room)
+    if (this.room.status === 'playing' && gameDeadline !== null && gameDeadline > now) {
+      deadlines.push(gameDeadline)
     }
     await this.ctx.storage.setAlarm(Math.min(...deadlines))
   }
 
   private toSnapshot(room: StoredRoom): RoomSnapshot {
-    const game = room.game
-    const wordGuessGame = game?.gameId === 'word-guess' ? game : null
+    const gameModule = getGameModule(room.selectedGameId)
     return {
       code: room.code,
       hostId: room.hostId,
       status: room.status,
       capacity: ROOM_CAPACITY,
       selectedGameId: room.selectedGameId,
+      gameSettings: gameModule.publicSettings(room),
       players: room.players.map((player) => ({
         id: player.id,
         name: player.name,
@@ -661,22 +745,9 @@ export class GameRoom extends DurableObject<Env> {
         score: player.score,
         online: player.online,
         ready: player.ready,
-        answered: wordGuessGame?.answeredPlayerIds.includes(player.id) ?? false,
-        correct: wordGuessGame?.correctPlayerIds.includes(player.id) ?? false,
+        ...gameModule.playerFlags(room, player.id),
       })),
-      game: game?.gameId === 'word-guess'
-        ? {
-            gameId: 'word-guess',
-            round: game.round,
-            totalRounds: game.totalRounds,
-            phase: game.phase,
-            hint: game.hint,
-            answer: game.phase === 'reveal' ? game.answer : null,
-            roundEndsAt: room.status === 'finished' ? null : game.roundEndsAt,
-          }
-        : game?.gameId === 'blank'
-          ? { gameId: 'blank', startedAt: game.startedAt }
-          : null,
+      game: gameModule.toView(room),
     }
   }
 
@@ -687,7 +758,7 @@ export class GameRoom extends DurableObject<Env> {
     this.broadcast({ type: 'state', state: this.toSnapshot(this.room) })
   }
 
-  private broadcast(message: ServerMessage): void {
+  private broadcast(message: ServerMessage, excludedPlayerId?: string): void {
     const serialized = JSON.stringify(message)
     const activePlayerIds = new Set(this.room?.players.map((player) => player.id) ?? [])
 
@@ -697,6 +768,7 @@ export class GameRoom extends DurableObject<Env> {
         ws.readyState === WebSocket.OPEN &&
         playerId !== null &&
         playerId !== undefined &&
+        playerId !== excludedPlayerId &&
         activePlayerIds.has(playerId)
       ) {
         ws.send(serialized)
@@ -757,7 +829,8 @@ function migrateLegacyRoom(room: LegacyStoredRoom): StoredRoom {
     code: room.code,
     hostId: room.hostId,
     status: room.status,
-    selectedGameId: 'word-guess',
+    selectedGameId: DEFAULT_GAME_ID,
+    gameSettings: getGameModule(DEFAULT_GAME_ID).defaultSettings(),
     players: room.players.map((player, index) => ({
       ...player,
       avatarId: AVATARS[index % AVATARS.length]!.id,

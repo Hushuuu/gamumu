@@ -1,6 +1,6 @@
 # GAMUMU
 
-手機優先的多人派對遊戲。玩家建立或加入房間後，以 WebSocket 即時同步猜詞遊戲；房間、玩家與遊戲結果由 Cloudflare Durable Objects 管理。
+手機優先的多人派對遊戲。玩家建立或加入房間後，以 WebSocket 即時同步猜詞或你畫我猜；房間、玩家與遊戲結果由 Cloudflare Durable Objects 管理。
 
 ## 本機開發
 
@@ -21,6 +21,7 @@ Cloudflare、GitHub Pages、網域與 DNS 的設定步驟請見 [`CLOUDFLARE_SET
 - `src/`：Vue 3 + TypeScript 前端。
 - `worker/src/`：Cloudflare Worker API 與 Durable Object 房間邏輯。
 - `shared/protocol.ts`：前後端共用的即時通訊型別。
+- `shared/games/`：遊戲目錄、人數範圍與遊戲狀態契約；前端及 Worker 各有遊戲元件／邏輯註冊表。
 - `wrangler.jsonc`：Durable Object SQLite migration 與 Worker 設定。
 
-房間上限為 10 人；猜詞遊戲共 5 題，每題 20 秒，答對加 100 分。房間閒置 6 小時後過期。
+房間上限為 12 人；猜詞派對與你畫我猜可供 2–12 人參加，空白測試遊戲可供 1–12 人參加。猜詞遊戲共 5 題，每題 20 秒，答對加 100 分。房間閒置 6 小時後過期。
