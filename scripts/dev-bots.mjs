@@ -2,8 +2,8 @@
 // 用法：設定 BETA_CODE 後執行 npm run dev:bots -- <房間代碼> <機器人數量=5> <APIURL> <BETA_CODE>
 // 環境變數 API_URL 可指定 Worker 位置（預設 http://127.0.0.1:8787）。Ctrl+C 會讓機器人離開房間。
 
-const API = (process.env.API_URL ?? process.argv[4] ?? 'http://127.0.0.1:8787').replace(/\/$/, '')
-const BETA_CODE = process.argv[5]?.trim()
+const API = (process.env.API_URL || process.argv[4] || 'http://127.0.0.1:8787').replace(/\/$/, '')
+const BETA_CODE = process.env.BETA_CODE || process.argv[5]?.trim()
 const [code, countArg] = process.argv.slice(2)
 const count = Number(countArg ?? 5)
 

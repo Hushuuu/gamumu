@@ -406,7 +406,7 @@ function endDiscussion(): void {
       <section v-else-if="phase === 'night'" class="ww-panel ww-panel-night" aria-live="polite">
         <template v-if="priv?.acting && priv.camp === 'wolf'">
           <h3><WerewolfRoleIcon role-id="werewolf" :size="18" /> 選擇今晚要襲擊的玩家</h3>
-          <p>與同伴討論後點選目標；同伴的選擇會顯示在名單上，最高票者被襲擊。可隨時改選。</p>
+          <p>與同伴討論後點選目標；最高票者被襲擊。</p>
           <button
             class="button button-secondary ww-inline-button"
             type="button"
@@ -434,7 +434,7 @@ function endDiscussion(): void {
         <template v-else-if="priv?.acting && priv.role === 'seer'">
           <h3><WerewolfRoleIcon role-id="seer" :size="18" /> 選擇要查驗的玩家</h3>
           <p v-if="priv.myTarget !== null">
-            今晚已查驗：{{ nameOf(priv.myTarget) }} 是
+            已查驗：{{ nameOf(priv.myTarget) }} 是
             <strong>{{ seerTonightCamp === 'wolf' ? '狼人' : '好人' }}</strong>。
           </p>
           <p v-else>點選一位玩家，立即得知他是好人或狼人。</p>
@@ -540,7 +540,7 @@ function endDiscussion(): void {
             :disabled="!props.canInteract"
             @click="endSpeech"
           >
-            {{ isSpeaker ? '結束我的發言' : '跳過目前發言者' }}
+            {{ isSpeaker ? '結束發言' : '跳過目前發言者' }}
           </button>
         </template>
         <template v-else>

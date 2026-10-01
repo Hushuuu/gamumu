@@ -196,7 +196,7 @@ watch(removedFromRoom, (removed) => {
 
 watch(betaAccessExpired, (expired) => {
   if (expired) {
-    lockBetaSession('封測驗證已失效，請重新輸入封測碼。')
+    lockBetaSession('驗證已失效，請重新輸入封測碼。')
   }
 })
 
@@ -571,12 +571,11 @@ function connectionLabel(): string {
           <p class="eyebrow"><span></span> 不用下載，開了就能玩</p>
           <h1>好玩的事，<br /><span>一起發生。</span></h1>
           <p class="hero-description">
-            開一間小小派對房，找朋友一起猜詞、搶分數。把手機傳一傳，笑聲就開始了。
+            隨時隨地開啟你的小小派對，笑聲開始了。
           </p>
           <div class="hero-tags" aria-label="遊戲特色">
             <span>即時連線</span>
             <span>最多 12 人</span>
-            <span>手機優先</span>
           </div>
         </div>
         <div class="hero-art" aria-hidden="true">
@@ -603,7 +602,7 @@ function connectionLabel(): string {
         </div>
 
         <div v-if="betaStatus === 'checking'" class="beta-checking" role="status">
-          正在確認封測資格…
+          正在確認資格…
         </div>
         <form v-else-if="betaStatus !== 'authorized'" class="beta-gate" @submit.prevent="unlockBeta">
           <label class="field-label" for="beta-code">封測驗證碼</label>
@@ -629,7 +628,7 @@ function connectionLabel(): string {
         </form>
         <div v-else class="beta-session-banner" role="status">
           <span class="beta-session-dot" aria-hidden="true"></span>
-          <span>封測驗證有效至 {{ betaExpiryLabel }}</span>
+          <span>驗證有效至 {{ betaExpiryLabel }}</span>
         </div>
 
         <label class="field-label" for="player-name">大家會怎麼稱呼你？</label>
@@ -689,7 +688,7 @@ function connectionLabel(): string {
         <span class="how-arrow" aria-hidden="true">→</span>
         <div><span class="how-number">02</span><span>分享給朋友</span></div>
         <span class="how-arrow" aria-hidden="true">→</span>
-        <div><span class="how-number">03</span><span>開始猜詞</span></div>
+        <div><span class="how-number">03</span><span>開始玩樂</span></div>
       </section>
     </main>
 

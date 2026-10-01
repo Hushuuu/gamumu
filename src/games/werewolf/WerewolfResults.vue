@@ -162,7 +162,7 @@ onUnmounted(() => {
       >
         <header class="ww-review-header">
           <div>
-            <p class="eyebrow">狼人殺覆盤</p>
+            <p class="eyebrow">覆盤</p>
             <h2 id="ww-review-title">本局行動紀錄</h2>
           </div>
           <button

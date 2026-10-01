@@ -113,7 +113,7 @@ function saveSettings(): void {
         <select :value="scriptId" :disabled="disabled || !isValid" @change="selectScript">
           <option v-for="item in WEREWOLF_SCRIPTS" :key="item.id" :value="item.id">{{ item.name }}</option>
         </select>
-        <small>更換劇本會立即儲存，角色依人數自動配置</small>
+        <small>角色依人數自動配置</small>
       </label>
       <label class="ww-checkbox">
         <span>輪流發言</span>
@@ -150,7 +150,7 @@ function saveSettings(): void {
     </form>
     <p class="draw-settings-note">
       {{ isHost ? '儲存變更會清除所有人的準備狀態。' : '設定變更後需要重新準備。' }}
-      伺服器擔任法官；討論請面對面或自行用語音進行。
+      討論請面對面或自行用語音進行。
     </p>
   </section>
 </template>
