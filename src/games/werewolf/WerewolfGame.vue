@@ -615,3 +615,214 @@ function endDiscussion(): void {
     </template>
   </div>
 </template>
+
+<style scoped>
+.ww-state {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.ww-state.is-night {
+  margin: 0 -8px;
+  padding: 18px 8px 12px;
+  border-radius: 16px;
+  background: #24213f;
+  color: #e9e6ff;
+}
+
+.ww-state.is-night .round-heading h2, .ww-state.is-night .round-kicker {
+  color: #e9e6ff;
+}
+
+.ww-panel {
+  padding: 13px;
+  border: 1px solid #eae8f2;
+  border-radius: 14px;
+  background: #fcfbff;
+  color: var(--ink);
+}
+
+.ww-panel-night {
+  border-color: #3b3766;
+  background: #2f2b52;
+  color: #e9e6ff;
+}
+
+.ww-panel h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.ww-panel p {
+  margin: 4px 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.ww-hint {
+  color: #89869b;
+  font-size: 10px;
+}
+
+.ww-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ww-inline-button {
+  min-height: 38px;
+  margin-top: 6px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.ww-actions .ww-inline-button {
+  margin-top: 0;
+}
+
+.ww-notice {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.ww-notice-dead {
+  background: #f1f0f6;
+  color: #6c6982;
+}
+
+.ww-role-guess-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ww-role-guess-heading p {
+  color: #77738e;
+}
+
+.ww-role-guess-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.ww-role-guess-card {
+  display: flex;
+  min-width: 0;
+  min-height: 78px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 7px 5px;
+  border: 1px solid #eae8f2;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 10px;
+  cursor: grab;
+  touch-action: manipulation;
+}
+
+.ww-role-guess-card:active {
+  cursor: grabbing;
+}
+
+.ww-role-guess-card.is-selected {
+  border-color: var(--purple);
+  background: #eeebff;
+  box-shadow: 0 0 0 2px rgb(104 84 177 / 14%);
+}
+
+.ww-role-guess-card:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ww-role-guess-card strong {
+  color: var(--purple-dark);
+  font-size: 10px;
+}
+
+.ww-guess-status {
+  margin: 8px 0 0;
+  color: #77738e;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.ww-tally {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ww-tally li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f1efff;
+  font-size: 11px;
+}
+
+.ww-tally span {
+  color: #77738e;
+  font-size: 10px;
+}
+
+.ww-speaker {
+  margin: 8px 0;
+  font-size: 15px;
+}
+
+.ww-speech-order {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: speech;
+}
+
+.ww-speech-order li {
+  counter-increment: speech;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f1efff;
+  color: #5c5875;
+  font-size: 11px;
+}
+
+.ww-speech-order li::before {
+  content: counter(speech) '. ';
+}
+
+.ww-speech-order li.is-current {
+  background: var(--purple, #6f5cff);
+  color: #fff;
+  font-weight: 700;
+}
+
+.ww-speech-order li.is-done, .ww-speech-order li.is-dead {
+  opacity: 0.45;
+}
+
+.ww-speech-order li.is-dead {
+  text-decoration: line-through;
+}
+</style>

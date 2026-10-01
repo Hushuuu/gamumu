@@ -57,3 +57,73 @@ function hide(): void {
     </template>
   </button>
 </template>
+
+<style scoped>
+.ww-role-card {
+  display: flex;
+  min-height: 92px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px;
+  border: 1px dashed #cfc8fa;
+  border-radius: 14px;
+  background: #f7f5ff;
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.ww-role-card.is-revealed {
+  border-style: solid;
+  background: #eafaf3;
+}
+
+.ww-role-card.is-wolf {
+  background: #fff0ec;
+}
+
+.ww-role-card:disabled {
+  opacity: 0.6;
+}
+
+.ww-role-card-icon {
+  margin-bottom: 2px;
+}
+
+.ww-role-card-back {
+  width: 32px;
+  height: 40px;
+  margin-bottom: 2px;
+  color: var(--purple-dark);
+  fill: #eeebff;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.ww-role-card-back circle {
+  fill: currentColor;
+}
+
+.ww-role-card strong {
+  font-size: 15px;
+}
+
+.ww-role-camp {
+  color: #77738e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.ww-role-card small {
+  color: #77738e;
+  font-size: 10px;
+  line-height: 1.5;
+}
+</style>

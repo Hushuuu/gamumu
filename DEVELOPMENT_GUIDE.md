@@ -132,7 +132,7 @@ Client game_action
 src/
   App.vue                    首頁、共用房間大廳、遊戲選擇及房間操作
   main.ts                    Vue 應用程式入口
-  style.css                  全域樣式與響應式版面
+  style.css                  全域基礎與跨元件共用樣式
   composables/
     useGameRoom.ts           WebSocket、房間快照、重連與傳送操作
   games/
@@ -229,7 +229,7 @@ npm run worker:check  # 產生 Wrangler 型別並檢查 Worker TypeScript
 
 ### 修改共用畫面或遊戲畫面
 
-首頁、等待大廳及共用玩家名單在 `src/App.vue`；遊戲進行與結算畫面則修改對應的 `src/games/<game-id>/` 元件。共用樣式位於 `src/style.css`。若要新增房間操作或連線行為，避免只在元件內建立一套 WebSocket 狀態；沿用 `useGameRoom.ts` 和 `src/services/` 的分工。
+首頁、等待大廳及共用玩家名單在 `src/App.vue`；遊戲進行與結算畫面則修改對應的 `src/games/<game-id>/` 元件。元件專屬樣式放在該 Vue SFC 的 `<style scoped>`；全域基礎與跨元件共用樣式放在 `src/style.css`。若要新增房間操作或連線行為，避免只在元件內建立一套 WebSocket 狀態；沿用 `useGameRoom.ts` 和 `src/services/` 的分工。
 
 ### 新增房間操作或伺服器訊息
 

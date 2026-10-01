@@ -238,3 +238,113 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
     </template>
   </div>
 </template>
+
+<style scoped>
+.draw-guess-state {
+  padding-bottom: 6px;
+}
+
+.draw-guess-heading h2 {
+  font-size: 17px;
+}
+
+.draw-turn-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 13px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f7f5ff;
+  color: #77738e;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.draw-turn-banner strong {
+  color: var(--purple-dark);
+  font-size: 11px;
+}
+
+.draw-answer-form, .draw-guess-form {
+  margin-top: 13px;
+}
+
+.draw-skip-button {
+  min-height: 34px;
+  margin-top: 9px;
+  padding: 0 11px;
+  border: 1px solid #e5e2ed;
+  border-radius: 9px;
+  background: #fff;
+  color: #77738e;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.draw-skip-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.draw-wait-message {
+  margin: 12px 0;
+  color: #89869b;
+  font-size: 10px;
+  text-align: center;
+}
+
+.draw-phase-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.draw-action-buttons {
+  display: flex;
+  gap: 7px;
+}
+
+.draw-finish-button {
+  min-height: 34px;
+  margin-top: 9px;
+  padding-inline: 11px;
+  font-size: 9px;
+}
+
+.draw-secret-answer {
+  margin: 8px 0 0;
+  color: #77738e;
+  font-size: 10px;
+}
+
+.draw-secret-answer strong {
+  color: var(--purple-dark);
+}
+
+.draw-reveal-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 13px;
+  padding: 13px;
+  border-radius: 12px;
+  background: #f4f2ff;
+  text-align: center;
+}
+
+.draw-reveal-card strong {
+  margin-top: 4px;
+  color: var(--purple-dark);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.draw-reveal-card p {
+  margin: 6px 0 0;
+  color: #85809d;
+  font-size: 9px;
+}
+</style>

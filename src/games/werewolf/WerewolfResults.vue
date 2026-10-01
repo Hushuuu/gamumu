@@ -190,3 +190,171 @@ onUnmounted(() => {
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.ww-result-player {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ww-results-list {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.ww-results-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #f7f5ff;
+  font-size: 12px;
+}
+
+.ww-results-list li.is-winner {
+  background: #eafaf3;
+}
+
+.ww-results-list small {
+  grid-column: 1 / -1;
+  color: #77738e;
+  font-size: 10px;
+}
+
+.ww-review-open {
+  margin-top: 14px;
+}
+
+.ww-review-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  background: rgb(25 22 39 / 68%);
+  color: var(--ink);
+}
+
+.ww-review-dialog {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  background: #fff;
+}
+
+.ww-review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: max(16px, env(safe-area-inset-top)) 20px 14px;
+  border-bottom: 1px solid #eceaf3;
+}
+
+.ww-review-header .eyebrow {
+  margin: 0 0 4px;
+}
+
+.ww-review-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+}
+
+.ww-review-close {
+  flex: 0 0 auto;
+}
+
+.ww-review-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+  overscroll-behavior: contain;
+}
+
+.ww-review-day {
+  width: min(100%, 860px);
+  margin: 0 auto 24px;
+}
+
+.ww-review-day h3 {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 10px;
+  padding: 8px 0;
+  background: #fff;
+  color: var(--purple-dark);
+  font-size: 14px;
+}
+
+.ww-review-day ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ww-review-day li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #eceaf3;
+  border-radius: 12px;
+  background: #faf9fd;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ww-review-index {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: #eeebff;
+  color: var(--purple-dark);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ww-review-empty {
+  width: min(100%, 860px);
+  margin: 0 auto;
+  color: #77738e;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+
+  .ww-review-header {
+    padding: max(14px, env(safe-area-inset-top)) 14px 12px;
+  }
+
+  .ww-review-header h2 {
+    font-size: 17px;
+  }
+
+  .ww-review-content {
+    padding: 14px;
+  }
+
+  .ww-review-day li {
+    gap: 8px;
+    padding: 10px;
+    font-size: 12px;
+  }
+}
+</style>

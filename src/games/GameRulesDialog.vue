@@ -234,3 +234,130 @@ onUnmounted(() => {
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.game-rules-trigger {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.game-rules-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 11000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(25 22 39 / 64%);
+  color: var(--ink);
+}
+
+.game-rules-dialog {
+  display: grid;
+  width: min(100%, 720px);
+  max-height: min(84vh, 850px);
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgb(21 18 38 / 24%);
+}
+
+.game-rules-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid #eceaf3;
+}
+
+.game-rules-header .eyebrow {
+  margin: 0 0 4px;
+}
+
+.game-rules-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 19px;
+}
+
+.game-rules-close {
+  min-height: 36px;
+  flex: 0 0 auto;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 11px;
+}
+
+.game-rules-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 22px 24px;
+  overscroll-behavior: contain;
+  text-align: left;
+}
+
+.game-rules-description {
+  margin: 0 0 18px;
+  color: #5c5875;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.game-rules-section {
+  margin-top: 18px;
+}
+
+.game-rules-section h3 {
+  margin: 0 0 8px;
+  color: var(--purple-dark);
+  font-size: 12px;
+}
+
+.game-rules-section ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 20px;
+  color: #55516b;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+@media (max-width: 520px) {
+
+  .game-rules-trigger {
+    min-height: 30px;
+    padding-inline: 8px;
+    font-size: 9px;
+  }
+
+  .game-rules-backdrop {
+    padding: 0;
+  }
+
+  .game-rules-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+  }
+
+  .game-rules-header {
+    padding: max(14px, env(safe-area-inset-top)) 14px 12px;
+  }
+
+  .game-rules-header h2 {
+    font-size: 17px;
+  }
+
+  .game-rules-content {
+    padding: 14px 16px 22px;
+  }
+}
+</style>

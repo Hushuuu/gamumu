@@ -59,3 +59,40 @@ withDefaults(defineProps<{
     </g>
   </svg>
 </template>
+
+<style scoped>
+.ww-role-symbol {
+  display: inline-block;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.ww-role-symbol-werewolf, .ww-role-symbol-wolfKing {
+  color: #a83f3b;
+}
+
+.ww-role-symbol-villager {
+  color: #68707c;
+}
+
+.ww-role-symbol-seer {
+  color: #6954b1;
+}
+
+.ww-role-symbol-witch {
+  color: #a24d87;
+}
+
+.ww-role-symbol-hunter {
+  color: #3d7861;
+}
+
+.ww-role-symbol-guard {
+  color: #4270a7;
+}
+
+.ww-role-symbol-bg {
+  fill: currentColor;
+  fill-opacity: 0.12;
+}
+</style>

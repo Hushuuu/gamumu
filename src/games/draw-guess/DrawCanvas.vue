@@ -343,3 +343,67 @@ function isDrawPoint(value: unknown): value is DrawPoint {
     </div>
   </div>
 </template>
+
+<style scoped>
+.draw-board {
+  margin-top: 12px;
+}
+
+.draw-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.draw-tools {
+  display: flex;
+  gap: 6px;
+}
+
+.draw-tool-button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #e7e4f0;
+  border-radius: 9px;
+  background: #fff;
+  color: #77738e;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.draw-tool-button.is-selected {
+  border-color: #a79af1;
+  background: #f1efff;
+  color: var(--purple-dark);
+}
+
+.draw-tool-button:disabled {
+  cursor: default;
+}
+
+.draw-board-hint {
+  color: #9692a7;
+  font-size: 9px;
+}
+
+.draw-canvas-frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  border: 1px solid #e6e3ef;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: inset 0 1px 3px rgba(48, 45, 66, 0.04);
+}
+
+.draw-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+</style>

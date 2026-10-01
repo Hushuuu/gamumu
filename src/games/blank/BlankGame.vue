@@ -46,3 +46,65 @@ function finishGame(): void {
     </section>
   </div>
 </template>
+
+<style scoped>
+.blank-game-state {
+  display: flex;
+  min-height: 245px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 8px 8px;
+  text-align: center;
+}
+
+.blank-game-icon {
+  display: flex;
+  width: 58px;
+  height: 58px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  background: #f1efff;
+  color: var(--purple);
+  font-size: 35px;
+  font-weight: 400;
+}
+
+.blank-game-state .eyebrow {
+  margin: 15px 0 0;
+}
+
+.blank-game-state h2 {
+  margin: 5px 0;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.blank-game-state > p:not(.eyebrow) {
+  max-width: 380px;
+  margin: 0;
+  color: #89869b;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.blank-game-status {
+  margin-top: 14px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #f4f2ff;
+  color: #8179b5;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.blank-game-state .start-button {
+  margin-top: 15px;
+}
+
+.blank-game-wait {
+  margin-top: 13px !important;
+}
+</style>

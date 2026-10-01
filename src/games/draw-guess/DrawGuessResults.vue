@@ -22,3 +22,33 @@ const winner = computed(() => ranking.value[0] ?? null)
     </li>
   </ol>
 </template>
+
+<style scoped>
+.draw-results-list {
+  display: grid;
+  gap: 6px;
+  max-width: 280px;
+  margin: 14px auto 0;
+  padding: 0;
+  list-style: none;
+}
+
+.draw-results-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: #f7f5ff;
+  color: #5c5875;
+  font-size: 10px;
+}
+
+.draw-results-list strong {
+  color: var(--purple-dark);
+}
+
+.draw-results-list small {
+  font-size: 8px;
+}
+</style>

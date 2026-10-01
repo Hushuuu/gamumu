@@ -154,3 +154,34 @@ function saveSettings(): void {
     </p>
   </section>
 </template>
+
+<style scoped>
+.ww-setup-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.ww-setup-roles .ww-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.draw-settings-form select {
+  width: 100%;
+  height: 38px;
+  padding: 0 9px;
+  border: 1px solid #e7e4f0;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+
+.draw-settings-form .ww-checkbox input {
+  width: 22px;
+  height: 22px;
+}
+</style>

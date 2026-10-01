@@ -19,3 +19,27 @@ const winner = computed(() => {
     <strong>{{ winner.score }} <small>分</small></strong>
   </div>
 </template>
+
+<style scoped>
+.winner-score {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-top: 15px;
+  padding: 8px 15px;
+  border-radius: 13px;
+  background: #fff7e4;
+  color: #9d7a2e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.winner-score strong {
+  color: #8d6821;
+  font-size: 20px;
+}
+
+.winner-score small {
+  font-size: 10px;
+}
+</style>

@@ -138,3 +138,88 @@ function submitAnswer(): void {
     </template>
   </div>
 </template>
+
+<style scoped>
+.hint-card {
+  margin-top: 17px;
+  padding: 13px 15px;
+  border: 1px dashed #d9d3fb;
+  border-radius: 14px;
+  background: #faf9ff;
+}
+
+.hint-label {
+  color: #9a91d0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+.hint-card p {
+  margin: 5px 0 0;
+  color: #5d5877;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.answer-area {
+  margin-top: 17px;
+}
+
+.answer-progress {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  color: #89869b;
+  font-size: 10px;
+}
+
+.answer-progress strong {
+  color: #635f79;
+  font-size: 10px;
+}
+
+.progress-track {
+  height: 5px;
+  grid-column: 1 / -1;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #efedf5;
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8f7cf3, #bcabff);
+  transition: width 220ms ease;
+}
+
+.reveal-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 16px;
+  padding: 18px 12px;
+  border-radius: 16px;
+  background: #f4f2ff;
+  text-align: center;
+}
+
+.reveal-card strong {
+  margin-top: 4px;
+  color: var(--purple-dark);
+  font-size: clamp(24px, 8vw, 36px);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.reveal-card p {
+  margin: 5px 0 0;
+  color: #85809d;
+  font-size: 10px;
+}
+</style>
