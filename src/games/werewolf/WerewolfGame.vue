@@ -12,8 +12,13 @@ import {
 import type { GameEvent, PlayerView } from '../../../shared/protocol'
 import PlayerPicker from './components/PlayerPicker.vue'
 import RoleCard from './components/RoleCard.vue'
+import WerewolfMomentOverlay from './components/WerewolfMomentOverlay.vue'
 import WerewolfRoleIcon from './components/WerewolfRoleIcon.vue'
-import { ROLE_GUESS_DRAG_TYPE, type PickerSeat } from './components/types'
+import {
+  ROLE_GUESS_DRAG_TYPE,
+  type PickerSeat,
+  type WerewolfMoment,
+} from './components/types'
 
 const props = defineProps<{
   game: GameView
@@ -30,7 +35,6 @@ const emit = defineEmits<{
 }>()
 
 type PickMode = 'wolf' | 'guard' | 'seer' | 'witch' | 'hunter' | 'vote' | 'none'
-
 const PHASE_TITLES: Record<WerewolfPhase, string> = {
   'role-reveal': '查看身分',
   night: '黑夜',
@@ -48,9 +52,12 @@ const poisonPick = ref<string | null>(null)
 const votePick = ref<string | null>(null)
 const shootPick = ref<string | null>(null)
 const selectedGuessRole = ref<WerewolfRoleId | null>(null)
+const momentQueue = ref<WerewolfMoment[]>([])
+const activeMoment = computed(() => momentQueue.value[0] ?? null)
 const roleGuesses = ref<Partial<Record<string, WerewolfRoleId>>>({})
 let suppressPickerClick = false
 let clockTimer: number | undefined
+let momentSequence = 0
 
 const view = computed(() => (props.game.gameId === 'werewolf' ? props.game : null))
 const priv = computed(() => {
@@ -128,6 +135,16 @@ function nameOf(playerId: string | null): string {
     return '無人'
   }
   return props.players.find((player) => player.id === playerId)?.name ?? '已離開的玩家'
+}
+
+function showMoment(kind: WerewolfMoment['kind'], title: string, detail: string): void {
+  momentQueue.value.push({ id: ++momentSequence, kind, title, detail })
+}
+
+function completeMoment(id: number): void {
+  if (momentQueue.value[0]?.id === id) {
+    momentQueue.value.shift()
+  }
 }
 
 const seats = computed<PickerSeat[]>(() => {
@@ -228,6 +245,74 @@ watch(() => props.gameEvent, (event) => {
     privateState.value = event.payload
   }
 }, { immediate: true })
+
+watch(
+  [
+    () => view.value?.phase,
+    () => view.value?.day,
+    () => JSON.stringify(view.value?.lastDeathIds ?? []),
+    () => view.value?.exiledId ?? null,
+    () => view.value?.hunterShot?.targetId ?? null,
+  ],
+  (
+    [nextPhase, nextDay, nextDeathIds, nextExiledId, nextShotTargetId],
+    [previousPhase, previousDay, previousDeathIds, previousExiledId, previousShotTargetId],
+  ) => {
+    const current = view.value
+    if (!nextPhase || !current) {
+      return
+    }
+
+    if (
+      previousPhase &&
+      nextPhase === 'night' &&
+      (previousPhase !== 'night' || nextDay !== previousDay)
+    ) {
+      showMoment('night', '夜晚開始', '村民們請閉上眼睛')
+    }
+
+    if (previousPhase && nextPhase === 'dawn' && previousPhase !== 'dawn') {
+      showMoment(
+        'day',
+        '天亮了',
+        current.lastDeathIds.length > 0
+          ? '村民們醒來了，昨夜的消息即將揭曉。'
+          : '昨晚平安無事，大家可以睜開眼睛了。',
+      )
+    }
+
+    if (
+      previousPhase &&
+      nextPhase === 'dawn' &&
+      nextDeathIds !== previousDeathIds &&
+      current.lastDeathIds.length > 0
+    ) {
+      showMoment(
+        'death',
+        '有人出局',
+        `昨夜 ${current.lastDeathIds.map(nameOf).join('、')} 出局了`,
+      )
+    }
+
+    if (
+      previousPhase &&
+      nextPhase === 'vote-result' &&
+      nextExiledId &&
+      nextExiledId !== previousExiledId
+    ) {
+      showMoment('death', '投票結果', `${nameOf(nextExiledId)} 被放逐出局`)
+    }
+
+    if (
+      previousPhase &&
+      nextPhase === 'hunter-shot' &&
+      nextShotTargetId &&
+      nextShotTargetId !== previousShotTargetId
+    ) {
+      showMoment('death', '獵人開槍', `${nameOf(nextShotTargetId)} 被獵人帶走`)
+    }
+  },
+)
 
 watch(() => [view.value?.phase, view.value?.day, view.value?.nightStep], () => {
   poisonPick.value = null
@@ -343,6 +428,12 @@ function endDiscussion(): void {
 
 <template>
   <div class="playing-state ww-state" :class="{ 'is-night': phase === 'night' }">
+    <WerewolfMomentOverlay
+      v-if="activeMoment"
+      :key="activeMoment.id"
+      :moment="activeMoment"
+      @complete="completeMoment"
+    />
     <template v-if="view">
       <div class="round-heading">
         <div>

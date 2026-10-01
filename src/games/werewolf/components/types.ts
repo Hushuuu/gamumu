@@ -11,3 +11,12 @@ export interface PickerSeat {
 }
 
 export const ROLE_GUESS_DRAG_TYPE = 'application/x-gamumu-werewolf-role'
+
+export type WerewolfMomentKind = 'night' | 'day' | 'death' | 'wolf-win' | 'good-win'
+
+export interface WerewolfMoment {
+  id: number
+  kind: WerewolfMomentKind
+  title: string
+  detail: string
+}

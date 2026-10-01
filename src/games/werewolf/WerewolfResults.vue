@@ -3,7 +3,9 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import type { GameView } from '../../../shared/games'
 import { WEREWOLF_ROLES, type WerewolfReplayEvent } from '../../../shared/games/werewolf'
 import type { PlayerView } from '../../../shared/protocol'
+import WerewolfMomentOverlay from './components/WerewolfMomentOverlay.vue'
 import WerewolfRoleIcon from './components/WerewolfRoleIcon.vue'
+import type { WerewolfMoment } from './components/types'
 
 const props = defineProps<{ players: PlayerView[]; game?: GameView | null }>()
 
@@ -15,6 +17,7 @@ const winnerText = computed(() => {
   if (view.value?.winner === 'good') return '好人陣營獲勝！'
   return '狼人殺結束'
 })
+const winnerMoment = ref<WerewolfMoment | null>(null)
 const rows = computed(() => {
   const current = view.value
   if (!current?.roles) {
@@ -33,6 +36,31 @@ const rows = computed(() => {
     }
   })
 })
+
+let momentSequence = 0
+
+watch(() => view.value?.winner, (winner) => {
+  if (!winner) {
+    winnerMoment.value = null
+    return
+  }
+
+  winnerMoment.value = {
+    id: ++momentSequence,
+    kind: winner === 'wolf' ? 'wolf-win' : 'good-win',
+    title: winnerText.value,
+    detail: winner === 'wolf'
+      ? '狼人陣營拿下勝利，村莊今晚屬於他們。'
+      : '好人們齊心合作，村莊終於恢復平靜。',
+  }
+}, { immediate: true })
+
+function completeWinnerMoment(id: number): void {
+  if (winnerMoment.value?.id === id) {
+    winnerMoment.value = null
+  }
+}
+
 const reviewSections = computed(() => {
   const days = new Map<number, WerewolfReplayEvent[]>()
   for (const event of review.value?.events ?? []) {
@@ -122,6 +150,12 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <WerewolfMomentOverlay
+    v-if="winnerMoment"
+    :key="winnerMoment.id"
+    :moment="winnerMoment"
+    @complete="completeWinnerMoment"
+  />
   <div class="finish-icon" aria-hidden="true">
     <WerewolfRoleIcon v-if="view?.winner === 'wolf'" role-id="werewolf" :size="32" />
     <span v-else>🏆</span>
