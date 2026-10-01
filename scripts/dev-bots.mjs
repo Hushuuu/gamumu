@@ -1,16 +1,17 @@
 // 本機測試用：讓機器人加入既有房間、自動 Ready 並自動遊玩狼人殺。
-// 用法：npm run dev:bots -- <房間代碼> <機器人數量=5> <APIURL>
+// 用法：設定 BETA_CODE 後執行 npm run dev:bots -- <房間代碼> <機器人數量=5> <APIURL> <BETA_CODE>
 // 環境變數 API_URL 可指定 Worker 位置（預設 http://127.0.0.1:8787）。Ctrl+C 會讓機器人離開房間。
 
 const API = (process.env.API_URL ?? process.argv[4] ?? 'http://127.0.0.1:8787').replace(/\/$/, '')
+const BETA_CODE = process.argv[5]?.trim()
 const [code, countArg] = process.argv.slice(2)
 const count = Number(countArg ?? 5)
 
 console.log(`API URL: ${API}`)
 console.log(`房間代碼: ${code}, 機器人數量: ${count}`)
 
-if (!code || !Number.isInteger(count) || count < 1) {
-  console.error('用法：npm run dev:bots -- <房間代碼> [機器人數量=5]')
+if (!code || !Number.isInteger(count) || count < 1 || !BETA_CODE) {
+  console.error('未提供BETA_CODE，請在命令列中指定。')
   process.exit(1)
 }
 
@@ -18,13 +19,16 @@ const pick = (items) => items[Math.floor(Math.random() * items.length)]
 const later = (fn, min = 300, max = 1500) => setTimeout(fn, min + Math.random() * (max - min))
 
 class Bot {
-  constructor(name, credentials) {
+  constructor(name, credentials, betaToken) {
     this.name = name
     this.id = credentials.playerId
     this.state = null
     this.priv = null
     this.lastKey = ''
-    this.ws = new WebSocket(`${API.replace(/^http/, 'ws')}/api/rooms/${credentials.code}/ws`)
+    this.ws = new WebSocket(
+      `${API.replace(/^http/, 'ws')}/api/rooms/${credentials.code}/ws`,
+      ['gamumu-beta', `gamumu-beta.${betaToken}`],
+    )
     this.ws.onopen = () => this.send({ type: 'authenticate', token: credentials.token })
     this.ws.onmessage = (event) => this.onMessage(JSON.parse(event.data))
     this.ws.onclose = () => console.log(`[${this.name}] 連線中斷`)
@@ -122,7 +126,10 @@ class Bot {
 async function join(name) {
   const response = await fetch(`${API}/api/rooms/${code}/join`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      Authorization: `Bearer ${betaSession.token}`,
+    },
     body: JSON.stringify({ name }),
   })
   if (!response.ok) {
@@ -131,11 +138,21 @@ async function join(name) {
   return response.json()
 }
 
+const betaResponse = await fetch(`${API}/api/beta/redeem`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ code: BETA_CODE }),
+})
+if (!betaResponse.ok) {
+  throw new Error(`封測碼驗證失敗：${betaResponse.status} ${await betaResponse.text()}`)
+}
+const betaSession = await betaResponse.json()
+
 const bots = []
 for (let index = 1; index <= count; index += 1) {
   const name = `Bot${index}`
   try {
-    bots.push(new Bot(name, await join(name)))
+    bots.push(new Bot(name, await join(name), betaSession.token))
     console.log(`[${name}] 已加入房間 ${code}`)
   } catch (error) {
     console.error(error.message)

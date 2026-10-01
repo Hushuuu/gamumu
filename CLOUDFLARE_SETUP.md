@@ -31,6 +31,8 @@ npm run dev
 
 Worker 會在 `http://127.0.0.1:8787` 啟動；Vite 網頁在 `http://localhost:5173`，並將 `/api` 與 WebSocket 請求代理給 Worker。Wrangler 的本機 Durable Object 資料會寫入 `.wrangler/`，不會提交到 Git。
 
+封測開發前，複製 `.dev.vars.example` 為 `.dev.vars`，並改成自己的本機測試碼與 session 簽章密鑰。`.dev.vars` 已加入 Git 忽略清單，不要提交真實封測碼。
+
 ## 部署 Cloudflare Worker
 
 1. 登入 Cloudflare 並在專案根目錄授權 Wrangler：
@@ -39,7 +41,23 @@ Worker 會在 `http://127.0.0.1:8787` 啟動；Vite 網頁在 `http://localhost:
    npx wrangler login
    ```
 
-2. 編輯 `wrangler.jsonc` 的 `vars.ALLOWED_ORIGINS`，列出正式前端的 **Origin**（協定與主機，不含路徑），例如：
+2. 在 Cloudflare Dashboard 的 **Workers & Pages → gamumu-api → Settings → Variables and Secrets** 新增兩個 Secret：
+
+   | Secret 名稱 | 內容 |
+   | --- | --- |
+   | `BETA_CODES` | 以逗號或換行分隔的有效封測碼清單；每組 12–64 位英數字 |
+   | `BETA_SESSION_SECRET` | 至少 32 個字元的隨機簽章密鑰 |
+
+   也可以用 Wrangler 逐一設定，指令會互動式要求輸入 Secret 值：
+
+   ```powershell
+   npx wrangler secret put BETA_CODES
+   npx wrangler secret put BETA_SESSION_SECRET
+   ```
+
+   目前封測碼可重複兌換；每次兌換後的通行憑證有效 6 小時。新增或移除封測碼時，只更新整個 `BETA_CODES` Secret 清單並部署 Worker；移除的碼會立即停止新兌換，也會讓以該碼取得的通行憑證在下一次 API/WebSocket 操作時失效。更換 `BETA_SESSION_SECRET` 則會讓所有現有通行憑證失效。請保留自己的有效碼清單，Secret 值不應放在前端變數或提交到 Git。
+
+3. 編輯 `wrangler.jsonc` 的 `vars.ALLOWED_ORIGINS`，列出正式前端的 **Origin**（協定與主機，不含路徑），例如：
 
    ```jsonc
    "ALLOWED_ORIGINS": "http://localhost:5173,https://game.example.com"
@@ -47,7 +65,7 @@ Worker 會在 `http://127.0.0.1:8787` 啟動；Vite 網頁在 `http://localhost:
 
    如果使用 GitHub Pages 預設網址，加入 `https://<GitHub 使用者或組織>.github.io`。若同時使用自訂網域，也把該網域加入清單。Origin 必須完全一致；GitHub Pages 的 `/repository/` 路徑不屬於 Origin。
 
-3. 部署：
+4. 部署：
 
    ```powershell
    npm run worker:deploy
@@ -55,7 +73,7 @@ Worker 會在 `http://127.0.0.1:8787` 啟動；Vite 網頁在 `http://localhost:
 
    Wrangler 會建立 `GameRoom` SQLite Durable Object migration。第一次部署若要求確認 migration，請確認後繼續。
 
-4. 記下 Wrangler 顯示的 Worker 網址，例如 `https://gamumu-api.<帳號>.workers.dev`。這是稍後前端 `VITE_API_URL` 要使用的值，不要在結尾加 `/api`。
+5. 記下 Wrangler 顯示的 Worker 網址，例如 `https://gamumu-api.<帳號>.workers.dev`。這是稍後前端 `VITE_API_URL` 要使用的值，不要在結尾加 `/api`。
 
 ### 使用自訂 API 網域（選用）
 

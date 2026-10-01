@@ -215,12 +215,13 @@ npm run build         # Vue TypeScript 檢查並建置前端
 npm run worker:check  # 產生 Wrangler 型別並檢查 Worker TypeScript
 ```
 
-目前 `package.json` 沒有 test 或 lint script。多人測試技巧：開發模式（`npm run dev`）的房間憑證存在 `sessionStorage`，同一個瀏覽器的每個分頁都是獨立玩家；再用 `npm run dev:bots -- <房間代碼> [數量]`（`scripts/dev-bots.mjs`）讓機器人加入房間、自動 Ready 並自動遊玩狼人殺，就能只開一個分頁測試完整流程（Ctrl+C 讓機器人離房）。完成房間／遊戲變更後，除了執行上述檢查，也應以多個瀏覽器手動驗證建立、加入、選頭像、Ready、遊戲選擇、開始、作答或結束、重新載入重連及離開流程。你畫我猜另需驗證繪圖同步、多人猜中計分、跳過、每人多輪及繪圖者斷線。狼人殺另需驗證 6–12 人（狼王守衛版 10–12 人）的角色配置、夜間行動限制（含守衛限制、同守同救）、獵人開槍、平票、勝負與分數，以及私人身分不外洩。
+目前 `package.json` 沒有 test 或 lint script。多人測試技巧：開發模式（`npm run dev`）的房間憑證存在 `sessionStorage`，同一個瀏覽器的每個分頁都是獨立玩家；設定環境變數 `BETA_CODE` 後，再用 `npm run dev:bots -- <房間代碼> [數量]`（`scripts/dev-bots.mjs`）讓機器人加入房間、自動 Ready 並自動遊玩狼人殺，就能只開一個分頁測試完整流程（Ctrl+C 讓機器人離房）。完成房間／遊戲變更後，除了執行上述檢查，也應以多個瀏覽器手動驗證建立、加入、選頭像、Ready、遊戲選擇、開始、作答或結束、重新載入重連及離開流程。你畫我猜另需驗證繪圖同步、多人猜中計分、跳過、每人多輪及繪圖者斷線。狼人殺另需驗證 6–12 人（狼王守衛版 10–12 人）的角色配置、夜間行動限制（含守衛限制、同守同救）、獵人開槍、平票、勝負與分數，以及私人身分不外洩。
 
 ## 設定與部署入口
 
 - `.env.example` 列出前端建置變數。`VITE_API_URL` 是 Worker 的 origin，不要加 `/api`；`VITE_BASE_PATH` 是網站根路徑或 GitHub Pages 專案子路徑。
 - Worker 的 `ALLOWED_ORIGINS` 在 `wrangler.jsonc` 設定，值為逗號分隔的完整 Origin（協定與主機，不含路徑）；必須包含正式前端的 Origin。
+- 封測碼與 session 簽章密鑰分別放在 Worker Secrets `BETA_CODES`、`BETA_SESSION_SECRET`；本機使用被 Git 忽略的 `.dev.vars`。前端只暫存 6 小時通行憑證，Worker 會驗證建立房間、加入房間與 WebSocket 連線。
 - GitHub Pages workflow 會在建置時使用 Actions Variables `VITE_API_URL` 與 `VITE_BASE_PATH`。目前 `.github/workflows/deploy-pages.yml` 在 push 到 `master` 時執行，也支援手動 `workflow_dispatch`；若部署分支不同，請同步調整 workflow 與部署文件。
 - 帳號授權、Worker 部署、GitHub Pages 設定和自訂網域步驟請依 [`CLOUDFLARE_SETUP.md`](./CLOUDFLARE_SETUP.md) 操作。
 

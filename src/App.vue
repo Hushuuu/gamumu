@@ -18,7 +18,18 @@ import type { ClientMessage } from '../shared/protocol'
 import { useGameRoom } from './composables/useGameRoom'
 import { GAME_COMPONENTS } from './games/registry'
 import GameRulesDialog from './games/GameRulesDialog.vue'
-import { createRoomRequest, joinRoomRequest } from './services/api'
+import {
+  ApiError,
+  createRoomRequest,
+  getBetaSession,
+  joinRoomRequest,
+  redeemBetaCode,
+} from './services/api'
+import {
+  loadBetaSession,
+  removeBetaSession,
+  saveBetaSession,
+} from './services/betaSession'
 import { loadRoomToken, removeRoomToken, saveRoomToken } from './services/session'
 
 const {
@@ -28,6 +39,7 @@ const {
   gameEvent,
   playerId,
   removedFromRoom,
+  betaAccessExpired,
   connect,
   disconnect,
   send,
@@ -37,6 +49,12 @@ const {
 const playerName = ref('')
 const roomCodeInput = ref('')
 const activeRoomCode = ref('')
+const betaCode = ref('')
+const betaSessionToken = ref('')
+const betaSessionExpiresAt = ref(0)
+const betaStatus = ref<'checking' | 'locked' | 'authorized' | 'error'>('checking')
+const betaError = ref('')
+const isBetaLoading = ref(false)
 const isLoading = ref(false)
 const pageError = ref('')
 const pageNotice = ref('')
@@ -44,8 +62,20 @@ const devRoleId = ref<WerewolfRoleId | ''>('')
 const isDevelopmentBuild = import.meta.env.DEV
 
 let noticeTimer: number | undefined
+let betaExpiryTimer: number | undefined
 
 const normalizedName = computed(() => playerName.value.trim())
+const hasBetaAccess = computed(() => {
+  return betaStatus.value === 'authorized' && betaSessionExpiresAt.value > Date.now()
+})
+const betaExpiryLabel = computed(() => {
+  return betaSessionExpiresAt.value > 0
+    ? new Date(betaSessionExpiresAt.value).toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    : ''
+})
 const validName = computed(() => {
   const length = Array.from(normalizedName.value).length
   return length >= 1 && length <= 20
@@ -164,7 +194,126 @@ watch(removedFromRoom, (removed) => {
     : '房主已將你移出房間。')
 })
 
+watch(betaAccessExpired, (expired) => {
+  if (expired) {
+    lockBetaSession('封測驗證已失效，請重新輸入封測碼。')
+  }
+})
+
 onMounted(() => {
+  void initializeBetaSession()
+})
+
+onUnmounted(() => {
+  if (noticeTimer !== undefined) {
+    window.clearTimeout(noticeTimer)
+  }
+  if (betaExpiryTimer !== undefined) {
+    window.clearTimeout(betaExpiryTimer)
+  }
+})
+
+async function initializeBetaSession(): Promise<void> {
+  const code = normalizeRoomCode(new URLSearchParams(window.location.search).get('room') ?? '')
+  if (/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/.test(code)) {
+    roomCodeInput.value = code
+  }
+
+  const storedBetaSession = loadBetaSession()
+  if (storedBetaSession.error) {
+    betaError.value = storedBetaSession.error
+  }
+  if (!storedBetaSession.session) {
+    betaStatus.value = 'locked'
+    return
+  }
+
+  betaStatus.value = 'checking'
+  try {
+    const expiresAt = await getBetaSession(storedBetaSession.session.token)
+    activateBetaSession({ token: storedBetaSession.session.token, expiresAt })
+    resumeRoomFromUrl()
+  } catch (error) {
+    if (error instanceof ApiError && error.code === 'BETA_ACCESS_REQUIRED') {
+      removeBetaSession()
+      betaStatus.value = 'locked'
+      betaError.value = error.message
+      return
+    }
+
+    betaStatus.value = 'error'
+    betaError.value = errorMessageFrom(error)
+  }
+}
+
+async function unlockBeta(): Promise<void> {
+  if (isBetaLoading.value) {
+    return
+  }
+  if (!betaCode.value.trim()) {
+    betaError.value = '請輸入封測碼。'
+    return
+  }
+
+  betaError.value = ''
+  isBetaLoading.value = true
+  try {
+    const session = await redeemBetaCode(betaCode.value.trim())
+    const storageWarning = saveBetaSession(session)
+    activateBetaSession(session)
+    betaCode.value = ''
+    if (storageWarning) {
+      showNotice(storageWarning)
+    }
+    resumeRoomFromUrl()
+  } catch (error) {
+    betaError.value = errorMessageFrom(error)
+  } finally {
+    isBetaLoading.value = false
+  }
+}
+
+function activateBetaSession(session: { token: string; expiresAt: number }): void {
+  betaSessionToken.value = session.token
+  betaSessionExpiresAt.value = session.expiresAt
+  betaStatus.value = 'authorized'
+  betaError.value = ''
+  if (betaExpiryTimer !== undefined) {
+    window.clearTimeout(betaExpiryTimer)
+  }
+  betaExpiryTimer = window.setTimeout(() => {
+    betaExpiryTimer = undefined
+    lockBetaSession('封測驗證已到期，請重新輸入封測碼。')
+  }, Math.max(0, session.expiresAt - Date.now()))
+}
+
+function lockBetaSession(message: string): void {
+  if (betaExpiryTimer !== undefined) {
+    window.clearTimeout(betaExpiryTimer)
+    betaExpiryTimer = undefined
+  }
+
+  const roomCode = activeRoomCode.value
+  betaSessionToken.value = ''
+  betaSessionExpiresAt.value = 0
+  betaStatus.value = 'locked'
+  betaError.value = message
+  pageError.value = ''
+
+  const storageWarning = removeBetaSession()
+  if (storageWarning) {
+    betaError.value = `${message} ${storageWarning}`
+  }
+
+  if (roomCode) {
+    disconnect()
+    activeRoomCode.value = ''
+    roomCodeInput.value = roomCode
+    showNotice(message)
+  }
+}
+
+function resumeRoomFromUrl(): void {
   const code = normalizeRoomCode(new URLSearchParams(window.location.search).get('room') ?? '')
   if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/.test(code)) {
     return
@@ -178,15 +327,13 @@ onMounted(() => {
   if (stored.token) {
     enterRoom(code, stored.token)
   }
-})
-
-onUnmounted(() => {
-  if (noticeTimer !== undefined) {
-    window.clearTimeout(noticeTimer)
-  }
-})
+}
 
 async function createRoom(): Promise<void> {
+  if (!hasBetaAccess.value) {
+    pageError.value = '請先輸入有效的封測碼。'
+    return
+  }
   if (isLoading.value || !validName.value) {
     pageError.value = '暱稱請填 1 到 20 個字元。'
     return
@@ -195,13 +342,17 @@ async function createRoom(): Promise<void> {
   pageError.value = ''
   isLoading.value = true
   try {
-    const credentials = await createRoomRequest(normalizedName.value)
+    const credentials = await createRoomRequest(normalizedName.value, betaSessionToken.value)
     const storageWarning = saveRoomToken(credentials.code, credentials.token)
     enterRoom(credentials.code, credentials.token)
     if (storageWarning) {
       showNotice(storageWarning)
     }
   } catch (error) {
+    if (error instanceof ApiError && error.code === 'BETA_ACCESS_REQUIRED') {
+      lockBetaSession(error.message)
+      return
+    }
     pageError.value = errorMessageFrom(error)
   } finally {
     isLoading.value = false
@@ -209,6 +360,10 @@ async function createRoom(): Promise<void> {
 }
 
 async function joinRoom(): Promise<void> {
+  if (!hasBetaAccess.value) {
+    pageError.value = '請先輸入有效的封測碼。'
+    return
+  }
   if (isLoading.value) {
     return
   }
@@ -224,13 +379,21 @@ async function joinRoom(): Promise<void> {
   pageError.value = ''
   isLoading.value = true
   try {
-    const credentials = await joinRoomRequest(normalizedRoomCode.value, normalizedName.value)
+    const credentials = await joinRoomRequest(
+      normalizedRoomCode.value,
+      normalizedName.value,
+      betaSessionToken.value,
+    )
     const storageWarning = saveRoomToken(credentials.code, credentials.token)
     enterRoom(credentials.code, credentials.token)
     if (storageWarning) {
       showNotice(storageWarning)
     }
   } catch (error) {
+    if (error instanceof ApiError && error.code === 'BETA_ACCESS_REQUIRED') {
+      lockBetaSession(error.message)
+      return
+    }
     pageError.value = errorMessageFrom(error)
   } finally {
     isLoading.value = false
@@ -242,7 +405,7 @@ function enterRoom(code: string, token: string): void {
   roomCodeInput.value = code
   pageError.value = ''
   updateRoomUrl(code)
-  connect(code, token)
+  connect(code, token, betaSessionToken.value)
 }
 
 function updateRoomCodeInput(event: Event): void {
@@ -439,6 +602,36 @@ function connectionLabel(): string {
           <span class="entry-number">01</span>
         </div>
 
+        <div v-if="betaStatus === 'checking'" class="beta-checking" role="status">
+          正在確認封測資格…
+        </div>
+        <form v-else-if="betaStatus !== 'authorized'" class="beta-gate" @submit.prevent="unlockBeta">
+          <label class="field-label" for="beta-code">封測驗證碼</label>
+          <div class="beta-code-row">
+            <input
+              id="beta-code"
+              v-model="betaCode"
+              class="text-input beta-code-input"
+              type="password"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              maxlength="64"
+              placeholder="輸入封測碼"
+              :disabled="isBetaLoading"
+            />
+            <button class="button button-primary beta-verify-button" type="submit" :disabled="isBetaLoading">
+              {{ isBetaLoading ? '驗證中…' : '驗證' }}
+            </button>
+          </div>
+          <p class="beta-hint">驗證通過後，此分頁可使用 6 小時。</p>
+          <p v-if="betaError" class="inline-message error-message" role="alert">{{ betaError }}</p>
+        </form>
+        <div v-else class="beta-session-banner" role="status">
+          <span class="beta-session-dot" aria-hidden="true"></span>
+          <span>封測驗證有效至 {{ betaExpiryLabel }}</span>
+        </div>
+
         <label class="field-label" for="player-name">大家會怎麼稱呼你？</label>
         <input
           id="player-name"
@@ -451,7 +644,11 @@ function connectionLabel(): string {
           @keydown.enter.prevent="createRoom"
         />
 
-        <button class="button button-primary create-button" :disabled="isLoading || !validName" @click="createRoom">
+        <button
+          class="button button-primary create-button"
+          :disabled="isLoading || !validName || !hasBetaAccess"
+          @click="createRoom"
+        >
           <span>{{ isLoading ? '準備房間中…' : '建立新房間' }}</span>
           <span class="button-icon" aria-hidden="true">↗</span>
         </button>
@@ -473,7 +670,11 @@ function connectionLabel(): string {
             @input="updateRoomCodeInput"
             @keydown.enter.prevent="joinRoom"
           />
-          <button class="button button-secondary join-button" :disabled="isLoading || !canJoin" @click="joinRoom">
+          <button
+            class="button button-secondary join-button"
+            :disabled="isLoading || !canJoin || !hasBetaAccess"
+            @click="joinRoom"
+          >
             {{ isLoading ? '加入中…' : '加入' }}
           </button>
         </div>

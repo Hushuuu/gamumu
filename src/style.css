@@ -338,6 +338,73 @@ a:focus-visible {
   padding: 30px;
 }
 
+.beta-gate,
+.beta-checking,
+.beta-session-banner {
+  margin-bottom: 22px;
+  padding: 15px;
+  border: 1px solid #e8e6f1;
+  border-radius: 17px;
+  background: #fbfaff;
+}
+
+.beta-gate .field-label {
+  margin-bottom: 8px;
+}
+
+.beta-code-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+}
+
+.beta-code-input {
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.beta-verify-button {
+  padding-inline: 17px;
+}
+
+.beta-hint {
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.beta-gate .inline-message {
+  margin-top: 9px;
+}
+
+.beta-checking,
+.beta-session-banner {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 9px;
+  color: #5c5875;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.beta-session-banner {
+  border-color: rgba(83, 200, 155, 0.24);
+  background: rgba(191, 242, 223, 0.35);
+  color: #34775f;
+}
+
+.beta-session-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #53c89b;
+  box-shadow: 0 0 0 3px rgba(83, 200, 155, 0.14);
+}
+
 .entry-heading,
 .players-heading {
   display: flex;

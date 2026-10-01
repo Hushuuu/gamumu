@@ -20,7 +20,8 @@
     }
   ],
   "vars": {
-    "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173,https://gamumu.nijidakku.cc"
+    "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173,https://gamumu.nijidakku.cc",
+    "BETA_CODE": "KRN3KJY58QFN9P5F,BMJ8KMVASMVXXC33,3AULP2AMXSXQGWV2,27TDE6HDVFBWG5JZ,8GJT24XMSRRTEQCG"
   },
   "observability": {
     "enabled": true

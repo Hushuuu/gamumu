@@ -1,12 +1,22 @@
 import { isRecord } from '../../shared/protocol'
 import type { Env } from './env'
-import { createRoomCode, createSessionToken, hashSessionToken } from './security'
+import {
+  createBetaSessionToken,
+  createRoomCode,
+  createSessionToken,
+  hashSessionToken,
+  parseBetaCodes,
+  readBearerToken,
+  readWebSocketBetaToken,
+  verifyBetaSessionToken,
+} from './security'
 import { GameRoom } from './rooms/GameRoom'
 
 export { GameRoom }
 
 const ROOM_CODE_PATTERN = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/
 const MAX_BODY_LENGTH = 2_048
+const MIN_BETA_SESSION_SECRET_LENGTH = 32
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -27,8 +37,70 @@ export default {
 async function routeRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
 
+  if (url.pathname === '/api/beta/redeem') {
+    if (request.method !== 'POST') {
+      return jsonResponse({ code: 'METHOD_NOT_ALLOWED', message: '此路徑只接受 POST。' }, 405)
+    }
+
+    const betaConfig = getBetaConfig(env)
+    if (!betaConfig) {
+      return betaNotConfiguredResponse()
+    }
+
+    const body = await readJsonObject(request)
+    if (!body) {
+      return jsonResponse({ code: 'INVALID_BODY', message: '請求內容必須是 JSON 物件。' }, 400)
+    }
+
+    const code = typeof body.code === 'string' ? body.code.trim().toUpperCase() : ''
+    if (!betaConfig.codes.includes(code)) {
+      return jsonResponse({ code: 'BETA_CODE_INVALID', message: '封測碼不正確，請確認後再試。' }, 401)
+    }
+
+    return jsonResponse(await createBetaSessionToken(code, betaConfig.secret))
+  }
+
+  if (url.pathname === '/api/beta/session') {
+    if (request.method !== 'GET') {
+      return jsonResponse({ code: 'METHOD_NOT_ALLOWED', message: '此路徑只接受 GET。' }, 405)
+    }
+
+    const betaConfig = getBetaConfig(env)
+    if (!betaConfig) {
+      return betaNotConfiguredResponse()
+    }
+
+    const token = readBearerToken(request)
+    const expiresAt = token
+      ? await verifyBetaSessionToken(token, betaConfig.secret, betaConfig.codes)
+      : null
+    if (!expiresAt) {
+      return betaAccessRequiredResponse()
+    }
+
+    return jsonResponse({ expiresAt })
+  }
+
   if (url.pathname === '/api/health' && request.method === 'GET') {
     return jsonResponse({ status: 'ok' })
+  }
+
+  const roomRoute = /^\/api\/rooms\/([^/]+)\/(join|ws)$/.exec(url.pathname)
+  if (url.pathname === '/api/rooms' || roomRoute) {
+    const betaConfig = getBetaConfig(env)
+    if (!betaConfig) {
+      return betaNotConfiguredResponse()
+    }
+
+    const token = roomRoute?.[2] === 'ws'
+      ? readWebSocketBetaToken(request)
+      : readBearerToken(request)
+    const expiresAt = token
+      ? await verifyBetaSessionToken(token, betaConfig.secret, betaConfig.codes)
+      : null
+    if (!expiresAt) {
+      return betaAccessRequiredResponse()
+    }
   }
 
   if (url.pathname === '/api/rooms' && request.method === 'POST') {
@@ -45,7 +117,6 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
     return createRoom(env, name)
   }
 
-  const roomRoute = /^\/api\/rooms\/([^/]+)\/(join|ws)$/.exec(url.pathname)
   if (!roomRoute) {
     return jsonResponse({ code: 'NOT_FOUND', message: '找不到這個 API 路徑。' }, 404)
   }
@@ -160,6 +231,30 @@ function isOriginAllowed(origin: string, allowedOrigins: string | undefined): bo
     .includes(origin)
 }
 
+function getBetaConfig(env: Env): { codes: string[]; secret: string } | null {
+  const codes = parseBetaCodes(env.BETA_CODES)
+  const secret = env.BETA_SESSION_SECRET?.trim()
+  if (!codes || !secret || secret.length < MIN_BETA_SESSION_SECRET_LENGTH) {
+    return null
+  }
+
+  return { codes, secret }
+}
+
+function betaNotConfiguredResponse(): Response {
+  return jsonResponse(
+    { code: 'BETA_NOT_CONFIGURED', message: '封測驗證尚未完成設定，請稍後再試。' },
+    503,
+  )
+}
+
+function betaAccessRequiredResponse(): Response {
+  return jsonResponse(
+    { code: 'BETA_ACCESS_REQUIRED', message: '封測驗證已失效，請重新輸入封測碼。' },
+    401,
+  )
+}
+
 function addCorsHeaders(response: Response, origin: string | null): Response {
   if (!origin) {
     return response
@@ -168,7 +263,7 @@ function addCorsHeaders(response: Response, origin: string | null): Response {
   const headers = new Headers(response.headers)
   headers.set('Access-Control-Allow-Origin', origin)
   headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  headers.set('Access-Control-Allow-Headers', 'Content-Type')
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   headers.set('Vary', 'Origin')
   return new Response(response.body, {
     status: response.status,

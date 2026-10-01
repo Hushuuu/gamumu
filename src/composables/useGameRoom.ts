@@ -5,7 +5,7 @@ import {
   type GameEvent,
   type RoomSnapshot,
 } from '../../shared/protocol'
-import { createWebSocketUrl } from '../services/api'
+import { ApiError, createWebSocketUrl, getBetaSession } from '../services/api'
 
 export type ConnectionStatus = 'offline' | 'connecting' | 'connected' | 'reconnecting'
 
@@ -16,25 +16,29 @@ export function useGameRoom() {
   const gameEvent = ref<GameEvent | null>(null)
   const playerId = ref('')
   const removedFromRoom = ref(false)
+  const betaAccessExpired = ref(false)
 
   let socket: WebSocket | null = null
   let reconnectTimer: number | undefined
   let reconnectAttempts = 0
   let activeCode = ''
   let activeToken = ''
+  let activeBetaToken = ''
   let manuallyDisconnected = false
   let stopReconnecting = false
   let pendingLeave: (() => void) | null = null
 
-  function connect(code: string, token: string): void {
+  function connect(code: string, token: string, betaToken: string): void {
     disconnect()
     activeCode = code
     activeToken = token
+    activeBetaToken = betaToken
+    betaAccessExpired.value = false
     manuallyDisconnected = false
     stopReconnecting = false
     reconnectAttempts = 0
     errorMessage.value = ''
-    openSocket(false)
+    void openSocket(false)
   }
 
   function disconnect(): void {
@@ -51,6 +55,7 @@ export function useGameRoom() {
     removedFromRoom.value = false
     activeCode = ''
     activeToken = ''
+    activeBetaToken = ''
   }
 
   function send(message: ClientMessage): boolean {
@@ -86,14 +91,41 @@ export function useGameRoom() {
     disconnect()
   }
 
-  function openSocket(isReconnect: boolean): void {
-    if (!activeCode || !activeToken || manuallyDisconnected || stopReconnecting) {
+  async function openSocket(isReconnect: boolean): Promise<void> {
+    if (!activeCode || !activeToken || !activeBetaToken || manuallyDisconnected || stopReconnecting) {
       return
     }
 
     connectionStatus.value = isReconnect ? 'reconnecting' : 'connecting'
     try {
-      const current = new WebSocket(createWebSocketUrl(activeCode))
+      await getBetaSession(activeBetaToken)
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        (error.code === 'BETA_ACCESS_REQUIRED' || error.code === 'BETA_NOT_CONFIGURED')
+      ) {
+        betaAccessExpired.value = true
+        stopReconnecting = true
+        connectionStatus.value = 'offline'
+        errorMessage.value = error.message
+        return
+      }
+
+      errorMessage.value = '無法確認封測資格，正在重新嘗試。'
+      connectionStatus.value = 'reconnecting'
+      scheduleReconnect()
+      return
+    }
+
+    if (!activeCode || !activeToken || !activeBetaToken || manuallyDisconnected || stopReconnecting) {
+      return
+    }
+
+    try {
+      const current = new WebSocket(
+        createWebSocketUrl(activeCode),
+        ['gamumu-beta', `gamumu-beta.${activeBetaToken}`],
+      )
       socket = current
 
       current.addEventListener('open', () => {
@@ -130,6 +162,9 @@ export function useGameRoom() {
             return
           case 'auth_error':
             errorMessage.value = payload.message
+            if (payload.code === 'BETA_ACCESS_REQUIRED') {
+              betaAccessExpired.value = true
+            }
             stopReconnecting = true
             current.close(4401, 'Authentication failed')
             return
@@ -232,6 +267,7 @@ export function useGameRoom() {
     gameEvent,
     playerId,
     removedFromRoom,
+    betaAccessExpired,
     connect,
     disconnect,
     send,

@@ -18,7 +18,12 @@ import {
 } from '../../../shared/protocol'
 import type { Env } from '../env'
 import { getGameModule } from '../games/registry'
-import { hashSessionToken } from '../security'
+import {
+  hashSessionToken,
+  parseBetaCodes,
+  readWebSocketBetaToken,
+  verifyBetaSessionToken,
+} from '../security'
 import type { LegacyStoredRoom, StoredPlayer, StoredRoom } from './types'
 
 const ROOM_STORAGE_KEY = 'room'
@@ -29,16 +34,21 @@ const TOKEN_HASH_PATTERN = /^[a-f0-9]{64}$/
 
 interface SocketAttachment {
   playerId: string | null
+  betaToken: string
 }
 
 export class GameRoom extends DurableObject<Env> {
   private room: StoredRoom | null = null
   private readonly initialized: Promise<void>
   private readonly devRoleSelectionEnabled: boolean
+  private readonly betaCodes: string | undefined
+  private readonly betaSessionSecret: string | undefined
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
     this.devRoleSelectionEnabled = env.ENABLE_DEV_ROLE_SELECTION === 'true'
+    this.betaCodes = env.BETA_CODES
+    this.betaSessionSecret = env.BETA_SESSION_SECRET?.trim()
     this.initialized = this.ctx.blockConcurrencyWhile(async () => {
       const storedRoom = await this.ctx.storage.get<StoredRoom | LegacyStoredRoom>(ROOM_STORAGE_KEY)
       if (!storedRoom) {
@@ -79,6 +89,27 @@ export class GameRoom extends DurableObject<Env> {
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     await this.initialized
+    const attachment = this.readAttachment(ws)
+    if (!attachment) {
+      ws.close(1011, 'Invalid connection state')
+      return
+    }
+
+    const betaSessionExpiresAt = await verifyBetaSessionToken(
+      attachment.betaToken,
+      this.betaSessionSecret,
+      parseBetaCodes(this.betaCodes),
+    )
+    if (!betaSessionExpiresAt) {
+      this.send(ws, {
+        type: 'auth_error',
+        code: 'BETA_ACCESS_REQUIRED',
+        message: '封測驗證已失效，請重新輸入封測碼。',
+      })
+      ws.close(4401, 'Beta access expired')
+      return
+    }
+
     if (!this.room) {
       this.send(ws, { type: 'auth_error', code: 'ROOM_NOT_FOUND', message: '房間不存在或已結束。' })
       ws.close(4404, 'Room not found')
@@ -102,12 +133,6 @@ export class GameRoom extends DurableObject<Env> {
 
     if (!isRecord(payload) || typeof payload.type !== 'string') {
       this.send(ws, { type: 'action_error', code: 'INVALID_MESSAGE', message: '訊息格式不正確。' })
-      return
-    }
-
-    const attachment = this.readAttachment(ws)
-    if (!attachment) {
-      ws.close(1011, 'Invalid connection state')
       return
     }
 
@@ -292,14 +317,33 @@ export class GameRoom extends DurableObject<Env> {
       return jsonResponse({ code: 'WEBSOCKET_REQUIRED', message: '此路徑需要 WebSocket 連線。' }, 426)
     }
 
+    const betaToken = readWebSocketBetaToken(request)
+    const betaSessionExpiresAt = betaToken
+      ? await verifyBetaSessionToken(
+        betaToken,
+        this.betaSessionSecret,
+        parseBetaCodes(this.betaCodes),
+      )
+      : null
+    if (!betaSessionExpiresAt || !betaToken) {
+      return jsonResponse(
+        { code: 'BETA_ACCESS_REQUIRED', message: '封測驗證已失效，請重新輸入封測碼。' },
+        401,
+      )
+    }
+
     const pair = new WebSocketPair()
     const client = pair[0]
     const server = pair[1]
     this.ctx.acceptWebSocket(server)
-    server.serializeAttachment({ playerId: null } satisfies SocketAttachment)
+    server.serializeAttachment({ playerId: null, betaToken } satisfies SocketAttachment)
     this.send(server, { type: 'auth_required' })
 
-    return new Response(null, { status: 101, webSocket: client })
+    return new Response(null, {
+      status: 101,
+      webSocket: client,
+      headers: { 'Sec-WebSocket-Protocol': 'gamumu-beta' },
+    })
   }
 
   private async handleSetReady(ws: WebSocket, player: StoredPlayer, value: unknown): Promise<void> {
@@ -451,6 +495,12 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private async authenticate(ws: WebSocket, token: string): Promise<void> {
+    const attachment = this.readAttachment(ws)
+    if (!attachment) {
+      ws.close(1011, 'Invalid connection state')
+      return
+    }
+
     if (!this.room || !/^[a-f0-9]{64}$/.test(token)) {
       this.send(ws, { type: 'auth_error', code: 'INVALID_TOKEN', message: '房間連線憑證無效，請重新加入。' })
       ws.close(4401, 'Invalid token')
@@ -471,7 +521,7 @@ export class GameRoom extends DurableObject<Env> {
       }
     }
 
-    ws.serializeAttachment({ playerId: player.id } satisfies SocketAttachment)
+    ws.serializeAttachment({ playerId: player.id, betaToken: attachment.betaToken } satisfies SocketAttachment)
     player.online = true
     await this.persist()
     this.send(ws, { type: 'authenticated', playerId: player.id })
@@ -875,8 +925,11 @@ export class GameRoom extends DurableObject<Env> {
     if (value.playerId !== null && typeof value.playerId !== 'string') {
       return null
     }
+    if (typeof value.betaToken !== 'string' || value.betaToken.length === 0) {
+      return null
+    }
 
-    return { playerId: value.playerId }
+    return { playerId: value.playerId, betaToken: value.betaToken }
   }
 
   private createStoredPlayer(body: Record<string, unknown>): StoredPlayer | null {
