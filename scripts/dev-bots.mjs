@@ -1,10 +1,13 @@
 // 本機測試用：讓機器人加入既有房間、自動 Ready 並自動遊玩狼人殺。
-// 用法：npm run dev:bots -- <房間代碼> [機器人數量=5]
+// 用法：npm run dev:bots -- <房間代碼> <機器人數量=5> <APIURL>
 // 環境變數 API_URL 可指定 Worker 位置（預設 http://127.0.0.1:8787）。Ctrl+C 會讓機器人離開房間。
 
-const API = (process.env.API_URL ?? 'http://127.0.0.1:8787').replace(/\/$/, '')
+const API = (process.env.API_URL ?? process.argv[4] ?? 'http://127.0.0.1:8787').replace(/\/$/, '')
 const [code, countArg] = process.argv.slice(2)
 const count = Number(countArg ?? 5)
+
+console.log(`API URL: ${API}`)
+console.log(`房間代碼: ${code}, 機器人數量: ${count}`)
 
 if (!code || !Number.isInteger(count) || count < 1) {
   console.error('用法：npm run dev:bots -- <房間代碼> [機器人數量=5]')

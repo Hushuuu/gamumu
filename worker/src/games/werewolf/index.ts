@@ -5,6 +5,10 @@ import {
   isWerewolfSettings,
   type WerewolfCamp,
   type WerewolfPrivateState,
+  type WerewolfRoleCounts,
+  type WerewolfRoleId,
+  type WerewolfReplayEvent,
+  type WerewolfReview,
   type WerewolfSettings,
   type WerewolfView,
 } from '../../../../shared/games/werewolf'
@@ -21,6 +25,117 @@ const HUNTER_RESULT_MS = 4_000
 const VOTE_RESULT_MS = 6_000
 const WIN_SCORE = 100
 const MAX_CATCH_UP_STEPS = 24
+
+function countRoles(roles: Record<string, WerewolfRoleId>): WerewolfRoleCounts {
+  const counts: WerewolfRoleCounts = {
+    werewolf: 0,
+    wolfKing: 0,
+    villager: 0,
+    seer: 0,
+    witch: 0,
+    hunter: 0,
+    guard: 0,
+  }
+  for (const roleId of Object.values(roles)) {
+    counts[roleId] += 1
+  }
+  return counts
+}
+
+function replayLog(game: StoredWerewolf): WerewolfReplayEvent[] {
+  if (!Array.isArray(game.replay)) {
+    game.replay = []
+  }
+  return game.replay
+}
+
+function recordReplayEvent(game: StoredWerewolf, event: WerewolfReplayEvent): void {
+  replayLog(game).push(event)
+}
+
+function playerWithRole(game: StoredWerewolf, roleId: WerewolfRoleId): string | null {
+  return game.playerIds.find((playerId) => game.roles[playerId] === roleId) ?? null
+}
+
+function recordNightChoices(game: StoredWerewolf, roleIds: WerewolfRoleId[]): void {
+  if (roleIds.includes('werewolf') || roleIds.includes('wolfKing')) {
+    for (const playerId of game.playerIds) {
+      const targetId = game.night.wolfPicks[playerId]
+      if (targetId !== undefined) {
+        recordReplayEvent(game, { type: 'wolf-choice', day: game.day, playerId, targetId })
+      }
+    }
+    recordReplayEvent(game, {
+      type: 'wolf-attack',
+      day: game.day,
+      targetId: game.night.wolfVictimId,
+    })
+  }
+
+  if (roleIds.includes('seer') && game.night.seerTargetId !== null) {
+    const playerId = playerWithRole(game, 'seer')
+    const targetRole = game.roles[game.night.seerTargetId]
+    if (playerId !== null && targetRole) {
+      recordReplayEvent(game, {
+        type: 'seer-check',
+        day: game.day,
+        playerId,
+        targetId: game.night.seerTargetId,
+        camp: WEREWOLF_ROLES[targetRole].camp,
+      })
+    }
+  }
+
+  if (roleIds.includes('guard')) {
+    const playerId = playerWithRole(game, 'guard')
+    if (
+      playerId !== null &&
+      (game.night.guardTargetId !== null || isAlive(game, playerId))
+    ) {
+      recordReplayEvent(game, {
+        type: 'guard-protect',
+        day: game.day,
+        playerId,
+        targetId: game.night.guardTargetId,
+      })
+    }
+  }
+
+  if (roleIds.includes('witch')) {
+    const playerId = playerWithRole(game, 'witch')
+    if (playerId !== null && game.night.witchSave && game.night.wolfVictimId !== null) {
+      recordReplayEvent(game, {
+        type: 'witch-save',
+        day: game.day,
+        playerId,
+        targetId: game.night.wolfVictimId,
+      })
+    }
+    if (playerId !== null && game.night.witchPoisonId !== null) {
+      recordReplayEvent(game, {
+        type: 'witch-poison',
+        day: game.day,
+        playerId,
+        targetId: game.night.witchPoisonId,
+      })
+    }
+  }
+}
+
+function reviewFor(room: GameRoomContext, game: StoredWerewolf): WerewolfReview | null {
+  if (game.phase !== 'finished') {
+    return null
+  }
+
+  if (!game.playerNames) {
+    game.playerNames = Object.fromEntries(room.players.map((player) => [player.id, player.name]))
+  }
+
+  return {
+    events: replayLog(game).map((event) => ({ ...event })),
+    playerNames: { ...game.playerNames },
+  }
+}
 
 function failure(code: string, message: string, changed = false): GameActionResult {
   return { ok: false, code, message, changed }
@@ -77,6 +192,7 @@ function finishGame(room: GameRoomContext, game: StoredWerewolf, winner: Werewol
   game.phaseEndsAt = 0
   game.pendingShooterId = null
   room.status = 'finished'
+  recordReplayEvent(game, { type: 'game-end', day: game.day, winner })
 
   for (const player of room.players) {
     const roleId = game.roles[player.id]
@@ -153,6 +269,13 @@ function resolveHunterShot(game: StoredWerewolf, targetId: string | null, now: n
     return
   }
 
+  recordReplayEvent(game, {
+    type: 'hunter-shot',
+    day: game.day,
+    playerId: shooterId,
+    roleId: game.roles[shooterId]!,
+    targetId,
+  })
   game.pendingShooterId = null
   game.hunterShot = { shooterId, roleId: game.roles[shooterId]!, targetId }
   if (targetId !== null) {
@@ -163,9 +286,11 @@ function resolveHunterShot(game: StoredWerewolf, targetId: string | null, now: n
 
 function endNightStep(game: StoredWerewolf, now: number): void {
   const script = getScript(game.scriptId)
-  for (const roleId of script.nightSteps[game.nightStep] ?? []) {
+  const roles = script.nightSteps[game.nightStep] ?? []
+  for (const roleId of roles) {
     getRole(roleId).nightAction?.onStepEnd?.(game)
   }
+  recordNightChoices(game, roles)
 
   if (game.nightStep + 1 < script.nightSteps.length) {
     game.nightStep += 1
@@ -178,7 +303,18 @@ function endNightStep(game: StoredWerewolf, now: number): void {
     if (isAlive(game, death.playerId)) {
       killPlayer(game, death.playerId, death.cause)
       game.lastDeathIds.push(death.playerId)
+      if (death.cause === 'wolf' || death.cause === 'poison') {
+        recordReplayEvent(game, {
+          type: 'night-death',
+          day: game.day,
+          playerId: death.playerId,
+          cause: death.cause,
+        })
+      }
     }
+  }
+  if (game.lastDeathIds.length === 0) {
+    recordReplayEvent(game, { type: 'night-peace', day: game.day })
   }
   game.phase = 'dawn'
   game.phaseEndsAt = now + DAWN_MS
@@ -191,6 +327,10 @@ function enterVote(game: StoredWerewolf, now: number): void {
 }
 
 function tallyVotes(game: StoredWerewolf, now: number): void {
+  for (const [playerId, targetId] of Object.entries(game.votes)) {
+    recordReplayEvent(game, { type: 'day-vote', day: game.day, playerId, targetId })
+  }
+
   const counts = new Map<string, number>()
   for (const [voterId, targetId] of Object.entries(game.votes)) {
     if (targetId !== null && isAlive(game, voterId) && isAlive(game, targetId)) {
@@ -201,6 +341,21 @@ function tallyVotes(game: StoredWerewolf, now: number): void {
   const highest = Math.max(0, ...counts.values())
   const leaders = [...counts.entries()].filter(([, count]) => count === highest && highest > 0)
   game.exiledId = leaders.length === 1 ? leaders[0]![0] : null
+  if (game.exiledId !== null) {
+    recordReplayEvent(game, {
+      type: 'vote-result',
+      day: game.day,
+      targetId: game.exiledId,
+      result: 'exiled',
+    })
+  } else {
+    recordReplayEvent(game, {
+      type: 'vote-result',
+      day: game.day,
+      targetId: null,
+      result: highest > 0 ? 'tie' : 'no-votes',
+    })
+  }
   game.lastDeathIds = []
   if (game.exiledId !== null) {
     killPlayer(game, game.exiledId, 'vote')
@@ -457,6 +612,7 @@ export const werewolfGame: GameModule = {
       settings,
       scriptId: settings.scriptId,
       playerIds,
+      playerNames: Object.fromEntries(room.players.map((player) => [player.id, player.name])),
       roles: Object.fromEntries(playerIds.map((playerId, index) => [playerId, roleList[index]!])),
       alive: Object.fromEntries(playerIds.map((playerId) => [playerId, true])),
       phase: 'role-reveal',
@@ -477,6 +633,7 @@ export const werewolfGame: GameModule = {
       speakerIndex: 0,
       hunterShot: null,
       winner: null,
+      replay: [],
     }
     room.status = 'playing'
     room.game = game
@@ -510,6 +667,7 @@ export const werewolfGame: GameModule = {
     let changed = false
     if (isAlive(game, playerId)) {
       const wasSpeaking = currentSpeakerId(game) === playerId
+      recordReplayEvent(game, { type: 'player-left', day: game.day, playerId })
       killPlayer(game, playerId, 'left')
       if (wasSpeaking) {
         nextSpeaker(game, now)
@@ -569,6 +727,7 @@ export const werewolfGame: GameModule = {
       phaseEndsAt: game.phaseEndsAt,
       stateVersion: game.stateVersion,
       settings: { ...game.settings },
+      roleCounts: countRoles(game.roles),
       seatIds: [...game.playerIds],
       aliveIds: aliveIds(game),
       lastDeathIds: [...game.lastDeathIds],
@@ -586,6 +745,7 @@ export const werewolfGame: GameModule = {
           : null,
       winner: game.winner,
       roles: game.phase === 'finished' ? { ...game.roles } : null,
+      review: reviewFor(room, game),
     }
   },
 }

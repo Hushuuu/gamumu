@@ -7,11 +7,13 @@ import {
   isWerewolfPrivateState,
   type WerewolfPhase,
   type WerewolfPrivateState,
+  type WerewolfRoleId,
 } from '../../../shared/games/werewolf'
 import type { GameEvent, PlayerView } from '../../../shared/protocol'
 import PlayerPicker from './components/PlayerPicker.vue'
 import RoleCard from './components/RoleCard.vue'
-import type { PickerSeat } from './components/types'
+import WerewolfRoleIcon from './components/WerewolfRoleIcon.vue'
+import { ROLE_GUESS_DRAG_TYPE, type PickerSeat } from './components/types'
 
 const props = defineProps<{
   game: GameView
@@ -45,6 +47,9 @@ const privateState = ref<WerewolfPrivateState | null>(null)
 const poisonPick = ref<string | null>(null)
 const votePick = ref<string | null>(null)
 const shootPick = ref<string | null>(null)
+const selectedGuessRole = ref<WerewolfRoleId | null>(null)
+const roleGuesses = ref<Partial<Record<string, WerewolfRoleId>>>({})
+let suppressPickerClick = false
 let clockTimer: number | undefined
 
 const view = computed(() => (props.game.gameId === 'werewolf' ? props.game : null))
@@ -86,7 +91,7 @@ const selectable = computed(() => {
   const others = [...aliveSet.value].filter((id) => id !== props.playerId)
   switch (mode.value) {
     case 'wolf':
-      return others.filter((id) => !state.teammates.includes(id))
+      return [...aliveSet.value]
     case 'seer':
       return others.filter((id) => !state.seerResults.some((result) => result.playerId === id))
     case 'guard':
@@ -151,6 +156,7 @@ const seats = computed<PickerSeat[]>(() => {
       avatarId: player?.avatarId ?? null,
       alive: aliveSet.value.has(id),
       tags,
+      guessRoleId: roleGuesses.value[id] ?? null,
     }
   })
 })
@@ -205,7 +211,18 @@ const speakerProgress = computed(() => {
   return `${speech.index + 1} / ${speech.order.length}`
 })
 const witchVictimName = computed(() => nameOf(priv.value?.witch?.victimId ?? null))
+const roleCountEntries = computed(() => {
+  const roleCounts = view.value?.roleCounts
+  if (!roleCounts) {
+    return []
+  }
 
+  return Object.values(WEREWOLF_ROLES).map(({ id, name }) => ({
+    id,
+    name,
+    count: roleCounts[id],
+  }))
+})
 watch(() => props.gameEvent, (event) => {
   if (event?.gameId === 'werewolf' && event.event === WEREWOLF_PRIVATE_EVENT && isWerewolfPrivateState(event.payload)) {
     privateState.value = event.payload
@@ -237,6 +254,16 @@ function act(action: string, payload: Record<string, unknown>): void {
 }
 
 function pick(playerId: string): void {
+  if (suppressPickerClick) {
+    suppressPickerClick = false
+    return
+  }
+
+  if (selectedGuessRole.value) {
+    assignRoleGuess(playerId, selectedGuessRole.value)
+    return
+  }
+
   switch (mode.value) {
     case 'wolf':
       act('wolf_target', { targetId: playerId })
@@ -257,6 +284,48 @@ function pick(playerId: string): void {
       votePick.value = playerId
       break
   }
+}
+
+function selectGuessRole(roleId: WerewolfRoleId): void {
+  selectedGuessRole.value = selectedGuessRole.value === roleId ? null : roleId
+}
+
+function startRoleGuessDrag(event: DragEvent, roleId: WerewolfRoleId): void {
+  const transfer = event.dataTransfer
+  if (!transfer) {
+    return
+  }
+
+  selectedGuessRole.value = roleId
+  transfer.effectAllowed = 'copy'
+  transfer.setData(ROLE_GUESS_DRAG_TYPE, roleId)
+  transfer.setData('text/plain', roleId)
+}
+
+function assignRoleGuess(playerId: string, roleId: string): boolean {
+  const guessableRole = roleCountEntries.value.find((role) => role.id === roleId && role.count > 0)
+  if (!guessableRole) {
+    return false
+  }
+
+  roleGuesses.value[playerId] = guessableRole.id
+  selectedGuessRole.value = null
+  return true
+}
+
+function dropRoleGuess(playerId: string, roleId: string): void {
+  if (!assignRoleGuess(playerId, roleId)) {
+    return
+  }
+
+  suppressPickerClick = true
+  window.setTimeout(() => {
+    suppressPickerClick = false
+  }, 0)
+}
+
+function clearRoleGuess(playerId: string): void {
+  delete roleGuesses.value[playerId]
 }
 
 function endSpeech(): void {
@@ -290,6 +359,41 @@ function endDiscussion(): void {
 
       <RoleCard :role="priv?.role ?? null" :teammate-names="teammateNames" />
 
+      <section class="ww-panel" aria-label="本局角色配置">
+        <div class="ww-role-guess-heading">
+          <div>
+            <h3>本局角色配置（{{ view.seatIds.length }} 人）</h3>
+            <p>選取角色卡後點擊玩家，或直接拖曳卡片至玩家；註記只暫存在你的畫面，不會同步給其他玩家。</p>
+          </div>
+        </div>
+        <div class="ww-role-guess-cards">
+          <button
+            v-for="role in roleCountEntries"
+            :key="role.id"
+            class="ww-role-guess-card"
+            :class="{ 'is-selected': selectedGuessRole === role.id }"
+            type="button"
+            :disabled="role.count === 0"
+            :draggable="role.count > 0"
+            :aria-pressed="selectedGuessRole === role.id"
+            :aria-label="`選擇${role.name}角色卡，本局有 ${role.count} 位`"
+            @click="selectGuessRole(role.id)"
+            @dragstart="startRoleGuessDrag($event, role.id)"
+          >
+            <WerewolfRoleIcon :role-id="role.id" :size="24" />
+            <span>{{ role.name }}</span>
+            <strong>× {{ role.count }}</strong>
+          </button>
+        </div>
+        <p class="ww-guess-status" role="status">
+          {{
+            selectedGuessRole
+              ? `已選擇${WEREWOLF_ROLES[selectedGuessRole].name}，點擊下方玩家即可註記；再次點擊卡片可取消。`
+              : '角色數量為 0 的卡片不能註記；拖曳角色卡或點選卡片後再點玩家。'
+          }}
+        </p>
+      </section>
+
       <p v-if="priv && !priv.alive" class="ww-notice ww-notice-dead" role="status">
         你已出局。可以繼續旁觀，但請不要透露任何身分資訊。
       </p>
@@ -301,7 +405,7 @@ function endDiscussion(): void {
 
       <section v-else-if="phase === 'night'" class="ww-panel ww-panel-night" aria-live="polite">
         <template v-if="priv?.acting && priv.camp === 'wolf'">
-          <h3>🐺 選擇今晚要襲擊的玩家</h3>
+          <h3><WerewolfRoleIcon role-id="werewolf" :size="18" /> 選擇今晚要襲擊的玩家</h3>
           <p>與同伴討論後點選目標；同伴的選擇會顯示在名單上，最高票者被襲擊。可隨時改選。</p>
           <button
             class="button button-secondary ww-inline-button"
@@ -313,7 +417,7 @@ function endDiscussion(): void {
           </button>
         </template>
         <template v-else-if="priv?.acting && priv.role === 'guard'">
-          <h3>🛡️ 選擇要守護的玩家</h3>
+          <h3><WerewolfRoleIcon role-id="guard" :size="18" /> 選擇要守護的玩家</h3>
           <p>
             被守護的人今晚不會被狼人殺死（可守護自己），但不能連續兩晚守護同一人。
             若守護的人同晚被女巫救起，反而會死亡。可隨時改選。
@@ -328,7 +432,7 @@ function endDiscussion(): void {
           </button>
         </template>
         <template v-else-if="priv?.acting && priv.role === 'seer'">
-          <h3>🔮 選擇要查驗的玩家</h3>
+          <h3><WerewolfRoleIcon role-id="seer" :size="18" /> 選擇要查驗的玩家</h3>
           <p v-if="priv.myTarget !== null">
             今晚已查驗：{{ nameOf(priv.myTarget) }} 是
             <strong>{{ seerTonightCamp === 'wolf' ? '狼人' : '好人' }}</strong>。
@@ -336,7 +440,7 @@ function endDiscussion(): void {
           <p v-else>點選一位玩家，立即得知他是好人或狼人。</p>
         </template>
         <template v-else-if="priv?.acting && priv.role === 'witch' && priv.witch">
-          <h3>🧪 女巫行動</h3>
+          <h3><WerewolfRoleIcon role-id="witch" :size="18" /> 女巫行動</h3>
           <p v-if="priv.witch.victimId">今晚 {{ witchVictimName }} 被襲擊。</p>
           <p v-else>{{ priv.witch.antidote ? '今晚沒有人被襲擊。' : '解藥已用完，無法得知襲擊目標。' }}</p>
           <div class="ww-actions">
@@ -383,7 +487,7 @@ function endDiscussion(): void {
 
       <section v-else-if="phase === 'hunter-shot'" class="ww-panel" aria-live="polite">
         <template v-if="priv?.canShoot">
-          <h3>🏹 你可以開槍</h3>
+          <h3><WerewolfRoleIcon :role-id="priv.role" :size="18" /> 你可以開槍</h3>
           <p>選擇一位玩家帶走，或放棄開槍。</p>
           <div class="ww-actions">
             <button
@@ -405,7 +509,10 @@ function endDiscussion(): void {
           </div>
         </template>
         <template v-else>
-          <h3>🏹 開槍時刻</h3>
+          <h3>
+            <WerewolfRoleIcon v-if="view.shooterRoleId" :role-id="view.shooterRoleId" :size="18" />
+            開槍時刻
+          </h3>
           <p>{{ hunterText }}</p>
         </template>
       </section>
@@ -498,9 +605,12 @@ function endDiscussion(): void {
       <PlayerPicker
         :seats="seats"
         :selectable="selectable"
-        :selected="selected"
+        :selected="selectedGuessRole ? null : selected"
+        :selected-guess-role="selectedGuessRole"
         :disabled="!props.canInteract || mode === 'none'"
         @select="pick"
+        @role-drop="dropRoleGuess"
+        @clear-guess="clearRoleGuess"
       />
     </template>
   </div>

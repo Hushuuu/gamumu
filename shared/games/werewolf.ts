@@ -8,6 +8,7 @@ export type WerewolfRoleId =
   | 'hunter'
   | 'guard'
 export type WerewolfScriptId = 'classic' | 'wolf-guard'
+export type WerewolfRoleCounts = Record<WerewolfRoleId, number>
 
 export type WerewolfPhase =
   | 'role-reveal'
@@ -23,7 +24,6 @@ export interface WerewolfRoleInfo {
   id: WerewolfRoleId
   name: string
   camp: WerewolfCamp
-  icon: string
   description: string
 }
 
@@ -32,49 +32,42 @@ export const WEREWOLF_ROLES: Record<WerewolfRoleId, WerewolfRoleInfo> = {
     id: 'werewolf',
     name: '狼人',
     camp: 'wolf',
-    icon: '🐺',
     description: '每晚與同伴選擇一名玩家襲擊。殺光所有好人即可獲勝。',
   },
   wolfKing: {
     id: 'wolfKing',
     name: '狼王',
     camp: 'wolf',
-    icon: '👑',
     description: '與狼人同陣營並一起襲擊。被狼人殺死或被放逐時可開槍帶走一人；被毒死則不能開槍。',
   },
   villager: {
     id: 'villager',
     name: '村民',
     camp: 'good',
-    icon: '🧑‍🌾',
     description: '沒有特殊能力。白天靠討論與投票找出狼人。',
   },
   seer: {
     id: 'seer',
     name: '預言家',
     camp: 'good',
-    icon: '🔮',
     description: '每晚可查驗一名玩家是好人還是狼人。',
   },
   witch: {
     id: 'witch',
     name: '女巫',
     camp: 'good',
-    icon: '🧪',
     description: '擁有一瓶解藥與一瓶毒藥，同一晚只能使用其中一瓶。',
   },
   hunter: {
     id: 'hunter',
     name: '獵人',
     camp: 'good',
-    icon: '🏹',
     description: '被狼人殺死或被放逐時可開槍帶走一人；被毒死則不能開槍。',
   },
   guard: {
     id: 'guard',
     name: '守衛',
     camp: 'good',
-    icon: '🛡️',
     description: '每晚可守護一人（含自己），使其免於狼人襲擊；不能連續兩晚守護同一人。守護的人若同晚被解藥救起，反而會死亡。',
   },
 }
@@ -170,6 +163,27 @@ export interface WerewolfSpeech {
   index: number
 }
 
+export type WerewolfReplayEvent =
+  | { type: 'wolf-choice'; day: number; playerId: string; targetId: string | null }
+  | { type: 'wolf-attack'; day: number; targetId: string | null }
+  | { type: 'seer-check'; day: number; playerId: string; targetId: string; camp: WerewolfCamp }
+  | { type: 'guard-protect'; day: number; playerId: string; targetId: string | null }
+  | { type: 'witch-save'; day: number; playerId: string; targetId: string }
+  | { type: 'witch-poison'; day: number; playerId: string; targetId: string }
+  | { type: 'night-death'; day: number; playerId: string; cause: 'wolf' | 'poison' }
+  | { type: 'night-peace'; day: number }
+  | { type: 'day-vote'; day: number; playerId: string; targetId: string | null }
+  | { type: 'vote-result'; day: number; targetId: string; result: 'exiled' }
+  | { type: 'vote-result'; day: number; targetId: null; result: 'tie' | 'no-votes' }
+  | { type: 'hunter-shot'; day: number; playerId: string; roleId: WerewolfRoleId; targetId: string | null }
+  | { type: 'player-left'; day: number; playerId: string }
+  | { type: 'game-end'; day: number; winner: WerewolfCamp }
+
+export interface WerewolfReview {
+  events: WerewolfReplayEvent[]
+  playerNames: Record<string, string>
+}
+
 export interface WerewolfView {
   gameId: 'werewolf'
   phase: WerewolfPhase
@@ -179,6 +193,7 @@ export interface WerewolfView {
   phaseEndsAt: number
   stateVersion: number
   settings: WerewolfSettings
+  roleCounts: WerewolfRoleCounts
   seatIds: string[]
   aliveIds: string[]
   lastDeathIds: string[]
@@ -191,14 +206,87 @@ export interface WerewolfView {
   speech: WerewolfSpeech | null
   winner: WerewolfCamp | null
   roles: Record<string, WerewolfRoleId> | null
+  review: WerewolfReview | null
 }
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
 }
 
+function isWerewolfRoleCounts(value: unknown): value is WerewolfRoleCounts {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  const roleIds = Object.keys(WEREWOLF_ROLES)
+  return (
+    Object.keys(value).length === roleIds.length &&
+    roleIds.every((roleId) => {
+      const count = value[roleId]
+      return typeof count === 'number' && Number.isInteger(count) && count >= 0
+    })
+  )
+}
+
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string'
+}
+
+function isWerewolfReplayEvent(value: unknown): value is WerewolfReplayEvent {
+  if (!isRecord(value) || !isIntegerInRange(value.day, 0, 1_000)) {
+    return false
+  }
+
+  switch (value.type) {
+    case 'wolf-choice':
+    case 'guard-protect':
+    case 'day-vote':
+      return typeof value.playerId === 'string' && isNullableString(value.targetId)
+    case 'wolf-attack':
+      return isNullableString(value.targetId)
+    case 'seer-check':
+      return (
+        typeof value.playerId === 'string' &&
+        typeof value.targetId === 'string' &&
+        (value.camp === 'good' || value.camp === 'wolf')
+      )
+    case 'witch-save':
+    case 'witch-poison':
+      return typeof value.playerId === 'string' && typeof value.targetId === 'string'
+    case 'night-death':
+      return (
+        typeof value.playerId === 'string' &&
+        (value.cause === 'wolf' || value.cause === 'poison')
+      )
+    case 'night-peace':
+      return true
+    case 'vote-result':
+      return value.result === 'exiled'
+        ? typeof value.targetId === 'string'
+        : (value.result === 'tie' || value.result === 'no-votes') && value.targetId === null
+    case 'hunter-shot':
+      return (
+        typeof value.playerId === 'string' &&
+        isWerewolfRoleId(value.roleId) &&
+        isNullableString(value.targetId)
+      )
+    case 'player-left':
+      return typeof value.playerId === 'string'
+    case 'game-end':
+      return value.winner === 'good' || value.winner === 'wolf'
+    default:
+      return false
+  }
+}
+
+function isWerewolfReview(value: unknown): value is WerewolfReview {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.events) &&
+    value.events.every(isWerewolfReplayEvent) &&
+    isRecord(value.playerNames) &&
+    Object.values(value.playerNames).every((name) => typeof name === 'string')
+  )
 }
 
 export function isWerewolfView(value: unknown): value is WerewolfView {
@@ -233,6 +321,12 @@ export function isWerewolfView(value: unknown): value is WerewolfView {
   const rolesValid =
     value.roles === null ||
     (isRecord(value.roles) && Object.values(value.roles).every(isWerewolfRoleId))
+  const seatCount = isStringArray(value.seatIds) ? value.seatIds.length : null
+  const roleCountTotal = isWerewolfRoleCounts(value.roleCounts)
+    ? Object.values(value.roleCounts).reduce((total, count) => total + count, 0)
+    : null
+  const reviewValid =
+    value.phase === 'finished' ? isWerewolfReview(value.review) : value.review === null
 
   return (
     phases.includes(value.phase as WerewolfPhase) &&
@@ -242,6 +336,8 @@ export function isWerewolfView(value: unknown): value is WerewolfView {
     typeof value.phaseEndsAt === 'number' &&
     typeof value.stateVersion === 'number' &&
     isWerewolfSettings(value.settings) &&
+    roleCountTotal !== null &&
+    roleCountTotal === seatCount &&
     isStringArray(value.seatIds) &&
     isStringArray(value.aliveIds) &&
     isStringArray(value.lastDeathIds) &&
@@ -253,7 +349,8 @@ export function isWerewolfView(value: unknown): value is WerewolfView {
     hunterShotValid &&
     speechValid &&
     (value.winner === null || value.winner === 'good' || value.winner === 'wolf') &&
-    rolesValid
+    rolesValid &&
+    reviewValid
   )
 }
 

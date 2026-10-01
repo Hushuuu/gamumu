@@ -10,7 +10,7 @@ export type StoredGame = StoredWordGuess | StoredBlankGame | StoredDrawGuess | S
 export interface GameRoomContext {
   status: RoomStatus
   hostId: string
-  players: Array<Pick<PlayerView, 'id' | 'score' | 'online'>>
+  players: Array<Pick<PlayerView, 'id' | 'name' | 'score' | 'online'>>
   gameSettings?: Record<string, unknown>
   game: StoredGame | null
 }

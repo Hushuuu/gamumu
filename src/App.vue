@@ -482,7 +482,7 @@ function connectionLabel(): string {
       </section>
 
       <template v-else>
-        <section class="avatar-panel" aria-labelledby="avatar-panel-title">
+        <section v-if="snapshot.status !== 'playing'" class="avatar-panel" aria-labelledby="avatar-panel-title">
           <div class="avatar-panel-heading">
             <div>
               <p class="eyebrow">你的識別</p>

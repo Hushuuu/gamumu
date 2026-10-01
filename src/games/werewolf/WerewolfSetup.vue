@@ -8,6 +8,7 @@ import {
   type WerewolfScriptId,
   type WerewolfSettings,
 } from '../../../shared/games/werewolf'
+import WerewolfRoleIcon from './components/WerewolfRoleIcon.vue'
 
 const props = defineProps<{
   settings: Record<string, unknown>
@@ -60,6 +61,16 @@ function settingNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) ? value : fallback
 }
 
+function selectScript(event: Event): void {
+  const target = event.target
+  if (!(target instanceof HTMLSelectElement) || !isWerewolfScriptId(target.value)) {
+    return
+  }
+
+  scriptId.value = target.value
+  saveSettings()
+}
+
 function saveSettings(): void {
   if (disabled.value || !isValid.value) {
     return
@@ -84,22 +95,25 @@ function saveSettings(): void {
         <h3 id="werewolf-settings-title">狼人殺 · {{ script.name }}</h3>
         <p>{{ script.description }}（{{ script.minPlayers }}–{{ script.maxPlayers }} 人）</p>
       </div>
-      <span class="draw-settings-icon" aria-hidden="true">🐺</span>
+      <span class="draw-settings-icon">
+        <WerewolfRoleIcon role-id="werewolf" :size="28" />
+      </span>
     </div>
 
     <p class="ww-setup-roles">
       <span v-for="roleId in script.roles" :key="roleId" class="ww-tag">
-        {{ WEREWOLF_ROLES[roleId].icon }} {{ WEREWOLF_ROLES[roleId].name }}
+        <WerewolfRoleIcon :role-id="roleId" :size="16" />
+        {{ WEREWOLF_ROLES[roleId].name }}
       </span>
     </p>
 
     <form class="draw-settings-form" @submit.prevent="saveSettings">
       <label v-if="WEREWOLF_SCRIPTS.length > 1">
         <span>劇本</span>
-        <select v-model="scriptId" :disabled="disabled">
+        <select :value="scriptId" :disabled="disabled || !isValid" @change="selectScript">
           <option v-for="item in WEREWOLF_SCRIPTS" :key="item.id" :value="item.id">{{ item.name }}</option>
         </select>
-        <small>角色會依人數自動配置</small>
+        <small>更換劇本會立即儲存，角色依人數自動配置</small>
       </label>
       <label class="ww-checkbox">
         <span>輪流發言</span>

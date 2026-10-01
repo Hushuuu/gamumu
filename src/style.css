@@ -2076,8 +2076,60 @@ a:focus-visible {
   opacity: 0.6;
 }
 
-.ww-role-icon {
-  font-size: 28px;
+.ww-role-symbol {
+  display: inline-block;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.ww-role-symbol-werewolf,
+.ww-role-symbol-wolfKing {
+  color: #a83f3b;
+}
+
+.ww-role-symbol-villager {
+  color: #68707c;
+}
+
+.ww-role-symbol-seer {
+  color: #6954b1;
+}
+
+.ww-role-symbol-witch {
+  color: #a24d87;
+}
+
+.ww-role-symbol-hunter {
+  color: #3d7861;
+}
+
+.ww-role-symbol-guard {
+  color: #4270a7;
+}
+
+.ww-role-symbol-bg {
+  fill: currentColor;
+  fill-opacity: 0.12;
+}
+
+.ww-role-card-icon {
+  margin-bottom: 2px;
+}
+
+.ww-role-card-back {
+  width: 32px;
+  height: 40px;
+  margin-bottom: 2px;
+  color: var(--purple-dark);
+  fill: #eeebff;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.ww-role-card-back circle {
+  fill: currentColor;
 }
 
 .ww-role-card strong {
@@ -2181,6 +2233,11 @@ a:focus-visible {
   font: inherit;
 }
 
+.ww-seats > li {
+  position: relative;
+  min-width: 0;
+}
+
 .ww-seat img,
 .ww-seat-placeholder {
   width: 34px;
@@ -2214,6 +2271,12 @@ a:focus-visible {
   border-color: #d9d3fb;
 }
 
+.ww-seats > li.is-guess-target .ww-seat {
+  border-style: dashed;
+  border-color: var(--purple);
+  cursor: copy;
+}
+
 .ww-seat.is-selected {
   border-color: var(--purple);
   background: #eeebff;
@@ -2236,6 +2299,109 @@ a:focus-visible {
 .ww-tag-dead {
   background: #e7e6ee;
   color: #6c6982;
+}
+
+.ww-role-guess {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--purple-dark);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.ww-guess-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #ded9f1;
+  border-radius: 50%;
+  background: #fff;
+  color: #77738e;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ww-guess-remove:hover,
+.ww-guess-remove:focus-visible {
+  border-color: var(--purple);
+  background: #eeebff;
+  color: var(--purple-dark);
+}
+
+.ww-role-guess-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ww-role-guess-heading p {
+  color: #77738e;
+}
+
+.ww-role-guess-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.ww-role-guess-card {
+  display: flex;
+  min-width: 0;
+  min-height: 78px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 7px 5px;
+  border: 1px solid #eae8f2;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 10px;
+  cursor: grab;
+  touch-action: manipulation;
+}
+
+.ww-role-guess-card:active {
+  cursor: grabbing;
+}
+
+.ww-role-guess-card.is-selected {
+  border-color: var(--purple);
+  background: #eeebff;
+  box-shadow: 0 0 0 2px rgb(104 84 177 / 14%);
+}
+
+.ww-role-guess-card:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ww-role-guess-card strong {
+  color: var(--purple-dark);
+  font-size: 10px;
+}
+
+.ww-guess-status {
+  margin: 8px 0 0;
+  color: #77738e;
+  font-size: 10px;
+  line-height: 1.5;
 }
 
 .ww-tally {
@@ -2266,6 +2432,18 @@ a:focus-visible {
   flex-wrap: wrap;
   gap: 6px;
   margin: 10px 0 0;
+}
+
+.ww-setup-roles .ww-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ww-result-player {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .draw-settings-form select {
@@ -2309,9 +2487,138 @@ a:focus-visible {
   font-size: 10px;
 }
 
+.ww-review-open {
+  margin-top: 14px;
+}
+
+.ww-review-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  background: rgb(25 22 39 / 68%);
+  color: var(--ink);
+}
+
+.ww-review-dialog {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  background: #fff;
+}
+
+.ww-review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: max(16px, env(safe-area-inset-top)) 20px 14px;
+  border-bottom: 1px solid #eceaf3;
+}
+
+.ww-review-header .eyebrow {
+  margin: 0 0 4px;
+}
+
+.ww-review-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+}
+
+.ww-review-close {
+  flex: 0 0 auto;
+}
+
+.ww-review-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+  overscroll-behavior: contain;
+}
+
+.ww-review-day {
+  width: min(100%, 860px);
+  margin: 0 auto 24px;
+}
+
+.ww-review-day h3 {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 10px;
+  padding: 8px 0;
+  background: #fff;
+  color: var(--purple-dark);
+  font-size: 14px;
+}
+
+.ww-review-day ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ww-review-day li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #eceaf3;
+  border-radius: 12px;
+  background: #faf9fd;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ww-review-index {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: #eeebff;
+  color: var(--purple-dark);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ww-review-empty {
+  width: min(100%, 860px);
+  margin: 0 auto;
+  color: #77738e;
+  text-align: center;
+}
+
 .draw-settings-form .ww-checkbox input {
   width: 22px;
   height: 22px;
+}
+
+@media (max-width: 520px) {
+  .ww-review-header {
+    padding: max(14px, env(safe-area-inset-top)) 14px 12px;
+  }
+
+  .ww-review-header h2 {
+    font-size: 17px;
+  }
+
+  .ww-review-content {
+    padding: 14px;
+  }
+
+  .ww-review-day li {
+    gap: 8px;
+    padding: 10px;
+    font-size: 12px;
+  }
 }
 
 .ww-speaker {

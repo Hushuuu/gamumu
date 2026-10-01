@@ -7,6 +7,7 @@ import type {
   WerewolfSettings,
   WerewolfHunterShot,
   WerewolfPrivateState,
+  WerewolfReplayEvent,
 } from '../../../../shared/games/werewolf'
 
 export type DeathCause = 'wolf' | 'poison' | 'vote' | 'shot' | 'left'
@@ -25,6 +26,7 @@ export interface StoredWerewolf {
   settings: WerewolfSettings
   scriptId: WerewolfScriptId
   playerIds: string[]
+  playerNames: Record<string, string>
   roles: Record<string, WerewolfRoleId>
   alive: Record<string, boolean>
   phase: WerewolfPhase
@@ -45,6 +47,7 @@ export interface StoredWerewolf {
   speakerIndex: number
   hunterShot: WerewolfHunterShot | null
   winner: WerewolfCamp | null
+  replay: WerewolfReplayEvent[]
 }
 
 export type NightActionResult = { ok: true } | { ok: false; message: string }
