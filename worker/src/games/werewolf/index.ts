@@ -12,7 +12,7 @@ import {
   type WerewolfSettings,
   type WerewolfView,
 } from '../../../../shared/games/werewolf'
-import type { GameActionResult, GameModule, GameRoomContext } from '../types'
+import type { GameActionResult, GameModule, GameRoomContext, GameStartOptions } from '../types'
 import { aliveIds, isAlive, isTargetId, shuffle } from './helpers'
 import { getRole } from './roles'
 import { getScript } from './scripts'
@@ -601,11 +601,29 @@ export const werewolfGame: GameModule = {
     const state = buildPrivateState(game, playerId)
     return state ? { name: WEREWOLF_PRIVATE_EVENT, payload: { ...state } } : null
   },
-  start(room, now) {
+  start(room, now, options?: GameStartOptions) {
     const settings = currentSettings(room)
     const script = getScript(settings.scriptId)
     const playerIds = room.players.map((player) => player.id)
     const roleList = shuffle(script.roleSetup(playerIds.length))
+    if (options?.devWerewolfRole) {
+      const hostIndex = playerIds.indexOf(room.hostId)
+      if (hostIndex < 0) {
+        throw new Error('Cannot assign a development role because the host is not in the room.')
+      }
+
+      if (roleList[hostIndex] !== options.devWerewolfRole) {
+        const roleIndex = roleList.findIndex(
+          (roleId, index) => index !== hostIndex && roleId === options.devWerewolfRole,
+        )
+        if (roleIndex < 0) {
+          throw new Error(`Development role ${options.devWerewolfRole} is not in the selected script.`)
+        }
+        const previousRole = roleList[hostIndex]!
+        roleList[hostIndex] = roleList[roleIndex]!
+        roleList[roleIndex] = previousRole
+      }
+    }
 
     const game: StoredWerewolf = {
       gameId: 'werewolf',

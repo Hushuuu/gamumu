@@ -1,6 +1,6 @@
 import { isAvatarId, type AvatarId } from './avatars'
 import { isGameId, isGameView } from './games'
-import type { GameId, GameView } from './games'
+import type { GameId, GameView, WerewolfRoleId } from './games'
 
 export { GAME_OPTIONS, ROOM_CAPACITY, getGameOption, isGameId } from './games'
 export type { GameId, GameOption, GameView } from './games'
@@ -43,7 +43,7 @@ export type ClientMessage =
   | { type: 'select_game'; gameId: GameId }
   | { type: 'configure_game'; gameId: GameId; settings: Record<string, unknown> }
   | { type: 'kick_player'; playerId: string }
-  | { type: 'start_game' }
+  | { type: 'start_game'; devRoleId?: WerewolfRoleId }
   | { type: 'game_action'; gameId: GameId; action: string; payload: Record<string, unknown> }
   | { type: 'submit_answer'; answer: string }
   | { type: 'finish_game' }

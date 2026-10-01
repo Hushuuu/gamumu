@@ -11,8 +11,10 @@ export { isDrawGuessSettings, isDrawGuessView } from './draw-guess'
 export {
   DEFAULT_WEREWOLF_SETTINGS,
   WEREWOLF_PRIVATE_EVENT,
+  WEREWOLF_ROLE_COUNTS_BY_SCRIPT,
   WEREWOLF_ROLES,
   WEREWOLF_SCRIPTS,
+  getWerewolfRoleCounts,
   getWerewolfPlayerRange,
   isWerewolfPrivateState,
   isWerewolfRoleId,

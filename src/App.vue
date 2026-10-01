@@ -6,12 +6,18 @@ import {
   GAME_OPTIONS,
   getGameOption,
   getPlayerRange,
+  getWerewolfRoleCounts,
   ROOM_CAPACITY,
+  WEREWOLF_ROLES,
+  WEREWOLF_SCRIPTS,
+  isWerewolfScriptId,
   type GameId,
+  type WerewolfRoleId,
 } from '../shared/games'
 import type { ClientMessage } from '../shared/protocol'
 import { useGameRoom } from './composables/useGameRoom'
 import { GAME_COMPONENTS } from './games/registry'
+import GameRulesDialog from './games/GameRulesDialog.vue'
 import { createRoomRequest, joinRoomRequest } from './services/api'
 import { loadRoomToken, removeRoomToken, saveRoomToken } from './services/session'
 
@@ -34,6 +40,8 @@ const activeRoomCode = ref('')
 const isLoading = ref(false)
 const pageError = ref('')
 const pageNotice = ref('')
+const devRoleId = ref<WerewolfRoleId | ''>('')
+const isDevelopmentBuild = import.meta.env.DEV
 
 let noticeTimer: number | undefined
 
@@ -58,6 +66,22 @@ const selectedGame = computed(() => {
 })
 const gameComponents = computed(() => {
   return GAME_COMPONENTS[snapshot.value?.selectedGameId ?? DEFAULT_GAME_ID]
+})
+const devRoleOptions = computed(() => {
+  const room = snapshot.value
+  if (room?.selectedGameId !== 'werewolf' || !isWerewolfScriptId(room.gameSettings.scriptId)) {
+    return []
+  }
+
+  const script = WEREWOLF_SCRIPTS.find((candidate) => candidate.id === room.gameSettings.scriptId)
+  const counts = getWerewolfRoleCounts(room.gameSettings.scriptId, room.players.length)
+  if (!script || !counts) {
+    return []
+  }
+
+  return script.roles
+    .filter((roleId) => counts[roleId] > 0)
+    .map((roleId) => ({ id: roleId, name: WEREWOLF_ROLES[roleId].name, count: counts[roleId] }))
 })
 const playerRange = computed(() => {
   return getPlayerRange(selectedGame.value.id, snapshot.value?.gameSettings)
@@ -102,6 +126,26 @@ const shareUrl = computed(() => {
   const url = new URL(window.location.href)
   url.searchParams.set('room', activeRoomCode.value)
   return url.toString()
+})
+
+watch(
+  [
+    () => snapshot.value?.selectedGameId,
+    () => snapshot.value?.gameSettings.scriptId,
+  ],
+  () => {
+    devRoleId.value = ''
+  },
+)
+watch(devRoleOptions, (options) => {
+  if (devRoleId.value && !options.some((role) => role.id === devRoleId.value)) {
+    devRoleId.value = ''
+  }
+})
+watch(() => snapshot.value?.status, (status) => {
+  if (status === 'playing') {
+    devRoleId.value = ''
+  }
 })
 
 watch(removedFromRoom, (removed) => {
@@ -250,6 +294,14 @@ async function leaveRoom(): Promise<void> {
 }
 
 function startGame(): void {
+  if (
+    isDevelopmentBuild &&
+    snapshot.value?.selectedGameId === 'werewolf' &&
+    devRoleId.value
+  ) {
+    send({ type: 'start_game', devRoleId: devRoleId.value })
+    return
+  }
   send({ type: 'start_game' })
 }
 
@@ -511,7 +563,14 @@ function connectionLabel(): string {
         <section class="game-panel">
           <div class="game-panel-heading">
             <span class="game-type"><span aria-hidden="true">✦</span> {{ selectedGame.name }}</span>
-            <span class="player-count">{{ snapshot.players.length }} / {{ ROOM_CAPACITY }} 人</span>
+            <div class="game-panel-heading-actions">
+              <GameRulesDialog
+                :game-id="selectedGame.id"
+                :game-settings="snapshot.gameSettings"
+                :player-count="snapshot.players.length"
+              />
+              <span class="player-count">{{ snapshot.players.length }} / {{ ROOM_CAPACITY }} 人</span>
+            </div>
           </div>
 
           <div v-if="snapshot.status === 'waiting'" class="waiting-state">
@@ -550,6 +609,30 @@ function connectionLabel(): string {
                 本局人數須為 {{ playerRange.min }}–{{ playerRange.max }} 位。
               </p>
             </div>
+
+            <section
+              v-if="isDevelopmentBuild && isHost && snapshot.selectedGameId === 'werewolf'"
+              class="dev-role-selection"
+              aria-labelledby="dev-role-selection-title"
+            >
+              <label for="dev-role-selection">
+                <span id="dev-role-selection-title">開發測試：房主角色自選</span>
+                <select
+                  id="dev-role-selection"
+                  v-model="devRoleId"
+                  :disabled="connectionStatus !== 'connected' || devRoleOptions.length === 0"
+                >
+                  <option value="">隨機分配</option>
+                  <option v-for="role in devRoleOptions" :key="role.id" :value="role.id">
+                    {{ role.name }}（本局 {{ role.count }} 位）
+                  </option>
+                </select>
+              </label>
+              <p>只指定房主自己的身分，其他玩家仍依本局劇本隨機分配；正式部署的 Worker 不接受此選角。</p>
+              <p v-if="devRoleOptions.length === 0" class="dev-role-selection-warning">
+                目前人數不適用所選劇本，請先調整劇本或玩家人數。
+              </p>
+            </section>
 
             <component
               v-if="gameComponents.setup"

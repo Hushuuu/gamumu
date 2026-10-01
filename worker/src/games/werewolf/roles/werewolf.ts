@@ -13,7 +13,7 @@ export const wolfPackAction: Pick<RoleNightAction, 'action' | 'handle'> = {
     if (!isTargetId(targetId)) {
       return { ok: false, message: '襲擊目標格式不正確。' }
     }
-    if (targetId !== null && (!isAlive(game, targetId) || targetId === playerId)) {
+    if (targetId !== null && (!isAlive(game, targetId))) {
       return { ok: false, message: '只能選擇存活的其他玩家。' }
     }
 

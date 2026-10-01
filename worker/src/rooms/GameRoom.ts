@@ -1,6 +1,16 @@
 import { DurableObject } from 'cloudflare:workers'
 import { AVATARS, isAvatarId, type AvatarId } from '../../../shared/avatars'
-import { DEFAULT_GAME_ID, getGameOption, getPlayerRange, isGameId, ROOM_CAPACITY } from '../../../shared/games'
+import {
+  DEFAULT_GAME_ID,
+  getGameOption,
+  getPlayerRange,
+  getWerewolfRoleCounts,
+  isGameId,
+  isWerewolfRoleId,
+  isWerewolfSettings,
+  ROOM_CAPACITY,
+  type WerewolfRoleId,
+} from '../../../shared/games'
 import {
   isRecord,
   type RoomSnapshot,
@@ -24,9 +34,11 @@ interface SocketAttachment {
 export class GameRoom extends DurableObject<Env> {
   private room: StoredRoom | null = null
   private readonly initialized: Promise<void>
+  private readonly devRoleSelectionEnabled: boolean
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
+    this.devRoleSelectionEnabled = env.ENABLE_DEV_ROLE_SELECTION === 'true'
     this.initialized = this.ctx.blockConcurrencyWhile(async () => {
       const storedRoom = await this.ctx.storage.get<StoredRoom | LegacyStoredRoom>(ROOM_STORAGE_KEY)
       if (!storedRoom) {
@@ -139,7 +151,7 @@ export class GameRoom extends DurableObject<Env> {
         await this.handleKickPlayer(ws, player, payload.playerId)
         return
       case 'start_game':
-        await this.handleStartGame(ws, player)
+        await this.handleStartGame(ws, player, payload.devRoleId)
         return
       case 'game_action':
         await this.handleGameAction(ws, player, payload.gameId, payload.action, payload.payload)
@@ -475,7 +487,11 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
-  private async handleStartGame(ws: WebSocket, player: StoredPlayer): Promise<void> {
+  private async handleStartGame(
+    ws: WebSocket,
+    player: StoredPlayer,
+    devRoleId: unknown,
+  ): Promise<void> {
     if (!this.room) {
       return
     }
@@ -519,7 +535,51 @@ export class GameRoom extends DurableObject<Env> {
       return
     }
 
-    getGameModule(this.room.selectedGameId).start(this.room, Date.now())
+    let devWerewolfRole: WerewolfRoleId | undefined
+    if (devRoleId !== undefined) {
+      if (!this.devRoleSelectionEnabled) {
+        this.send(ws, {
+          type: 'action_error',
+          code: 'DEV_ROLE_SELECTION_DISABLED',
+          message: '自選角色只在開發測試 Worker 開放，請使用 npm run worker:dev。',
+        })
+        return
+      }
+
+      if (
+        this.room.selectedGameId !== 'werewolf' ||
+        !isWerewolfRoleId(devRoleId) ||
+        !isWerewolfSettings(this.room.gameSettings)
+      ) {
+        this.send(ws, {
+          type: 'action_error',
+          code: 'INVALID_DEV_ROLE',
+          message: '所選角色不屬於目前的狼人殺劇本。',
+        })
+        return
+      }
+
+      const roleCounts = getWerewolfRoleCounts(
+        this.room.gameSettings.scriptId,
+        this.room.players.length,
+      )
+      if (!roleCounts || roleCounts[devRoleId] === 0) {
+        this.send(ws, {
+          type: 'action_error',
+          code: 'INVALID_DEV_ROLE',
+          message: '此劇本或目前人數沒有配置所選角色。',
+        })
+        return
+      }
+
+      devWerewolfRole = devRoleId
+    }
+
+    getGameModule(this.room.selectedGameId).start(
+      this.room,
+      Date.now(),
+      devWerewolfRole === undefined ? undefined : { devWerewolfRole },
+    )
     await this.persist()
     this.broadcastState()
   }
@@ -623,8 +683,6 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     this.room.status = 'waiting'
-    this.room.selectedGameId = DEFAULT_GAME_ID
-    this.room.gameSettings = getGameModule(DEFAULT_GAME_ID).defaultSettings()
     this.room.game = null
     for (const roomPlayer of this.room.players) {
       roomPlayer.ready = false

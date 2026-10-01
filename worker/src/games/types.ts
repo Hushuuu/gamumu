@@ -4,6 +4,7 @@ import type { StoredBlankGame } from './blank/types'
 import type { StoredDrawGuess } from './draw-guess/types'
 import type { StoredWerewolf } from './werewolf/types'
 import type { StoredWordGuess } from './word-guess/types'
+import type { WerewolfRoleId } from '../../../shared/games/werewolf'
 
 export type StoredGame = StoredWordGuess | StoredBlankGame | StoredDrawGuess | StoredWerewolf
 
@@ -13,6 +14,10 @@ export interface GameRoomContext {
   players: Array<Pick<PlayerView, 'id' | 'name' | 'score' | 'online'>>
   gameSettings?: Record<string, unknown>
   game: StoredGame | null
+}
+
+export interface GameStartOptions {
+  devWerewolfRole?: WerewolfRoleId
 }
 
 export interface GameActionEvent {
@@ -38,7 +43,7 @@ export interface GameModule {
   ): GameActionResult
   publicSettings(room: GameRoomContext): Record<string, unknown>
   privateState(room: GameRoomContext, playerId: string): GameActionEvent | null
-  start(room: GameRoomContext, now: number): void
+  start(room: GameRoomContext, now: number, options?: GameStartOptions): void
   handleAction(
     room: GameRoomContext,
     playerId: string,

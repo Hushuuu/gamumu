@@ -104,6 +104,50 @@ export const WEREWOLF_SCRIPTS: WerewolfScriptInfo[] = [
   },
 ]
 
+export const WEREWOLF_ROLE_COUNTS_BY_SCRIPT: Record<
+  WerewolfScriptId,
+  Record<number, Partial<Record<WerewolfRoleId, number>>>
+> = {
+  classic: {
+    6: { werewolf: 2, villager: 2, seer: 1, witch: 1 },
+    7: { werewolf: 2, villager: 2, seer: 1, witch: 1, hunter: 1 },
+    8: { werewolf: 3, villager: 2, seer: 1, witch: 1, hunter: 1 },
+    9: { werewolf: 3, villager: 3, seer: 1, witch: 1, hunter: 1 },
+    10: { werewolf: 3, villager: 4, seer: 1, witch: 1, hunter: 1 },
+    11: { werewolf: 4, villager: 4, seer: 1, witch: 1, hunter: 1 },
+    12: { werewolf: 4, villager: 5, seer: 1, witch: 1, hunter: 1 },
+  },
+  'wolf-guard': {
+    10: { werewolf: 2, wolfKing: 1, villager: 3, seer: 1, witch: 1, hunter: 1, guard: 1 },
+    11: { werewolf: 3, wolfKing: 1, villager: 3, seer: 1, witch: 1, hunter: 1, guard: 1 },
+    12: { werewolf: 3, wolfKing: 1, villager: 4, seer: 1, witch: 1, hunter: 1, guard: 1 },
+  },
+}
+
+export function getWerewolfRoleCounts(
+  scriptId: WerewolfScriptId,
+  playerCount: number,
+): WerewolfRoleCounts | null {
+  const composition = WEREWOLF_ROLE_COUNTS_BY_SCRIPT[scriptId][playerCount]
+  if (!composition) {
+    return null
+  }
+
+  const counts: WerewolfRoleCounts = {
+    werewolf: 0,
+    wolfKing: 0,
+    villager: 0,
+    seer: 0,
+    witch: 0,
+    hunter: 0,
+    guard: 0,
+  }
+  for (const roleId of Object.keys(composition) as WerewolfRoleId[]) {
+    counts[roleId] = composition[roleId] ?? 0
+  }
+  return counts
+}
+
 export function getWerewolfPlayerRange(settings: unknown): { min: number; max: number } | null {
   const scriptId = isRecord(settings) ? settings.scriptId : undefined
   const script = WEREWOLF_SCRIPTS.find((candidate) => candidate.id === scriptId)
