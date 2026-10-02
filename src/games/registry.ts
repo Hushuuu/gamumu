@@ -22,6 +22,7 @@ export const GAME_COMPONENTS: Record<GameId, GameComponents> = {
     finished: defineAsyncComponent(() => import('./draw-guess/DrawGuessResults.vue')),
   },
   rummikub: {
+    setup: defineAsyncComponent(() => import('./rummikub/RummikubSetup.vue')),
     playing: defineAsyncComponent(() => import('./rummikub/RummikubGame.vue')),
     finished: defineAsyncComponent(() => import('./rummikub/RummikubResults.vue')),
   },

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   getRummikubBoardTilePoints,
   isRummikubColor,
@@ -23,6 +23,7 @@ interface DraftMeld {
 }
 
 type BoardJoker = Extract<RummikubBoardTile, { kind: 'joker' }>
+type RackSortMode = 'color' | 'number'
 
 const COLOR_NAMES: Record<RummikubColor, string> = {
   red: '紅',
@@ -53,7 +54,9 @@ const emit = defineEmits<{
 }>()
 
 const game = computed(() => props.game.gameId === 'rummikub' ? props.game : null)
+const clockNow = ref(Date.now())
 const privateHand = ref<RummikubTile[]>([])
+const rackSortMode = ref<RackSortMode>('color')
 const isEditing = ref(false)
 const draftHand = ref<RummikubTile[]>([])
 const draftMelds = ref<DraftMeld[]>([])
@@ -63,6 +66,19 @@ const originalMelds = ref<RummikubMeld[]>([])
 const originalHandTileIds = ref(new Set<number>())
 const originalTableTileIds = ref(new Set<number>())
 let nextDraftMeldId = 1
+let turnClockInterval: number | null = null
+
+onMounted(() => {
+  turnClockInterval = window.setInterval(() => {
+    clockNow.value = Date.now()
+  }, 1000)
+})
+
+onUnmounted(() => {
+  if (turnClockInterval !== null) {
+    window.clearInterval(turnClockInterval)
+  }
+})
 
 const currentPlayer = computed(() => {
   return props.players.find((player) => player.id === game.value?.currentPlayerId) ?? null
@@ -72,6 +88,21 @@ const ownGamePlayer = computed(() => {
 })
 const isMyTurn = computed(() => {
   return Boolean(game.value && game.value.currentPlayerId === props.playerId)
+})
+const remainingTurnSeconds = computed(() => {
+  const deadlineAt = game.value?.turnDeadlineAt
+  return deadlineAt == null
+    ? null
+    : Math.max(0, Math.ceil((deadlineAt - clockNow.value) / 1000))
+})
+const turnCountdown = computed(() => {
+  if (remainingTurnSeconds.value === null) {
+    return '∞'
+  }
+
+  const minutes = Math.floor(remainingTurnSeconds.value / 60)
+  const seconds = String(remainingTurnSeconds.value % 60).padStart(2, '0')
+  return `${String(minutes).padStart(2, '0')}:${seconds}`
 })
 const handIsSynchronized = computed(() => {
   return Boolean(
@@ -90,6 +121,12 @@ const visibleMelds = computed<DraftMeld[]>(() => {
     id: `table-${index}`,
     tiles: meld.tiles,
   }))
+})
+const visibleHand = computed(() => {
+  return sortHand(
+    isEditing.value ? draftHand.value : privateHand.value,
+    rackSortMode.value,
+  )
 })
 const playerNameById = computed(() => new Map(props.players.map((player) => [player.id, player.name])))
 const selectedTileCount = computed(() => selectedTileIds.value.length)
@@ -213,14 +250,26 @@ watch(() => game.value?.turnNumber, (turnNumber, previousTurnNumber) => {
   }
 })
 
-function sortHand(tiles: RummikubTile[]): RummikubTile[] {
+function sortHand(tiles: RummikubTile[], mode: RackSortMode = rackSortMode.value): RummikubTile[] {
   return [...tiles].sort((left, right) => {
-    const leftColor = left.kind === 'joker' ? 4 : COLOR_ORDER[left.color]
-    const rightColor = right.kind === 'joker' ? 4 : COLOR_ORDER[right.color]
-    if (leftColor !== rightColor) {
-      return leftColor - rightColor
+    if (left.kind === 'joker' || right.kind === 'joker') {
+      if (left.kind === 'joker' && right.kind === 'joker') {
+        return left.id - right.id
+      }
+      return left.kind === 'joker' ? 1 : -1
     }
-    return left.kind === 'joker' || right.kind === 'joker' ? 0 : left.value - right.value
+
+    const primaryOrder = mode === 'color'
+      ? COLOR_ORDER[left.color] - COLOR_ORDER[right.color]
+      : left.value - right.value
+    if (primaryOrder !== 0) {
+      return primaryOrder
+    }
+
+    const secondaryOrder = mode === 'color'
+      ? left.value - right.value
+      : COLOR_ORDER[left.color] - COLOR_ORDER[right.color]
+    return secondaryOrder || left.id - right.id
   })
 }
 
@@ -505,11 +554,29 @@ function drawOrPass(): void {
         <p v-if="ownGamePlayer && !ownGamePlayer.hasOpened">
           先用自己的手牌完成至少 30 分登錄，才能操作桌面牌組。
         </p>
-        <p v-else>選擇手牌與桌面牌，重排成合法組合並出牌。</p>
+        <p v-else-if="isMyTurn">選擇手牌與桌面牌，重排成合法組合並出牌。</p>
+        <p v-else>可隨時查看自己的手牌；輪到你時再開始整理。</p>
+        <p v-if="remainingTurnSeconds === 0" class="rummikub-timeout-message" role="status">
+          {{ game?.drawPileCount ? '時間到，未提交的桌面編輯將還原並自動抽牌。' : '時間到且牌堆已空，系統正自動跳過。' }}
+        </p>
       </div>
-      <div class="rummikub-pile-count">
-        <strong>{{ game?.drawPileCount ?? 0 }}</strong>
-        <span>牌堆剩餘</span>
+      <div class="rummikub-status-metrics">
+        <div
+          class="rummikub-turn-countdown"
+          :class="{ 'is-expiring': remainingTurnSeconds !== null && remainingTurnSeconds <= 10 }"
+          role="timer"
+          aria-label="目前回合剩餘思考時間"
+          aria-live="off"
+        >
+          <strong>{{ turnCountdown }}</strong>
+          <span>
+            {{ remainingTurnSeconds === null ? '不限時' : remainingTurnSeconds === 0 ? '時間到' : '剩餘時間' }}
+          </span>
+        </div>
+        <div class="rummikub-pile-count">
+          <strong>{{ game?.drawPileCount ?? 0 }}</strong>
+          <span>牌堆剩餘</span>
+        </div>
       </div>
     </section>
 
@@ -597,51 +664,79 @@ function drawOrPass(): void {
       </div>
     </section>
 
-    <section v-if="isEditing" class="rummikub-panel rummikub-editor-panel">
+    <section
+      class="rummikub-panel rummikub-hand-panel"
+      :class="{ 'is-editing': isEditing }"
+    >
       <header class="rummikub-panel-heading">
         <div>
           <p class="rummikub-kicker">YOUR RACK</p>
-          <h3>你的手牌 <span>{{ draftHand.length }}</span></h3>
+          <h3>你的手牌 <span>{{ visibleHand.length }}</span></h3>
         </div>
-        <div class="rummikub-editor-actions">
-          <button
-            class="button button-secondary"
-            type="button"
-            :disabled="!props.canInteract || selectedTileCount === 0"
-            @click="moveSelectedToNewMeld"
-          >
-            建立新組合
-          </button>
-          <button
-            class="button button-secondary"
-            type="button"
-            :disabled="!props.canInteract || !canReturnSelectedTiles"
-            @click="returnSelectedTilesToHand"
-          >
-            撤回所選手牌
-          </button>
+        <div class="rummikub-rack-controls">
+          <div class="rummikub-sort-controls" role="group" aria-label="手牌排序方式">
+            <button
+              class="rummikub-sort-button"
+              :class="{ 'is-active': rackSortMode === 'color' }"
+              type="button"
+              :aria-pressed="rackSortMode === 'color'"
+              @click="rackSortMode = 'color'"
+            >
+              依花色
+            </button>
+            <button
+              class="rummikub-sort-button"
+              :class="{ 'is-active': rackSortMode === 'number' }"
+              type="button"
+              :aria-pressed="rackSortMode === 'number'"
+              @click="rackSortMode = 'number'"
+            >
+              依數字
+            </button>
+          </div>
+          <div v-if="isEditing" class="rummikub-editor-actions">
+            <button
+              class="button button-secondary"
+              type="button"
+              :disabled="!props.canInteract || selectedTileCount === 0"
+              @click="moveSelectedToNewMeld"
+            >
+              建立新組合
+            </button>
+            <button
+              class="button button-secondary"
+              type="button"
+              :disabled="!props.canInteract || !canReturnSelectedTiles"
+              @click="returnSelectedTilesToHand"
+            >
+              撤回所選手牌
+            </button>
+          </div>
         </div>
       </header>
 
-      <p v-if="draftHand.length === 0" class="rummikub-empty-hand">
-        這回合已選完手牌；確認桌面每組都合法後即可出牌。
+      <p v-if="!handIsSynchronized" class="rummikub-sync-message" role="status">
+        正在同步你的手牌…
+      </p>
+      <p v-else-if="visibleHand.length === 0" class="rummikub-empty-hand">
+        {{ isEditing ? '這回合已選完手牌；確認桌面每組都合法後即可出牌。' : '目前沒有手牌。' }}
       </p>
       <div v-else class="rummikub-tile-row rummikub-hand">
         <button
-          v-for="tile in draftHand"
+          v-for="tile in visibleHand"
           :key="tile.id"
           class="rummikub-tile"
           :class="[
             `tile-${getTileColor(tile)}`,
             {
-              'is-selected': selectedTileIds.includes(tile.id),
+              'is-selected': isEditing && selectedTileIds.includes(tile.id),
               'is-joker': tile.kind === 'joker',
             },
           ]"
           type="button"
           :aria-label="getTileAriaLabel(tile)"
-          :aria-pressed="selectedTileIds.includes(tile.id)"
-          :disabled="!props.canInteract"
+          :aria-pressed="isEditing && selectedTileIds.includes(tile.id)"
+          :disabled="!isEditing || !props.canInteract"
           @click="toggleTileSelection(tile.id, true)"
         >
           <span>{{ getTileLabel(tile) }}</span>
@@ -649,7 +744,7 @@ function drawOrPass(): void {
         </button>
       </div>
 
-      <div v-if="visibleJokers.length > 0" class="rummikub-joker-settings">
+      <div v-if="isEditing && visibleJokers.length > 0" class="rummikub-joker-settings">
         <div>
           <p class="rummikub-kicker">WILD TILE</p>
           <h4>Joker 代表牌</h4>
@@ -677,7 +772,7 @@ function drawOrPass(): void {
         </label>
       </div>
 
-      <div class="rummikub-draft-status" role="status">
+      <div v-if="isEditing" class="rummikub-draft-status" role="status">
         <span v-if="invalidMeldCount > 0">
           還有 {{ invalidMeldCount }} 組不合法；每組至少 3 張且需符合 Group 或 Run。
         </span>
@@ -695,7 +790,7 @@ function drawOrPass(): void {
         <span v-if="selectedTileCount > 0">選好牌後，點組合上的「放入所選牌」或建立新組合。</span>
       </div>
 
-      <footer class="rummikub-submit-actions">
+      <footer v-if="isEditing" class="rummikub-submit-actions">
         <button
           class="button button-secondary"
           type="button"
@@ -715,31 +810,26 @@ function drawOrPass(): void {
       </footer>
     </section>
 
-    <section v-else-if="isMyTurn" class="rummikub-turn-actions">
-      <p v-if="!handIsSynchronized" class="rummikub-sync-message" role="status">
-        正在同步你的手牌…
-      </p>
-      <template v-else>
-        <button
-          class="button button-primary"
-          type="button"
-          :disabled="!canAct"
-          @click="beginEdit"
-        >
-          整理桌面並出牌
-        </button>
-        <button
-          class="button button-secondary"
-          type="button"
-          :disabled="!canAct"
-          @click="drawOrPass"
-        >
-          {{ game?.drawPileCount ? '抽一張並結束回合' : '牌堆已空，結束回合' }}
-        </button>
-      </template>
+    <section v-if="!isEditing && isMyTurn && handIsSynchronized" class="rummikub-turn-actions">
+      <button
+        class="button button-primary"
+        type="button"
+        :disabled="!canAct"
+        @click="beginEdit"
+      >
+        整理桌面
+      </button>
+      <button
+        class="button button-secondary"
+        type="button"
+        :disabled="!canAct"
+        @click="drawOrPass"
+      >
+        {{ game?.drawPileCount ? '抽一張並結束回合' : '牌堆已空，結束回合' }}
+      </button>
     </section>
 
-    <p v-else class="rummikub-waiting-note">
+    <p v-else-if="!isEditing && !isMyTurn" class="rummikub-waiting-note">
       等待目前玩家出牌、抽牌或結束回合。
     </p>
   </div>
@@ -794,6 +884,43 @@ function drawOrPass(): void {
   color: #77796c;
   font-size: 11px;
   line-height: 1.5;
+}
+
+.rummikub-status-panel p.rummikub-timeout-message {
+  color: #a45b26;
+  font-weight: 700;
+}
+
+.rummikub-status-metrics {
+  display: flex;
+  align-items: stretch;
+  gap: 7px;
+}
+
+.rummikub-turn-countdown {
+  display: grid;
+  min-width: 76px;
+  place-items: center;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: #f7f4e9;
+  color: #65644d;
+}
+
+.rummikub-turn-countdown.is-expiring {
+  background: #fff2e8;
+  color: #a45b26;
+}
+
+.rummikub-turn-countdown strong {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.rummikub-turn-countdown span {
+  margin-top: 4px;
+  font-size: 9px;
+  font-weight: 700;
 }
 
 .rummikub-pile-count {
@@ -873,6 +1000,14 @@ function drawOrPass(): void {
   gap: 9px;
 }
 
+.rummikub-rack-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
 .rummikub-panel-heading {
   margin-bottom: 10px;
 }
@@ -891,6 +1026,33 @@ function drawOrPass(): void {
   color: #737b63;
   font-size: 10px;
   font-weight: 700;
+}
+
+.rummikub-sort-controls {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 9px;
+  background: #f1f3e9;
+}
+
+.rummikub-sort-button {
+  min-height: 29px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #77796e;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rummikub-sort-button.is-active {
+  border-color: #dce5d6;
+  background: #fff;
+  color: #4f704a;
 }
 
 .rummikub-empty-board,
@@ -1028,14 +1190,17 @@ function drawOrPass(): void {
   opacity: 1;
 }
 
-.rummikub-editor-panel {
+.rummikub-hand-panel {
   display: grid;
   gap: 12px;
+}
+
+.rummikub-hand-panel.is-editing {
   border-color: #dfe6d7;
   background: #fffffc;
 }
 
-.rummikub-editor-panel .rummikub-panel-heading {
+.rummikub-hand-panel .rummikub-panel-heading {
   align-items: flex-start;
   flex-wrap: wrap;
   margin-bottom: 0;
@@ -1140,6 +1305,10 @@ function drawOrPass(): void {
     padding-inline: 8px;
   }
 
+  .rummikub-status-metrics {
+    flex-direction: column;
+  }
+
   .rummikub-player-chip {
     gap: 5px;
     padding-inline: 7px;
@@ -1149,8 +1318,18 @@ function drawOrPass(): void {
     padding: 10px;
   }
 
-  .rummikub-editor-panel .rummikub-panel-heading {
+  .rummikub-hand-panel .rummikub-panel-heading {
     display: grid;
+  }
+
+  .rummikub-rack-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .rummikub-editor-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .rummikub-tile {

@@ -12,6 +12,8 @@ export interface StoredRummikub {
   table: RummikubMeld[]
   turnOrder: string[]
   currentPlayerId: string | null
+  turnTimeSeconds?: number | null
+  turnDeadlineAt?: number | null
   turnNumber: number
   openedPlayerIds: string[]
   consecutivePasses: number

@@ -42,6 +42,7 @@ export type {
   WerewolfWitchState,
 } from './werewolf'
 export {
+  DEFAULT_RUMMIKUB_SETTINGS,
   getRummikubBoardTilePoints,
   getRummikubRackTilePoints,
   isRummikubBoardTile,
@@ -49,6 +50,7 @@ export {
   isRummikubFace,
   isRummikubMeld,
   isRummikubPrivateState,
+  isRummikubSettings,
   isRummikubTile,
   isRummikubView,
   isValidRummikubMeld,
@@ -57,6 +59,7 @@ export {
   RUMMIKUB_TILE_COUNT,
 } from './rummikub'
 export type {
+  RummikubSettings,
   RummikubBoardTile,
   RummikubColor,
   RummikubEndReason,

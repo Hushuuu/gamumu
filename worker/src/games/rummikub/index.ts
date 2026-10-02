@@ -1,7 +1,9 @@
 import {
+  DEFAULT_RUMMIKUB_SETTINGS,
   getRummikubBoardTilePoints,
   getRummikubRackTilePoints,
   isRummikubFace,
+  isRummikubSettings,
   isValidRummikubMeld,
   RUMMIKUB_COLORS,
   RUMMIKUB_PRIVATE_EVENT,
@@ -12,6 +14,7 @@ import type {
   RummikubColor,
   RummikubFace,
   RummikubMeld,
+  RummikubSettings,
   RummikubTile,
   RummikubView,
 } from '../../../../shared/games/rummikub'
@@ -33,8 +36,26 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function actionError(code: string, message: string): GameActionResult {
-  return { ok: false, changed: false, code, message }
+function actionError(code: string, message: string, changed = false): GameActionResult {
+  return { ok: false, changed, code, message }
+}
+
+function currentSettings(room: GameRoomContext): RummikubSettings {
+  return isRummikubSettings(room.gameSettings)
+    ? room.gameSettings
+    : DEFAULT_RUMMIKUB_SETTINGS
+}
+
+function setTurnDeadline(game: StoredRummikub, now: number): void {
+  if (game.turnTimeSeconds === undefined || game.turnTimeSeconds === null) {
+    game.turnDeadlineAt = null
+    return
+  }
+
+  if (!isRummikubSettings({ turnTimeSeconds: game.turnTimeSeconds })) {
+    throw new Error('Stored Rummikub turn time is invalid.')
+  }
+  game.turnDeadlineAt = now + game.turnTimeSeconds * 1000
 }
 
 function randomIndex(maxExclusive: number): number {
@@ -355,6 +376,7 @@ function settleGame(
   }
 
   game.currentPlayerId = null
+  game.turnDeadlineAt = null
   game.winnerId = winnerId
   game.endReason = endReason
   game.roundScores = roundScores
@@ -369,7 +391,7 @@ function selectBlockedWinner(room: GameRoomContext, game: StoredRummikub): strin
   })[0]!.id
 }
 
-function advanceTurn(room: GameRoomContext, game: StoredRummikub): void {
+function advanceTurn(room: GameRoomContext, game: StoredRummikub, now: number): void {
   const activeOrder = game.turnOrder.filter((playerId) => {
     return room.players.some((player) => player.id === playerId)
   })
@@ -380,6 +402,7 @@ function advanceTurn(room: GameRoomContext, game: StoredRummikub): void {
 
   game.currentPlayerId = activeOrder[(currentIndex + 1) % activeOrder.length]!
   game.turnNumber += 1
+  setTurnDeadline(game, now)
 }
 
 function playTurn(
@@ -387,6 +410,7 @@ function playTurn(
   playerId: string,
   game: StoredRummikub,
   payload: Record<string, unknown>,
+  now: number,
 ): GameActionResult {
   const parsedBoard = parseBoard(game, payload)
   if (!parsedBoard.ok) {
@@ -458,7 +482,7 @@ function playTurn(
   if (game.hands[playerId]!.length === 0) {
     settleGame(room, game, playerId, 'played-out', true)
   } else {
-    advanceTurn(room, game)
+    advanceTurn(room, game, now)
   }
 
   return { ok: true, changed: true }
@@ -468,6 +492,7 @@ function drawTile(
   room: GameRoomContext,
   playerId: string,
   game: StoredRummikub,
+  now: number,
 ): GameActionResult {
   const tileId = game.drawPile.pop()
   if (tileId === undefined) {
@@ -476,13 +501,14 @@ function drawTile(
 
   getHand(game, playerId).push(tileId)
   game.consecutivePasses = 0
-  advanceTurn(room, game)
+  advanceTurn(room, game, now)
   return { ok: true, changed: true }
 }
 
 function passTurn(
   room: GameRoomContext,
   game: StoredRummikub,
+  now: number,
 ): GameActionResult {
   if (game.drawPile.length > 0) {
     return actionError('DRAW_AVAILABLE', '牌堆還有牌，選擇不出牌時必須抽一張。')
@@ -492,16 +518,39 @@ function passTurn(
   if (game.consecutivePasses >= room.players.length) {
     settleGame(room, game, selectBlockedWinner(room, game), 'blocked', true)
   } else {
-    advanceTurn(room, game)
+    advanceTurn(room, game, now)
   }
   return { ok: true, changed: true }
 }
 
-function startRummikub(room: GameRoomContext): void {
+function timeoutTurn(room: GameRoomContext, game: StoredRummikub, now: number): boolean {
+  if (game.turnDeadlineAt == null || game.turnDeadlineAt > now) {
+    return false
+  }
+
+  const playerId = game.currentPlayerId
+  if (!playerId || !room.players.some((player) => player.id === playerId)) {
+    throw new Error('Rummikub timed-out turn has no active player.')
+  }
+
+  const result = game.drawPile.length > 0
+    ? drawTile(room, playerId, game, now)
+    : passTurn(room, game, now)
+  if (!result.ok) {
+    throw new Error(`Unable to end timed-out Rummikub turn: ${result.code}.`)
+  }
+  if (!result.changed) {
+    throw new Error('Timed-out Rummikub turn did not change the game state.')
+  }
+  return true
+}
+
+function startRummikub(room: GameRoomContext, now: number): void {
   if (room.players.length < 2 || room.players.length > 4) {
     throw new Error('Rummikub requires between 2 and 4 players.')
   }
 
+  const settings = currentSettings(room)
   const tiles = createTiles()
   const deckOrder = Array.from({ length: RUMMIKUB_TILE_COUNT }, (_value, id) => id)
   const playerIds = room.players.map((player) => player.id)
@@ -526,6 +575,10 @@ function startRummikub(room: GameRoomContext): void {
     table: [],
     turnOrder,
     currentPlayerId: turnOrder[0]!,
+    turnTimeSeconds: settings.turnTimeSeconds,
+    turnDeadlineAt: settings.turnTimeSeconds === null
+      ? null
+      : now + settings.turnTimeSeconds * 1000,
     turnNumber: 1,
     openedPlayerIds: [],
     consecutivePasses: 0,
@@ -540,12 +593,8 @@ function handleRummikubAction(
   playerId: string,
   action: string,
   payload: Record<string, unknown>,
-  _now: number,
+  now: number,
 ): GameActionResult {
-  if (!['play_turn', 'draw_tile', 'pass_turn'].includes(action)) {
-    return actionError('UNKNOWN_GAME_ACTION', '拉密不支援這個操作。')
-  }
-
   const game = room.game
   if (room.status !== 'playing' || game?.gameId !== 'rummikub') {
     return actionError('GAME_NOT_STARTED', '拉密遊戲尚未開始。')
@@ -555,17 +604,34 @@ function handleRummikubAction(
     return actionError('PLAYER_NOT_FOUND', '你已不在這個房間。')
   }
 
+  if (game.turnDeadlineAt != null && game.turnDeadlineAt <= now) {
+    const willDraw = game.drawPile.length > 0
+    if (timeoutTurn(room, game, now)) {
+      return actionError(
+        'TURN_TIMED_OUT',
+        willDraw
+          ? '思考時間已結束，未提交的桌面編輯已還原並自動抽牌。'
+          : '思考時間已結束，牌堆已空，本回合已自動跳過。',
+        true,
+      )
+    }
+  }
+
+  if (!['play_turn', 'draw_tile', 'pass_turn'].includes(action)) {
+    return actionError('UNKNOWN_GAME_ACTION', '拉密不支援這個操作。')
+  }
+
   if (game.currentPlayerId !== playerId) {
     return actionError('NOT_YOUR_TURN', '還沒輪到你行動。')
   }
 
   switch (action) {
     case 'play_turn':
-      return playTurn(room, playerId, game, payload)
+      return playTurn(room, playerId, game, payload, now)
     case 'draw_tile':
-      return drawTile(room, playerId, game)
+      return drawTile(room, playerId, game, now)
     case 'pass_turn':
-      return passTurn(room, game)
+      return passTurn(room, game, now)
     default:
       return actionError('UNKNOWN_GAME_ACTION', '拉密不支援這個操作。')
   }
@@ -574,14 +640,26 @@ function handleRummikubAction(
 export const rummikubGame: GameModule = {
   id: 'rummikub',
   pushPrivateState: true,
-  defaultSettings: () => ({}),
-  configure: () => ({
-    ok: false,
-    changed: false,
-    code: 'GAME_NOT_CONFIGURABLE',
-    message: '拉密沒有可調整的設定。',
-  }),
-  publicSettings: () => ({}),
+  defaultSettings: () => ({ ...DEFAULT_RUMMIKUB_SETTINGS }),
+  configure(room, _playerId, settings) {
+    if (!isRummikubSettings(settings)) {
+      return {
+        ok: false,
+        changed: false,
+        code: 'INVALID_GAME_SETTINGS',
+        message: '每回合思考時間需為 15–300 秒，或選擇不限時。',
+      }
+    }
+
+    const current = currentSettings(room)
+    if (current.turnTimeSeconds === settings.turnTimeSeconds) {
+      return { ok: true, changed: false }
+    }
+
+    room.gameSettings = { ...settings }
+    return { ok: true, changed: true }
+  },
+  publicSettings: (room) => ({ ...currentSettings(room) }),
   privateState(room, playerId) {
     const game = room.game
     if (
@@ -599,12 +677,23 @@ export const rummikubGame: GameModule = {
       },
     }
   },
-  start(room) {
-    startRummikub(room)
+  start(room, now) {
+    startRummikub(room, now)
   },
   handleAction: handleRummikubAction,
-  nextAlarmAt: () => null,
-  handleAlarm: () => false,
+  nextAlarmAt(room) {
+    const game = room.game
+    return room.status === 'playing' && game?.gameId === 'rummikub'
+      ? game.turnDeadlineAt ?? null
+      : null
+  },
+  handleAlarm(room, now) {
+    const game = room.game
+    if (room.status !== 'playing' || game?.gameId !== 'rummikub') {
+      return false
+    }
+    return timeoutTurn(room, game, now)
+  },
   onPlayerLeave(room, _playerId, _now) {
     const game = room.game
     if (room.status !== 'playing' || game?.gameId !== 'rummikub') {
@@ -630,6 +719,7 @@ export const rummikubGame: GameModule = {
         hasOpened: game.openedPlayerIds.includes(player.id),
       })),
       currentPlayerId: game.currentPlayerId,
+      turnDeadlineAt: game.turnDeadlineAt ?? null,
       turnNumber: game.turnNumber,
       drawPileCount: game.drawPile.length,
       consecutivePasses: game.consecutivePasses,

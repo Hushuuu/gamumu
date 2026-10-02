@@ -921,8 +921,9 @@ export class GameRoom extends DurableObject<Env> {
     const now = Date.now()
     const deadlines = [this.room.updatedAt + ROOM_IDLE_TTL_MS]
     const gameDeadline = getGameModule(this.room.selectedGameId).nextAlarmAt(this.room)
-    if (this.room.status === 'playing' && gameDeadline !== null && gameDeadline > now) {
-      deadlines.push(gameDeadline)
+    if (this.room.status === 'playing' && gameDeadline !== null) {
+      // Keep due game alarms scheduled across unrelated room writes.
+      deadlines.push(Math.max(gameDeadline, now + 1))
     }
     await this.ctx.storage.setAlarm(Math.min(...deadlines))
   }

@@ -2,6 +2,14 @@ export const RUMMIKUB_COLORS = ['red', 'blue', 'black', 'yellow'] as const
 export const RUMMIKUB_PRIVATE_EVENT = 'rummikub-private-state'
 export const RUMMIKUB_TILE_COUNT = 106
 
+export interface RummikubSettings {
+  turnTimeSeconds: number | null
+}
+
+export const DEFAULT_RUMMIKUB_SETTINGS: RummikubSettings = {
+  turnTimeSeconds: 60,
+}
+
 export type RummikubColor = (typeof RUMMIKUB_COLORS)[number]
 
 export interface RummikubFace {
@@ -58,6 +66,7 @@ export interface RummikubView {
   table: RummikubMeld[]
   players: RummikubPlayerState[]
   currentPlayerId: string | null
+  turnDeadlineAt: number | null
   turnNumber: number
   drawPileCount: number
   consecutivePasses: number
@@ -72,6 +81,20 @@ export interface RummikubPrivateState {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function isRummikubSettings(value: unknown): value is RummikubSettings {
+  return (
+    isRecord(value) &&
+    (
+      value.turnTimeSeconds === null ||
+      (
+        Number.isInteger(value.turnTimeSeconds) &&
+        Number(value.turnTimeSeconds) >= 15 &&
+        Number(value.turnTimeSeconds) <= 300
+      )
+    )
+  )
 }
 
 export function isRummikubColor(value: unknown): value is RummikubColor {
@@ -193,6 +216,14 @@ export function isRummikubView(value: unknown): value is RummikubView {
     value.players.length < 1 ||
     value.players.length > 4 ||
     (value.currentPlayerId !== null && typeof value.currentPlayerId !== 'string') ||
+    (
+      value.turnDeadlineAt !== null &&
+      (
+        typeof value.turnDeadlineAt !== 'number' ||
+        !Number.isSafeInteger(value.turnDeadlineAt) ||
+        value.turnDeadlineAt < 0
+      )
+    ) ||
     !Number.isInteger(value.turnNumber) ||
     Number(value.turnNumber) < 1 ||
     !Number.isInteger(value.drawPileCount) ||
