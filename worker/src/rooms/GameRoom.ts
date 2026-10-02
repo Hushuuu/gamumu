@@ -24,7 +24,7 @@ import {
   readWebSocketBetaToken,
   verifyBetaSessionToken,
 } from '../security'
-import type { LegacyStoredRoom, StoredPlayer, StoredRoom } from './types'
+import type { LegacyStoredRoom, PreviousStoredRoom, StoredPlayer, StoredRoom } from './types'
 
 const ROOM_STORAGE_KEY = 'room'
 const ROOM_IDLE_TTL_MS = 6 * 60 * 60 * 1000
@@ -35,6 +35,11 @@ const TOKEN_HASH_PATTERN = /^[a-f0-9]{64}$/
 interface SocketAttachment {
   playerId: string | null
   betaToken: string
+}
+
+type VersionedStoredRoom = Omit<StoredRoom, 'schemaVersion' | 'gameSelectionConfirmed'> & {
+  schemaVersion: number
+  gameSelectionConfirmed?: boolean
 }
 
 export class GameRoom extends DurableObject<Env> {
@@ -50,17 +55,32 @@ export class GameRoom extends DurableObject<Env> {
     this.betaCodes = env.BETA_CODES
     this.betaSessionSecret = env.BETA_SESSION_SECRET?.trim()
     this.initialized = this.ctx.blockConcurrencyWhile(async () => {
-      const storedRoom = await this.ctx.storage.get<StoredRoom | LegacyStoredRoom>(ROOM_STORAGE_KEY)
+      const storedRoom = await this.ctx.storage.get<
+        VersionedStoredRoom | LegacyStoredRoom
+      >(ROOM_STORAGE_KEY)
       if (!storedRoom) {
         return
       }
 
       if ('schemaVersion' in storedRoom) {
-        if (storedRoom.schemaVersion !== 2) {
-          throw new Error(`Unsupported room storage schema: ${storedRoom.schemaVersion}`)
+        if (storedRoom.schemaVersion === 3) {
+          if (typeof storedRoom.gameSelectionConfirmed !== 'boolean') {
+            throw new Error('Stored room is missing game selection confirmation state.')
+          }
+          this.room = {
+            ...storedRoom,
+            schemaVersion: 3,
+            gameSelectionConfirmed: storedRoom.gameSelectionConfirmed,
+          }
+          return
         }
-        this.room = storedRoom
-        return
+        if (storedRoom.schemaVersion === 2) {
+          const previousRoom: PreviousStoredRoom = { ...storedRoom, schemaVersion: 2 }
+          this.room = migratePreviousRoom(previousRoom)
+          await this.ctx.storage.put(ROOM_STORAGE_KEY, this.room)
+          return
+        }
+        throw new Error(`Unsupported room storage schema: ${storedRoom.schemaVersion}`)
       }
 
       this.room = migrateLegacyRoom(storedRoom)
@@ -267,11 +287,12 @@ export class GameRoom extends DurableObject<Env> {
 
     const now = Date.now()
     this.room = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       code,
       hostId: player.id,
       status: 'waiting',
       selectedGameId: DEFAULT_GAME_ID,
+      gameSelectionConfirmed: false,
       gameSettings: getGameModule(DEFAULT_GAME_ID).defaultSettings(),
       players: [{ ...player, name }],
       game: null,
@@ -397,15 +418,19 @@ export class GameRoom extends DurableObject<Env> {
       return
     }
 
-    if (this.room.selectedGameId === value) {
+    const selectionChanged = this.room.selectedGameId !== value
+    if (!selectionChanged && this.room.gameSelectionConfirmed) {
       return
     }
 
-    this.room.selectedGameId = value
-    this.room.gameSettings = getGameModule(value).defaultSettings()
-    for (const roomPlayer of this.room.players) {
-      roomPlayer.ready = false
+    if (selectionChanged) {
+      this.room.selectedGameId = value
+      this.room.gameSettings = getGameModule(value).defaultSettings()
+      for (const roomPlayer of this.room.players) {
+        roomPlayer.ready = false
+      }
     }
+    this.room.gameSelectionConfirmed = true
     await this.persist()
     this.broadcastState()
   }
@@ -553,6 +578,15 @@ export class GameRoom extends DurableObject<Env> {
 
     if (this.room.status !== 'waiting') {
       this.send(ws, { type: 'action_error', code: 'GAME_ALREADY_STARTED', message: '遊戲已經開始。' })
+      return
+    }
+
+    if (!this.room.gameSelectionConfirmed) {
+      this.send(ws, {
+        type: 'action_error',
+        code: 'GAME_NOT_SELECTED',
+        message: '請先選擇本局遊戲。',
+      })
       return
     }
 
@@ -846,6 +880,7 @@ export class GameRoom extends DurableObject<Env> {
       status: room.status,
       capacity: ROOM_CAPACITY,
       selectedGameId: room.selectedGameId,
+      gameSelectionConfirmed: room.gameSelectionConfirmed,
       gameSettings: gameModule.publicSettings(room),
       players: room.players.map((player) => ({
         id: player.id,
@@ -962,11 +997,12 @@ function randomAvatarId(): AvatarId {
 
 function migrateLegacyRoom(room: LegacyStoredRoom): StoredRoom {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     code: room.code,
     hostId: room.hostId,
     status: room.status,
     selectedGameId: DEFAULT_GAME_ID,
+    gameSelectionConfirmed: false,
     gameSettings: getGameModule(DEFAULT_GAME_ID).defaultSettings(),
     players: room.players.map((player, index) => ({
       ...player,
@@ -976,6 +1012,14 @@ function migrateLegacyRoom(room: LegacyStoredRoom): StoredRoom {
     game: room.game ? { gameId: 'word-guess', ...room.game } : null,
     createdAt: room.createdAt,
     updatedAt: room.updatedAt,
+  }
+}
+
+function migratePreviousRoom(room: PreviousStoredRoom): StoredRoom {
+  return {
+    ...room,
+    schemaVersion: 3,
+    gameSelectionConfirmed: room.selectedGameId !== DEFAULT_GAME_ID,
   }
 }
 

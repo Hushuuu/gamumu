@@ -17,6 +17,7 @@ import {
 import type { ClientMessage } from '../shared/protocol'
 import { useGameRoom } from './composables/useGameRoom'
 import { GAME_COMPONENTS } from './games/registry'
+import GameSelectionDialog from './games/GameSelectionDialog.vue'
 import GameRulesDialog from './games/GameRulesDialog.vue'
 import {
   ApiError,
@@ -135,11 +136,15 @@ const canStartGame = computed(() => {
     isHost.value &&
     connectionStatus.value === 'connected' &&
     snapshot.value?.status === 'waiting' &&
+    snapshot.value.gameSelectionConfirmed &&
     !playerCountIssue.value &&
     allPlayersReady.value,
   )
 })
 const startHint = computed(() => {
+  if (!snapshot.value?.gameSelectionConfirmed) {
+    return '請先選擇本局遊戲。'
+  }
   if (playerCountIssue.value) {
     return playerCountIssue.value
   }
@@ -762,9 +767,18 @@ function connectionLabel(): string {
 
         <section class="game-panel">
           <div class="game-panel-heading">
-            <span class="game-type"><span aria-hidden="true">✦</span> {{ selectedGame.name }}</span>
+            <span class="game-type">
+              <span aria-hidden="true">✦</span>
+              {{
+                snapshot.status === 'waiting' &&
+                !snapshot.gameSelectionConfirmed
+                  ? isHost ? '尚未選擇遊戲' : '等待室長選擇遊戲'
+                  : selectedGame.name
+              }}
+            </span>
             <div class="game-panel-heading-actions">
               <GameRulesDialog
+                v-if="snapshot.status !== 'waiting' || isHost || snapshot.gameSelectionConfirmed"
                 :game-id="selectedGame.id"
                 :game-settings="snapshot.gameSettings"
                 :player-count="snapshot.players.length"
@@ -780,33 +794,71 @@ function connectionLabel(): string {
               <span class="waiting-circle"></span>
               <span class="waiting-face">☺</span>
             </div>
-            <h2>{{ playerCountIssue ? '確認本局人數' : allPlayersReady ? '大家準備好了！' : '準備好了嗎？' }}</h2>
-            <p>{{ playerCountIssue || '每位玩家都按下準備後，房主就可以開始。' }}</p>
+            <h2>
+              {{
+                !snapshot.gameSelectionConfirmed
+                  ? isHost ? '先選擇本局遊戲' : '等待室長選擇遊戲'
+                  : playerCountIssue
+                    ? '確認本局人數'
+                    : allPlayersReady
+                      ? '大家準備好了！'
+                      : '準備好了嗎？'
+              }}
+            </h2>
+            <p>
+              {{
+                !snapshot.gameSelectionConfirmed
+                  ? isHost
+                    ? '滑動遊戲卡挑選玩法，確認後才會同步給房間裡的所有人。'
+                    : '室長選好遊戲後，就能一起查看玩法並準備開局。'
+                  : playerCountIssue || '每位玩家都按下準備後，房主就可以開始。'
+              }}
+            </p>
 
             <div class="game-choice-panel">
-              <p class="game-choice-heading">{{ isHost ? '選擇本局遊戲' : '房主選擇的遊戲' }}</p>
-              <div class="game-choice-list">
-                <button
-                  v-for="game in GAME_OPTIONS"
-                  :key="game.id"
-                  class="game-choice"
-                  :class="{ 'is-selected': snapshot.selectedGameId === game.id }"
-                  type="button"
-                  :aria-pressed="snapshot.selectedGameId === game.id"
-                  :disabled="!isHost || connectionStatus !== 'connected' || snapshot.selectedGameId === game.id"
-                  @click="selectGame(game.id)"
-                >
-                  <span class="game-choice-indicator" aria-hidden="true">{{ game.icon }}</span>
-                  <span class="game-choice-copy">
-                    <strong>{{ game.name }}</strong>
-                    <small>{{ game.minPlayers }}–{{ game.maxPlayers }} 位玩家 · {{ game.description }}</small>
-                  </span>
-                  <span v-if="snapshot.selectedGameId === game.id" class="game-choice-current">已選</span>
-                </button>
+              <div v-if="isHost" class="game-choice-intro">
+                <p class="game-choice-heading">挑選今晚的派對主題</p>
+                <p>
+                  {{
+                    snapshot.gameSelectionConfirmed
+                      ? `目前房間選擇：${selectedGame.name}。確認另一款遊戲後才會同步給大家。`
+                      : '你可以先瀏覽卡片；確認遊戲後，房間裡的所有人才會看到你的選擇。'
+                  }}
+                </p>
               </div>
-              <p class="game-choice-note">
-                {{ isHost ? '更換遊戲會清除所有人的準備狀態。' : '只有房主可以更換遊戲。' }}
-                本局人數須為 {{ playerRange.min }}–{{ playerRange.max }} 位。
+              <div v-else class="game-choice-wait" role="status">
+                <span class="game-choice-wait-icon" aria-hidden="true">
+                  {{ snapshot.gameSelectionConfirmed ? selectedGame.icon : '…' }}
+                </span>
+                <span>
+                  <strong>
+                    {{
+                      snapshot.gameSelectionConfirmed
+                        ? `室長選擇了${selectedGame.name}`
+                        : '等待室長選擇遊戲'
+                    }}
+                  </strong>
+                  <small>
+                    {{
+                      snapshot.gameSelectionConfirmed
+                        ? '你可以先瀏覽遊戲卡，房間設定只由室長修改。'
+                        : '也可以先開啟遊戲列表瀏覽玩法，這不會更改房間選擇。'
+                    }}
+                  </small>
+                </span>
+              </div>
+              <GameSelectionDialog
+                :games="GAME_OPTIONS"
+                :selected-game-id="snapshot.selectedGameId"
+                :selection-confirmed="snapshot.gameSelectionConfirmed"
+                :game-settings="snapshot.gameSettings"
+                :player-count="snapshot.players.length"
+                :can-select="isHost"
+                :can-confirm="connectionStatus === 'connected'"
+                @select="selectGame"
+              />
+              <p v-if="isHost" class="game-choice-note">
+                更換已確認的遊戲會清除所有人的準備狀態；各款遊戲的人數需求會顯示在卡片上。
               </p>
             </div>
 
@@ -835,7 +887,7 @@ function connectionLabel(): string {
             </section>
 
             <component
-              v-if="gameComponents.setup"
+              v-if="gameComponents.setup && (isHost || snapshot.gameSelectionConfirmed)"
               :is="gameComponents.setup"
               :settings="snapshot.gameSettings"
               :is-host="isHost"
@@ -2130,90 +2182,76 @@ function connectionLabel(): string {
 }
 
 .game-choice-panel {
+  display: grid;
   width: 100%;
+  gap: 10px;
   margin-top: 18px;
   text-align: left;
 }
 
+.game-choice-intro {
+  display: grid;
+  gap: 4px;
+}
+
 .game-choice-heading {
-  margin: 0 0 8px;
+  margin: 0;
   color: #5c5875;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
 }
 
-.game-choice-list {
+.game-choice-intro > p:last-child {
+  margin: 0;
+  color: #89869b;
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.game-choice-wait {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px;
+  border: 1px solid #e9e6f3;
+  border-radius: 14px;
+  background: linear-gradient(110deg, #fff, #f8f6ff);
+}
+
+.game-choice-wait-icon {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.game-choice {
-  display: flex;
-  min-width: 0;
-  min-height: 68px;
-  align-items: center;
-  gap: 9px;
-  padding: 9px;
-  border: 1px solid #eae8f2;
-  border-radius: 13px;
-  background: #fff;
-  color: var(--ink);
-  text-align: left;
-}
-
-.game-choice.is-selected {
-  border-color: #a79af1;
-  background: #f7f5ff;
-}
-
-.game-choice:disabled:not(.is-selected) {
-  cursor: default;
-}
-
-.game-choice-indicator {
-  display: flex;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border-radius: 11px;
+  place-items: center;
+  border-radius: 13px;
   background: #efedff;
   color: var(--purple-dark);
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 800;
 }
 
-.game-choice-copy {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
+.game-choice-wait > span:last-child {
+  display: grid;
   gap: 3px;
 }
 
-.game-choice-copy strong {
+.game-choice-wait strong {
   color: #49455f;
-  font-size: 10px;
+  font-size: 11px;
 }
 
-.game-choice-copy small {
+.game-choice-wait small {
   color: #89869b;
-  font-size: 8px;
-  line-height: 1.4;
-}
-
-.game-choice-current {
-  color: var(--purple-dark);
-  font-size: 8px;
-  font-weight: 800;
+  font-size: 9px;
+  line-height: 1.5;
 }
 
 .game-choice-note {
-  margin: 7px 0 0;
+  margin: 0;
   color: #9a96ad;
   font-size: 9px;
+  line-height: 1.5;
   text-align: left;
 }
 
@@ -2336,10 +2374,6 @@ function connectionLabel(): string {
 @media (max-width: 390px) {
   .avatar-panel {
     padding-inline: 14px;
-  }
-
-  .game-choice-list {
-    grid-template-columns: 1fr;
   }
 
   .ready-controls {

@@ -25,6 +25,7 @@ export interface RoomSnapshot {
   status: RoomStatus
   capacity: number
   selectedGameId: GameId
+  gameSelectionConfirmed: boolean
   gameSettings: Record<string, unknown>
   players: PlayerView[]
   game: GameView | null
@@ -80,6 +81,7 @@ export function isRoomSnapshot(value: unknown): value is RoomSnapshot {
     !['waiting', 'playing', 'finished'].includes(String(value.status)) ||
     typeof value.capacity !== 'number' ||
     !isGameId(value.selectedGameId) ||
+    typeof value.gameSelectionConfirmed !== 'boolean' ||
     !isRecord(value.gameSettings) ||
     !Array.isArray(value.players)
   ) {

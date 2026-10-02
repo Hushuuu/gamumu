@@ -13,16 +13,21 @@ export interface StoredPlayer {
 }
 
 export interface StoredRoom {
-  schemaVersion: 2
+  schemaVersion: 3
   code: string
   hostId: string
   status: RoomStatus
   selectedGameId: GameId
+  gameSelectionConfirmed: boolean
   gameSettings?: Record<string, unknown>
   players: StoredPlayer[]
   game: StoredGame | null
   createdAt: number
   updatedAt: number
+}
+
+export interface PreviousStoredRoom extends Omit<StoredRoom, 'schemaVersion' | 'gameSelectionConfirmed'> {
+  schemaVersion: 2
 }
 
 export interface LegacyStoredPlayer {
