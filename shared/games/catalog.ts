@@ -4,19 +4,19 @@ export const GAME_OPTIONS = [
   {
     id: 'word-guess',
     name: '猜詞派對',
-    description: '五題猜詞挑戰，答對累積分數。',
+    description: '五題猜詞挑戰',
     icon: 'Aa',
     minPlayers: 2,
     maxPlayers: ROOM_CAPACITY,
   },
-  {
-    id: 'blank',
-    name: '空白測試遊戲',
-    description: '驗證新遊戲的選擇、啟動與結束流程。',
-    icon: '＋',
-    minPlayers: 1,
-    maxPlayers: ROOM_CAPACITY,
-  },
+  // {
+  //   id: 'blank',
+  //   name: '空白測試遊戲',
+  //   description: '驗證新遊戲的選擇、啟動與結束流程。',
+  //   icon: '＋',
+  //   minPlayers: 1,
+  //   maxPlayers: ROOM_CAPACITY,
+  // },
   {
     id: 'draw-guess',
     name: '你畫我猜',
@@ -28,7 +28,7 @@ export const GAME_OPTIONS = [
   {
     id: 'werewolf',
     name: '狼人殺',
-    description: '伺服器擔任法官的經典社交推理，找出隱藏在村莊裡的狼人。',
+    description: '經典社交推理，找出隱藏在村莊裡的狼人。',
     icon: '🐺',
     minPlayers: 6,
     maxPlayers: ROOM_CAPACITY,

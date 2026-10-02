@@ -21,12 +21,12 @@ const GAME_PROMOS: Record<GameId, GamePromo> = {
     description: '五道快問快答，讀懂提示、猜中關鍵詞，在倒數結束前把派對氣氛推到最高點。',
     stamp: 'READY, SET, GUESS',
   },
-  blank: {
-    category: '開發測試場',
-    headline: '新遊戲的第一站，邀你一起試玩。',
-    description: '這是驗證遊戲流程的測試項目，目前沒有正式競賽玩法；適合檢查房間與遊戲啟動流程。',
-    stamp: 'PLAYTEST LAB',
-  },
+  // blank: {
+  //   category: '開發測試場',
+  //   headline: '新遊戲的第一站，邀你一起試玩。',
+  //   description: '這是驗證遊戲流程的測試項目，目前沒有正式競賽玩法；適合檢查房間與遊戲啟動流程。',
+  //   stamp: 'PLAYTEST LAB',
+  // },
   'draw-guess': {
     category: '創意接力派對',
     headline: '畫得越出乎意料，猜中就越有成就感。',
