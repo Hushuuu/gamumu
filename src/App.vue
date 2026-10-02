@@ -38,6 +38,7 @@ const {
   connectionStatus,
   errorMessage,
   gameEvent,
+  gameAbortedCount,
   playerId,
   removedFromRoom,
   betaAccessExpired,
@@ -180,6 +181,11 @@ watch(devRoleOptions, (options) => {
 watch(() => snapshot.value?.status, (status) => {
   if (status === 'playing') {
     devRoleId.value = ''
+  }
+})
+watch(gameAbortedCount, (count, previousCount) => {
+  if (count > previousCount) {
+    window.alert('室長已提前結束本局遊戲。')
   }
 })
 

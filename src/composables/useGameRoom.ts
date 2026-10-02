@@ -14,6 +14,7 @@ export function useGameRoom() {
   const connectionStatus = ref<ConnectionStatus>('offline')
   const errorMessage = ref('')
   const gameEvent = ref<GameEvent | null>(null)
+  const gameAbortedCount = ref(0)
   const playerId = ref('')
   const removedFromRoom = ref(false)
   const betaAccessExpired = ref(false)
@@ -175,6 +176,9 @@ export function useGameRoom() {
             }
             return
           }
+          case 'game_aborted':
+            gameAbortedCount.value += 1
+            return
           case 'game_event':
             if (
               snapshot.value?.status === 'playing' &&
@@ -273,6 +277,7 @@ export function useGameRoom() {
     connectionStatus,
     errorMessage,
     gameEvent,
+    gameAbortedCount,
     playerId,
     removedFromRoom,
     betaAccessExpired,

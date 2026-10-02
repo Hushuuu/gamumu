@@ -234,7 +234,7 @@ npm run worker:check  # 產生 Wrangler 型別並檢查 Worker TypeScript
 ### 新增房間操作或伺服器訊息
 
 1. 在 `shared/protocol.ts` 更新 `ClientMessage`、`ServerMessage` 或公開快照型別，並同步調整相應的執行期格式檢查。
-2. 房間共用操作在 `worker/src/rooms/GameRoom.ts` 驗證玩家身分與權限；遊戲操作則用 `game_action` 交給對應的遊戲模組處理。共用房間操作可處理室長取消進行中的本局，並在取消時回復開局分數、清除遊戲狀態及取消遊戲選擇確認。
+2. 房間共用操作在 `worker/src/rooms/GameRoom.ts` 驗證玩家身分與權限；遊戲操作則用 `game_action` 交給對應的遊戲模組處理。共用房間操作可處理室長取消進行中的本局，並在取消時回復開局分數、清除遊戲狀態、取消遊戲選擇確認及通知其他玩家。
 3. 若是新增 HTTP endpoint，在 `worker/src/index.ts` 加入路由與輸入驗證，前端請求則放在 `src/services/api.ts`。
 4. 在 `src/composables/useGameRoom.ts` 處理 WebSocket 訊息與連線生命週期，再由共用頁面或遊戲元件呈現結果。
 

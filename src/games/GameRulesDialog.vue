@@ -54,21 +54,21 @@ const content = computed<RulesContent>(() => {
           },
         ],
       }
-    case 'blank':
-      return {
-        title: `${gameName.value}規則`,
-        description: '這是用來驗證共用房間流程的測試遊戲，目前沒有競賽或計分玩法。',
-        sections: [
-          {
-            title: '遊戲流程',
-            items: ['所有玩家準備後由房主開始測試。', '測試期間所有玩家會收到相同的遊戲狀態。'],
-          },
-          {
-            title: '結束遊戲',
-            items: ['只有房主可以按下「結束測試遊戲」。'],
-          },
-        ],
-      }
+    // case 'blank':
+    //   return {
+    //     title: `${gameName.value}規則`,
+    //     description: '這是用來驗證共用房間流程的測試遊戲，目前沒有競賽或計分玩法。',
+    //     sections: [
+    //       {
+    //         title: '遊戲流程',
+    //         items: ['所有玩家準備後由房主開始測試。', '測試期間所有玩家會收到相同的遊戲狀態。'],
+    //       },
+    //       {
+    //         title: '結束遊戲',
+    //         items: ['只有房主可以按下「結束測試遊戲」。'],
+    //       },
+    //     ],
+    //   }
     case 'draw-guess': {
       const roundsPerPlayer = settingNumber('roundsPerPlayer', 1)
       const drawTimeSeconds = settingNumber('drawTimeSeconds', 60)

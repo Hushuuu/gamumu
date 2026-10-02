@@ -717,6 +717,7 @@ export class GameRoom extends DurableObject<Env> {
 
     await this.persist()
     this.broadcastState()
+    this.broadcast({ type: 'game_aborted' }, player.id)
   }
 
   private async handleGameAction(

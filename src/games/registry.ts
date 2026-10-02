@@ -12,10 +12,10 @@ export const GAME_COMPONENTS: Record<GameId, GameComponents> = {
     playing: defineAsyncComponent(() => import('./word-guess/WordGuessGame.vue')),
     finished: defineAsyncComponent(() => import('./word-guess/WordGuessResults.vue')),
   },
-  blank: {
-    playing: defineAsyncComponent(() => import('./blank/BlankGame.vue')),
-    finished: defineAsyncComponent(() => import('./blank/BlankResults.vue')),
-  },
+  // blank: {
+  //   playing: defineAsyncComponent(() => import('./blank/BlankGame.vue')),
+  //   finished: defineAsyncComponent(() => import('./blank/BlankResults.vue')),
+  // },
   'draw-guess': {
     setup: defineAsyncComponent(() => import('./draw-guess/DrawGuessSetup.vue')),
     playing: defineAsyncComponent(() => import('./draw-guess/DrawGuessGame.vue')),

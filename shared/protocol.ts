@@ -58,6 +58,7 @@ export type ServerMessage =
   | { type: 'auth_error'; code: string; message: string }
   | { type: 'kicked'; message: string }
   | { type: 'state'; state: RoomSnapshot }
+  | { type: 'game_aborted' }
   | ({ type: 'game_event' } & GameEvent)
   | { type: 'guess_result'; correct: boolean }
   | { type: 'action_error'; code: string; message: string }
@@ -120,6 +121,7 @@ export function isServerMessage(value: unknown): value is ServerMessage {
 
   switch (value.type) {
     case 'auth_required':
+    case 'game_aborted':
     case 'left_room':
     case 'room_expired':
       return true
