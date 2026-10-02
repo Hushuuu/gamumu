@@ -55,6 +55,20 @@ export interface RummikubPlayerState {
   hasOpened: boolean
 }
 
+export interface RummikubComboState {
+  playerId: string
+  count: number
+}
+
+export type RummikubComboTier = 'spark' | 'surge' | 'overdrive'
+
+export function getRummikubComboTier(count: number): RummikubComboTier {
+  if (count >= 7) {
+    return 'overdrive'
+  }
+  return count >= 4 ? 'surge' : 'spark'
+}
+
 export type RummikubEndReason = 'played-out' | 'blocked' | 'player-left'
 
 function isRummikubEndReason(value: unknown): value is RummikubEndReason {
@@ -66,6 +80,8 @@ export interface RummikubView {
   table: RummikubMeld[]
   players: RummikubPlayerState[]
   currentPlayerId: string | null
+  combo?: RummikubComboState | null
+  lastTurnCombo?: RummikubComboState | null
   turnDeadlineAt: number | null
   turnNumber: number
   drawPileCount: number
@@ -81,6 +97,16 @@ export interface RummikubPrivateState {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isRummikubComboState(value: unknown): value is RummikubComboState {
+  return (
+    isRecord(value) &&
+    typeof value.playerId === 'string' &&
+    Number.isInteger(value.count) &&
+    Number(value.count) >= 1 &&
+    Number(value.count) <= RUMMIKUB_TILE_COUNT
+  )
 }
 
 export function isRummikubSettings(value: unknown): value is RummikubSettings {
@@ -208,8 +234,24 @@ export function isRummikubPrivateState(value: unknown): value is RummikubPrivate
 }
 
 export function isRummikubView(value: unknown): value is RummikubView {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  const combo = value.combo
+  const lastTurnCombo = value.lastTurnCombo
   if (
-    !isRecord(value) ||
+    (combo !== undefined && combo !== null && !isRummikubComboState(combo)) ||
+    (
+      lastTurnCombo !== undefined &&
+      lastTurnCombo !== null &&
+      !isRummikubComboState(lastTurnCombo)
+    )
+  ) {
+    return false
+  }
+
+  if (
     value.gameId !== 'rummikub' ||
     !Array.isArray(value.table) ||
     !Array.isArray(value.players) ||
@@ -243,6 +285,7 @@ export function isRummikubView(value: unknown): value is RummikubView {
   }
 
   const playerIds = new Set<string>()
+  const playerTileCounts = new Map<string, number>()
   for (const player of value.players) {
     if (
       !isRecord(player) ||
@@ -256,11 +299,32 @@ export function isRummikubView(value: unknown): value is RummikubView {
       return false
     }
     playerIds.add(player.id)
+    playerTileCounts.set(player.id, Number(player.tileCount))
   }
 
   if (
     (value.currentPlayerId !== null && !playerIds.has(value.currentPlayerId)) ||
     (value.winnerId !== null && !playerIds.has(value.winnerId))
+  ) {
+    return false
+  }
+
+  if (
+    lastTurnCombo !== undefined &&
+    lastTurnCombo !== null &&
+    !playerIds.has(lastTurnCombo.playerId)
+  ) {
+    return false
+  }
+
+  if (
+    combo !== undefined &&
+    combo !== null &&
+    (
+      !playerIds.has(combo.playerId) ||
+      value.currentPlayerId !== combo.playerId ||
+      combo.count > (playerTileCounts.get(combo.playerId) ?? 0)
+    )
   ) {
     return false
   }

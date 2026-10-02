@@ -1,4 +1,5 @@
 import type {
+  RummikubComboState,
   RummikubEndReason,
   RummikubMeld,
   RummikubTile,
@@ -10,6 +11,8 @@ export interface StoredRummikub {
   drawPile: number[]
   hands: Record<string, number[]>
   table: RummikubMeld[]
+  combo?: RummikubComboState | null
+  lastTurnCombo?: RummikubComboState | null
   turnOrder: string[]
   currentPlayerId: string | null
   turnTimeSeconds?: number | null

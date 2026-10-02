@@ -12,6 +12,7 @@ import {
 import type {
   RummikubBoardTile,
   RummikubColor,
+  RummikubComboState,
   RummikubFace,
   RummikubMeld,
   RummikubSettings,
@@ -350,6 +351,10 @@ function scoreRack(game: StoredRummikub, playerId: string): number {
   }, 0)
 }
 
+function clearCombo(game: StoredRummikub): void {
+  game.combo = null
+}
+
 function settleGame(
   room: GameRoomContext,
   game: StoredRummikub,
@@ -357,6 +362,7 @@ function settleGame(
   endReason: StoredRummikub['endReason'],
   awardScores: boolean,
 ): void {
+  clearCombo(game)
   const roundScores: Record<string, number> = {}
   if (winnerId !== null && awardScores) {
     const remainingPoints = new Map(
@@ -391,7 +397,12 @@ function selectBlockedWinner(room: GameRoomContext, game: StoredRummikub): strin
   })[0]!.id
 }
 
-function advanceTurn(room: GameRoomContext, game: StoredRummikub, now: number): void {
+function advanceTurn(
+  room: GameRoomContext,
+  game: StoredRummikub,
+  now: number,
+  lastTurnCombo: RummikubComboState | null = null,
+): void {
   const activeOrder = game.turnOrder.filter((playerId) => {
     return room.players.some((player) => player.id === playerId)
   })
@@ -400,9 +411,55 @@ function advanceTurn(room: GameRoomContext, game: StoredRummikub, now: number): 
     throw new Error('Rummikub current player is not in the active turn order.')
   }
 
+  clearCombo(game)
+  game.lastTurnCombo = lastTurnCombo
   game.currentPlayerId = activeOrder[(currentIndex + 1) % activeOrder.length]!
   game.turnNumber += 1
   setTurnDeadline(game, now)
+}
+
+function updateComboPreview(
+  game: StoredRummikub,
+  playerId: string,
+  payload: Record<string, unknown>,
+): GameActionResult {
+  const hand = getHand(game, playerId)
+  const rawTileIds = payload.tileIds
+  if (
+    payload.turnNumber !== game.turnNumber ||
+    !Array.isArray(rawTileIds) ||
+    rawTileIds.length > hand.length
+  ) {
+    return actionError('INVALID_COMBO', 'Combo 同步資訊無效，請重新整理後再試。')
+  }
+
+  const handTileIds = new Set(hand)
+  const comboTileIds = new Set<number>()
+  for (const rawTileId of rawTileIds) {
+    if (
+      typeof rawTileId !== 'number' ||
+      !Number.isInteger(rawTileId) ||
+      !handTileIds.has(rawTileId) ||
+      comboTileIds.has(rawTileId)
+    ) {
+      return actionError('INVALID_COMBO', 'Combo 同步資訊無效，請重新整理後再試。')
+    }
+    comboTileIds.add(rawTileId)
+  }
+
+  const nextCombo: RummikubComboState | null = comboTileIds.size === 0
+    ? null
+    : { playerId, count: comboTileIds.size }
+  const currentCombo = game.combo ?? null
+  if (
+    currentCombo?.playerId === nextCombo?.playerId &&
+    currentCombo?.count === nextCombo?.count
+  ) {
+    return { ok: true, changed: false }
+  }
+
+  game.combo = nextCombo
+  return { ok: true, changed: true }
 }
 
 function playTurn(
@@ -479,10 +536,12 @@ function playTurn(
   }
   game.consecutivePasses = 0
 
+  const lastTurnCombo = { playerId, count: usedHandTileIds.size }
   if (game.hands[playerId]!.length === 0) {
+    game.lastTurnCombo = lastTurnCombo
     settleGame(room, game, playerId, 'played-out', true)
   } else {
-    advanceTurn(room, game, now)
+    advanceTurn(room, game, now, lastTurnCombo)
   }
 
   return { ok: true, changed: true }
@@ -516,6 +575,7 @@ function passTurn(
 
   game.consecutivePasses += 1
   if (game.consecutivePasses >= room.players.length) {
+    game.lastTurnCombo = null
     settleGame(room, game, selectBlockedWinner(room, game), 'blocked', true)
   } else {
     advanceTurn(room, game, now)
@@ -573,6 +633,8 @@ function startRummikub(room: GameRoomContext, now: number): void {
     drawPile: deckOrder.slice(playerIds.length * HAND_SIZE),
     hands,
     table: [],
+    combo: null,
+    lastTurnCombo: null,
     turnOrder,
     currentPlayerId: turnOrder[0]!,
     turnTimeSeconds: settings.turnTimeSeconds,
@@ -617,7 +679,7 @@ function handleRummikubAction(
     }
   }
 
-  if (!['play_turn', 'draw_tile', 'pass_turn'].includes(action)) {
+  if (!['play_turn', 'draw_tile', 'pass_turn', 'update_combo'].includes(action)) {
     return actionError('UNKNOWN_GAME_ACTION', '拉密不支援這個操作。')
   }
 
@@ -626,6 +688,8 @@ function handleRummikubAction(
   }
 
   switch (action) {
+    case 'update_combo':
+      return updateComboPreview(game, playerId, payload)
     case 'play_turn':
       return playTurn(room, playerId, game, payload, now)
     case 'draw_tile':
@@ -694,12 +758,15 @@ export const rummikubGame: GameModule = {
     }
     return timeoutTurn(room, game, now)
   },
-  onPlayerLeave(room, _playerId, _now) {
+  onPlayerLeave(room, playerId, _now) {
     const game = room.game
     if (room.status !== 'playing' || game?.gameId !== 'rummikub') {
       return false
     }
 
+    if (game.lastTurnCombo?.playerId === playerId) {
+      game.lastTurnCombo = null
+    }
     settleGame(room, game, null, 'player-left', false)
     return true
   },
@@ -713,6 +780,8 @@ export const rummikubGame: GameModule = {
     return {
       gameId: 'rummikub',
       table: game.table,
+      combo: game.combo ?? null,
+      lastTurnCombo: game.lastTurnCombo ?? null,
       players: room.players.map((player) => ({
         id: player.id,
         tileCount: getHand(game, player.id).length,

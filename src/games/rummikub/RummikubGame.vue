@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { getRummikubComboTier } from '../../../shared/games/rummikub'
 import {
   getRummikubBoardTilePoints,
   isRummikubColor,
@@ -16,6 +17,7 @@ import type {
   RummikubTile,
 } from '../../../shared/games/rummikub'
 import type { GameEvent, GameView, PlayerView } from '../../../shared/protocol'
+import RummikubComboRecord from './RummikubComboRecord.vue'
 
 interface DraftMeld {
   id: string
@@ -65,6 +67,7 @@ const originalHand = ref<RummikubTile[]>([])
 const originalMelds = ref<RummikubMeld[]>([])
 const originalHandTileIds = ref(new Set<number>())
 const originalTableTileIds = ref(new Set<number>())
+let lastComboSignature: string | null = null
 let nextDraftMeldId = 1
 let turnClockInterval: number | null = null
 
@@ -129,6 +132,21 @@ const visibleHand = computed(() => {
   )
 })
 const playerNameById = computed(() => new Map(props.players.map((player) => [player.id, player.name])))
+const activeCombo = computed(() => {
+  const combo = game.value?.combo
+  if (!combo || combo.playerId !== game.value?.currentPlayerId) {
+    return null
+  }
+  return { ...combo, tier: getRummikubComboTier(combo.count) }
+})
+const previousTurnCombo = computed(() => {
+  const combo = game.value?.lastTurnCombo
+  if (!combo) {
+    return null
+  }
+  const playerName = playerNameById.value.get(combo.playerId)
+  return playerName ? { combo, playerName } : null
+})
 const selectedTileCount = computed(() => selectedTileIds.value.length)
 const canReturnSelectedTiles = computed(() => {
   const handTileIds = new Set(draftHand.value.map((tile) => tile.id))
@@ -246,7 +264,7 @@ watch(
 
 watch(() => game.value?.turnNumber, (turnNumber, previousTurnNumber) => {
   if (previousTurnNumber !== undefined && turnNumber !== previousTurnNumber) {
-    cancelEdit()
+    cancelEdit(false)
   }
 })
 
@@ -344,9 +362,16 @@ function beginEdit(): void {
   }))
   selectedTileIds.value = []
   isEditing.value = true
+  publishComboPreview(true)
 }
 
-function cancelEdit(): void {
+function cancelEdit(syncComboPreview = true): void {
+  if (syncComboPreview && isEditing.value && game.value) {
+    emit('game-action', 'update_combo', {
+      turnNumber: game.value.turnNumber,
+      tileIds: [],
+    })
+  }
   isEditing.value = false
   draftHand.value = []
   draftMelds.value = []
@@ -355,6 +380,30 @@ function cancelEdit(): void {
   originalHandTileIds.value = new Set()
   originalMelds.value = []
   originalTableTileIds.value = new Set()
+  lastComboSignature = null
+}
+
+function publishComboPreview(force = false): void {
+  const currentGame = game.value
+  if (!isEditing.value || !currentGame) {
+    return
+  }
+
+  const tileIds = draftMelds.value
+    .flatMap((meld) => meld.tiles)
+    .filter((tile) => originalHandTileIds.value.has(tile.id))
+    .map((tile) => tile.id)
+    .sort((left, right) => left - right)
+  const signature = tileIds.join(',')
+  if (!force && signature === lastComboSignature) {
+    return
+  }
+
+  lastComboSignature = signature
+  emit('game-action', 'update_combo', {
+    turnNumber: currentGame.turnNumber,
+    tileIds,
+  })
 }
 
 function canSelectBoardTile(tileId: number): boolean {
@@ -440,6 +489,7 @@ function transferSelectedTiles(targetMeldId: string | null): void {
   draftMelds.value = draftMelds.value.filter((meld) => meld.tiles.length > 0)
   draftHand.value = sortHand(draftHand.value)
   selectedTileIds.value = []
+  publishComboPreview()
 }
 
 function moveSelectedToMeld(meldId: string): void {
@@ -475,6 +525,7 @@ function returnSelectedTilesToHand(): void {
   draftMelds.value = draftMelds.value.filter((meld) => meld.tiles.length > 0)
   draftHand.value = sortHand([...draftHand.value, ...returnedTiles])
   selectedTileIds.value = []
+  publishComboPreview()
 }
 
 function updateJokerFace(tileId: number, face: RummikubFace): void {
@@ -562,6 +613,18 @@ function drawOrPass(): void {
       </div>
       <div class="rummikub-status-metrics">
         <div
+          v-if="activeCombo"
+          :key="`${activeCombo.playerId}-${activeCombo.count}`"
+          class="rummikub-combo-effect"
+          :class="`is-${activeCombo.tier}`"
+          role="status"
+          aria-live="polite"
+          :aria-label="`Combo ${activeCombo.count}`"
+        >
+          <span>COMBO</span>
+          <strong>{{ activeCombo.count }}</strong>
+        </div>
+        <div
           class="rummikub-turn-countdown"
           :class="{ 'is-expiring': remainingTurnSeconds !== null && remainingTurnSeconds <= 10 }"
           role="timer"
@@ -579,6 +642,13 @@ function drawOrPass(): void {
         </div>
       </div>
     </section>
+
+    <RummikubComboRecord
+      v-if="previousTurnCombo"
+      :key="`${previousTurnCombo.combo.playerId}-${previousTurnCombo.combo.count}-${game?.turnNumber ?? 0}`"
+      :combo="previousTurnCombo.combo"
+      :player-name="previousTurnCombo.playerName"
+    />
 
     <section class="rummikub-player-strip" aria-label="玩家手牌與登錄狀態">
       <div
@@ -795,7 +865,7 @@ function drawOrPass(): void {
           class="button button-secondary"
           type="button"
           :disabled="!props.canInteract"
-          @click="cancelEdit"
+          @click="cancelEdit()"
         >
           取消編輯
         </button>
@@ -895,6 +965,146 @@ function drawOrPass(): void {
   display: flex;
   align-items: stretch;
   gap: 7px;
+}
+
+.rummikub-combo-effect {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-width: 112px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  font-weight: 900;
+  transform-origin: center;
+  white-space: nowrap;
+}
+
+.rummikub-combo-effect > strong {
+  font-size: 29px;
+  line-height: 1;
+}
+
+.rummikub-combo-effect > span {
+  font-size: 10px;
+  letter-spacing: 0.13em;
+}
+
+.rummikub-combo-effect::before,
+.rummikub-combo-effect::after {
+  position: absolute;
+  z-index: -1;
+  inset: -5px;
+  border-radius: inherit;
+  content: '';
+  pointer-events: none;
+}
+
+.rummikub-combo-effect::before {
+  background: currentColor;
+  filter: blur(10px);
+  opacity: 0.55;
+}
+
+.rummikub-combo-effect::after {
+  border: 1px solid currentColor;
+  opacity: 0.4;
+  animation: rummikub-combo-ring 1.2s ease-out infinite;
+}
+
+.rummikub-combo-effect.is-spark {
+  border-color: #f1cf71;
+  background: linear-gradient(135deg, #fff9dc, #ffd968);
+  box-shadow: 0 7px 18px rgb(193 142 28 / 24%);
+  color: #80520c;
+  animation: rummikub-combo-spark 1.25s ease-in-out infinite;
+}
+
+.rummikub-combo-effect.is-surge {
+  border-color: #ffc16e;
+  background: linear-gradient(135deg, #ffdf86, #ff8c42 52%, #ee4f45);
+  box-shadow: 0 0 18px rgb(255 117 47 / 45%), 0 7px 20px rgb(193 67 35 / 28%);
+  color: #fffdf5;
+  animation: rummikub-combo-surge 850ms cubic-bezier(0.25, 1.5, 0.4, 1) infinite;
+}
+
+.rummikub-combo-effect.is-overdrive {
+  border-color: #ffe68e;
+  background: linear-gradient(120deg, #ff3e83, #953de3 55%, #3a53e8);
+  box-shadow: 0 0 24px rgb(204 58 222 / 58%), 0 7px 22px rgb(78 43 182 / 38%);
+  color: #fff;
+  animation: rummikub-combo-overdrive 620ms cubic-bezier(0.25, 1.7, 0.35, 1) infinite;
+}
+
+.rummikub-combo-effect.is-overdrive::before {
+  inset: -8px;
+  background: conic-gradient(from 0deg, #ffce46, #ff43b0, #7546ff, #43dcff, #ffce46);
+  animation: rummikub-combo-spin 1.6s linear infinite;
+}
+
+@keyframes rummikub-combo-spark {
+  0%,
+  100% {
+    transform: scale(1) rotate(-1deg);
+  }
+
+  50% {
+    transform: scale(1.08) rotate(1deg);
+  }
+}
+
+@keyframes rummikub-combo-surge {
+  0%,
+  100% {
+    transform: scale(1) rotate(-1deg);
+  }
+
+  40% {
+    transform: scale(1.14) rotate(2deg);
+  }
+
+  72% {
+    transform: scale(0.97) rotate(-1deg);
+  }
+}
+
+@keyframes rummikub-combo-overdrive {
+  0%,
+  100% {
+    transform: scale(1) rotate(-2deg);
+    filter: hue-rotate(0);
+  }
+
+  35% {
+    transform: scale(1.18) rotate(3deg);
+    filter: hue-rotate(28deg);
+  }
+
+  68% {
+    transform: scale(0.96) rotate(-2deg);
+    filter: hue-rotate(-18deg);
+  }
+}
+
+@keyframes rummikub-combo-ring {
+  0% {
+    opacity: 0.45;
+    transform: scale(0.94);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.27);
+  }
+}
+
+@keyframes rummikub-combo-spin {
+  to {
+    transform: rotate(1turn);
+  }
 }
 
 .rummikub-turn-countdown {
@@ -1340,6 +1550,14 @@ function drawOrPass(): void {
   .rummikub-turn-actions {
     display: grid;
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rummikub-combo-effect,
+  .rummikub-combo-effect::after,
+  .rummikub-combo-effect.is-overdrive::before {
+    animation: none;
   }
 }
 </style>

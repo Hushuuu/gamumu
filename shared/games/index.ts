@@ -44,6 +44,7 @@ export type {
 export {
   DEFAULT_RUMMIKUB_SETTINGS,
   getRummikubBoardTilePoints,
+  getRummikubComboTier,
   getRummikubRackTilePoints,
   isRummikubBoardTile,
   isRummikubColor,
@@ -62,6 +63,8 @@ export type {
   RummikubSettings,
   RummikubBoardTile,
   RummikubColor,
+  RummikubComboState,
+  RummikubComboTier,
   RummikubEndReason,
   RummikubFace,
   RummikubJokerAssignment,

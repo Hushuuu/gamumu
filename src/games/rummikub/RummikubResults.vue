@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { RummikubView } from '../../../shared/games/rummikub'
 import type { GameView, PlayerView } from '../../../shared/protocol'
+import RummikubComboRecord from './RummikubComboRecord.vue'
 
 const props = defineProps<{
   players: PlayerView[]
@@ -13,6 +14,14 @@ const view = computed<RummikubView | null>(() => {
 })
 const winner = computed(() => {
   return props.players.find((player) => player.id === view.value?.winnerId) ?? null
+})
+const lastTurnCombo = computed(() => {
+  const combo = view.value?.lastTurnCombo
+  if (!combo) {
+    return null
+  }
+  const player = props.players.find((candidate) => candidate.id === combo.playerId)
+  return player ? { combo, playerName: player.name } : null
 })
 const headline = computed(() => {
   if (view.value?.endReason === 'played-out') {
@@ -50,6 +59,12 @@ const results = computed(() => {
           ? '本局沒有進行計分。'
           : '獲勝者取得其他玩家手牌的總牌值，Joker 留在手牌時算 30 分。' }}
     </p>
+
+    <RummikubComboRecord
+      v-if="lastTurnCombo"
+      :combo="lastTurnCombo.combo"
+      :player-name="lastTurnCombo.playerName"
+    />
 
     <div v-if="results.length > 0" class="rummikub-score-list">
       <div v-for="player in results" :key="player.id" class="rummikub-score-row">
