@@ -51,7 +51,8 @@ function handleBlankGameAction(
 }
 
 export const blankGame: GameModule = {
-  id: 'blank',
+  // @ts-ignore
+  id: 'blank', 
   defaultSettings: () => ({}),
   configure: () => ({
     ok: false,

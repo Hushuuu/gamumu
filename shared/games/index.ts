@@ -1,4 +1,4 @@
-import { isBlankGameView } from './blank'
+//import { isBlankGameView } from './blank'
 import { getGameOption, isGameId } from './catalog'
 import type { GameId } from './catalog'
 import { isDrawGuessView } from './draw-guess'
@@ -50,7 +50,7 @@ export type { WordGuessView } from './word-guess'
 
 const GAME_VIEW_VALIDATORS: Record<GameId, (value: unknown) => boolean> = {
   'word-guess': isWordGuessView,
-  blank: isBlankGameView,
+  //blank: isBlankGameView,
   'draw-guess': isDrawGuessView,
   werewolf: isWerewolfView,
 }

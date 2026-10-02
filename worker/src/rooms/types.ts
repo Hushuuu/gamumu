@@ -22,6 +22,7 @@ export interface StoredRoom {
   gameSettings?: Record<string, unknown>
   players: StoredPlayer[]
   game: StoredGame | null
+  roundStartScores?: Record<string, number>
   createdAt: number
   updatedAt: number
 }

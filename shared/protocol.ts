@@ -48,6 +48,7 @@ export type ClientMessage =
   | { type: 'game_action'; gameId: GameId; action: string; payload: Record<string, unknown> }
   | { type: 'submit_answer'; answer: string }
   | { type: 'finish_game' }
+  | { type: 'abort_game' }
   | { type: 'prepare_next_game' }
   | { type: 'leave_room' }
 

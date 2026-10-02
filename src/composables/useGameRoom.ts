@@ -170,10 +170,18 @@ export function useGameRoom() {
             return
           case 'state': {
             snapshot.value = payload.state
+            if (payload.state.status !== 'playing') {
+              gameEvent.value = null
+            }
             return
           }
           case 'game_event':
-            gameEvent.value = payload
+            if (
+              snapshot.value?.status === 'playing' &&
+              payload.gameId === snapshot.value.selectedGameId
+            ) {
+              gameEvent.value = payload
+            }
             return
           case 'guess_result':
             return

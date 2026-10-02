@@ -520,6 +520,21 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
   send(message)
 }
 
+function abortGame(): void {
+  if (!isHost.value || snapshot.value?.status !== 'playing') {
+    return
+  }
+
+  const confirmed = window.confirm(
+    '確定要提前結束本局嗎？本局將作廢、不結算，期間累積的分數也會回復到開局前，並回到選擇遊戲階段。',
+  )
+  if (!confirmed) {
+    return
+  }
+
+  send({ type: 'abort_game' })
+}
+
 function prepareNextGame(): void {
   send({ type: 'prepare_next_game' })
 }
@@ -921,6 +936,16 @@ function connectionLabel(): string {
           </div>
 
           <div v-else-if="snapshot.status === 'playing' && snapshot.game">
+            <div v-if="isHost" class="game-host-actions">
+              <button
+                class="button button-secondary abort-game-button"
+                type="button"
+                :disabled="connectionStatus !== 'connected'"
+                @click="abortGame"
+              >
+                提前結束本局
+              </button>
+            </div>
             <component
               :is="gameComponents.playing"
               :game="snapshot.game"
@@ -1676,6 +1701,18 @@ function connectionLabel(): string {
 .game-panel {
   min-height: 306px;
   padding: 22px;
+}
+
+.game-host-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.abort-game-button {
+  min-height: 36px;
+  padding-inline: 12px;
+  font-size: 11px;
 }
 
 .game-panel-heading, .players-heading {

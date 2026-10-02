@@ -214,6 +214,9 @@ export class GameRoom extends DurableObject<Env> {
       case 'finish_game':
         await this.handleGameAction(ws, player, this.room.selectedGameId, 'finish_game', {}, true)
         return
+      case 'abort_game':
+        await this.handleAbortGame(ws, player)
+        return
       case 'prepare_next_game':
         await this.handlePrepareNextGame(ws, player)
         return
@@ -659,11 +662,59 @@ export class GameRoom extends DurableObject<Env> {
       devWerewolfRole = devRoleId
     }
 
+    this.room.roundStartScores = Object.fromEntries(
+      this.room.players.map((roomPlayer) => [roomPlayer.id, roomPlayer.score]),
+    )
     getGameModule(this.room.selectedGameId).start(
       this.room,
       Date.now(),
       devWerewolfRole === undefined ? undefined : { devWerewolfRole },
     )
+    await this.persist()
+    this.broadcastState()
+  }
+
+  private async handleAbortGame(ws: WebSocket, player: StoredPlayer): Promise<void> {
+    if (!this.room) {
+      return
+    }
+
+    if (player.id !== this.room.hostId) {
+      this.send(ws, { type: 'action_error', code: 'HOST_ONLY', message: '只有房主可以提前結束遊戲。' })
+      return
+    }
+
+    if (this.room.status !== 'playing' || !this.room.game) {
+      this.send(ws, {
+        type: 'action_error',
+        code: 'GAME_NOT_IN_PROGRESS',
+        message: '目前沒有進行中的遊戲。',
+      })
+      return
+    }
+
+    const roundStartScores = this.room.roundStartScores
+    if (
+      !roundStartScores ||
+      this.room.players.some((roomPlayer) => !Number.isFinite(roundStartScores[roomPlayer.id]))
+    ) {
+      this.send(ws, {
+        type: 'action_error',
+        code: 'ROUND_SCORE_SNAPSHOT_MISSING',
+        message: '本局開始於功能更新前，無法安全回復分數；請先完成本局。',
+      })
+      return
+    }
+
+    for (const roomPlayer of this.room.players) {
+      roomPlayer.score = roundStartScores[roomPlayer.id]!
+      roomPlayer.ready = false
+    }
+    this.room.status = 'waiting'
+    this.room.game = null
+    this.room.gameSelectionConfirmed = false
+    delete this.room.roundStartScores
+
     await this.persist()
     this.broadcastState()
   }
@@ -852,6 +903,9 @@ export class GameRoom extends DurableObject<Env> {
       return
     }
 
+    if (this.room.status !== 'playing') {
+      delete this.room.roundStartScores
+    }
     this.room.updatedAt = Date.now()
     await this.ctx.storage.put(ROOM_STORAGE_KEY, this.room)
     await this.scheduleAlarm()
