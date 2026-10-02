@@ -243,14 +243,14 @@ function getBetaConfig(env: Env): { codes: string[]; secret: string } | null {
 
 function betaNotConfiguredResponse(): Response {
   return jsonResponse(
-    { code: 'BETA_NOT_CONFIGURED', message: '封測驗證尚未完成設定，請稍後再試。' },
+    { code: 'BETA_NOT_CONFIGURED', message: '驗證尚未完成設定，請稍後再試。' },
     503,
   )
 }
 
 function betaAccessRequiredResponse(): Response {
   return jsonResponse(
-    { code: 'BETA_ACCESS_REQUIRED', message: '封測驗證已失效，請重新輸入封測碼。' },
+    { code: 'BETA_ACCESS_REQUIRED', message: '驗證已失效，請重新輸入封測碼。' },
     401,
   )
 }

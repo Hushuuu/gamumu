@@ -19,7 +19,7 @@ export function loadBetaSession(): LoadedBetaSession {
       value = JSON.parse(raw)
     } catch {
       window.sessionStorage.removeItem(BETA_SESSION_STORAGE_KEY)
-      return { session: null, error: '封測驗證資料無法讀取，請重新輸入封測碼。' }
+      return { session: null, error: '驗證資料無法讀取，請重新輸入封測碼。' }
     }
 
     if (
@@ -33,12 +33,12 @@ export function loadBetaSession(): LoadedBetaSession {
       !Number.isSafeInteger(value.expiresAt)
     ) {
       window.sessionStorage.removeItem(BETA_SESSION_STORAGE_KEY)
-      return { session: null, error: '封測驗證資料無效，請重新輸入封測碼。' }
+      return { session: null, error: '驗證資料無效，請重新輸入封測碼。' }
     }
 
     if (value.expiresAt <= Date.now()) {
       window.sessionStorage.removeItem(BETA_SESSION_STORAGE_KEY)
-      return { session: null, error: '封測驗證已到期，請重新輸入封測碼。' }
+      return { session: null, error: '驗證已到期，請重新輸入封測碼。' }
     }
 
     return {
@@ -58,7 +58,7 @@ export function saveBetaSession(session: BetaSessionCredentials): string | null 
     window.sessionStorage.setItem(BETA_SESSION_STORAGE_KEY, JSON.stringify(session))
     return null
   } catch {
-    return '瀏覽器無法保存封測驗證；重新整理後需要再次輸入封測碼。'
+    return '瀏覽器無法保存驗證；重新整理後需要再次輸入封測碼。'
   }
 }
 
@@ -67,6 +67,6 @@ export function removeBetaSession(): string | null {
     window.sessionStorage.removeItem(BETA_SESSION_STORAGE_KEY)
     return null
   } catch {
-    return '瀏覽器無法清除封測驗證資料。'
+    return '瀏覽器無法清除驗證資料。'
   }
 }

@@ -30,7 +30,7 @@ export async function redeemBetaCode(code: string): Promise<BetaSessionCredentia
     typeof data.expiresAt !== 'number' ||
     !Number.isSafeInteger(data.expiresAt)
   ) {
-    throw new Error('封測驗證回應資料不完整，請稍後再試。')
+    throw new Error('驗證回應資料不完整，請稍後再試。')
   }
 
   return { token: data.token, expiresAt: data.expiresAt }
@@ -42,7 +42,7 @@ export async function getBetaSession(token: string): Promise<number> {
   }))
 
   if (!isRecord(data) || typeof data.expiresAt !== 'number' || !Number.isSafeInteger(data.expiresAt)) {
-    throw new Error('封測驗證回應資料不完整，請稍後再試。')
+    throw new Error('驗證回應資料不完整，請稍後再試。')
   }
 
   return data.expiresAt

@@ -867,7 +867,7 @@ function drawOrPass(): void {
           :disabled="!props.canInteract"
           @click="cancelEdit()"
         >
-          取消編輯
+          全部取消
         </button>
         <button
           class="button button-primary"
@@ -887,7 +887,7 @@ function drawOrPass(): void {
         :disabled="!canAct"
         @click="beginEdit"
       >
-        整理桌面
+        開始出牌
       </button>
       <button
         class="button button-secondary"
@@ -1281,6 +1281,8 @@ function drawOrPass(): void {
 .rummikub-meld-list {
   display: grid;
   gap: 8px;
+  max-height: 270px;
+  overflow-x: auto;
 }
 
 .rummikub-meld {

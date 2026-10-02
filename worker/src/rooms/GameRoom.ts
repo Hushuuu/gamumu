@@ -124,7 +124,7 @@ export class GameRoom extends DurableObject<Env> {
       this.send(ws, {
         type: 'auth_error',
         code: 'BETA_ACCESS_REQUIRED',
-        message: '封測驗證已失效，請重新輸入封測碼。',
+        message: '驗證已失效，請重新輸入封測碼。',
       })
       ws.close(4401, 'Beta access expired')
       return
@@ -351,7 +351,7 @@ export class GameRoom extends DurableObject<Env> {
       : null
     if (!betaSessionExpiresAt || !betaToken) {
       return jsonResponse(
-        { code: 'BETA_ACCESS_REQUIRED', message: '封測驗證已失效，請重新輸入封測碼。' },
+        { code: 'BETA_ACCESS_REQUIRED', message: '驗證已失效，請重新輸入封測碼。' },
         401,
       )
     }

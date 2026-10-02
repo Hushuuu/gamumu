@@ -294,7 +294,7 @@ function activateBetaSession(session: { token: string; expiresAt: number }): voi
   }
   betaExpiryTimer = window.setTimeout(() => {
     betaExpiryTimer = undefined
-    lockBetaSession('封測驗證已到期，請重新輸入封測碼。')
+    lockBetaSession('驗證已到期，請重新輸入封測碼。')
   }, Math.max(0, session.expiresAt - Date.now()))
 }
 
