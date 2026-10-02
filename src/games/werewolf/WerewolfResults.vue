@@ -160,9 +160,9 @@ onUnmounted(() => {
     <WerewolfRoleIcon v-if="view?.winner === 'wolf'" role-id="werewolf" :size="32" />
     <span v-else>🏆</span>
   </div>
-  <p class="eyebrow">狼人殺完成</p>
+  <p class="eyebrow">遊戲結束</p>
   <h2>{{ winnerText }}</h2>
-  <p>勝利陣營每位玩家獲得 100 分；分數會保留到下一局。</p>
+  <p>勝利陣營每位玩家獲得 100 分</p>
   <ul v-if="rows.length" class="ww-results-list">
     <li v-for="row in rows" :key="row.id" :class="{ 'is-winner': row.won }">
       <span class="ww-result-player">

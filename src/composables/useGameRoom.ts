@@ -111,7 +111,7 @@ export function useGameRoom() {
         return
       }
 
-      errorMessage.value = '無法確認封測資格，正在重新嘗試。'
+      errorMessage.value = '無法確認資格，正在重新嘗試。'
       connectionStatus.value = 'reconnecting'
       scheduleReconnect()
       return

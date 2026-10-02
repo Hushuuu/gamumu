@@ -440,7 +440,7 @@ function endDiscussion(): void {
           <span class="round-kicker">
             {{ view.day > 0 ? `第 ${view.day} ${phase === 'night' ? '夜' : '天'}` : '開局準備' }}
           </span>
-          <h2>{{ gameName }} · {{ PHASE_TITLES[phase] }}</h2>
+          <h2>{{ PHASE_TITLES[phase] }}</h2>
         </div>
         <div class="timer-badge" :class="{ 'timer-low': remainingSeconds <= 5 }" role="timer">
           <strong>{{ remainingSeconds }}</strong>
@@ -449,41 +449,6 @@ function endDiscussion(): void {
       </div>
 
       <RoleCard :role="priv?.role ?? null" :teammate-names="teammateNames" />
-
-      <section class="ww-panel" aria-label="本局角色配置">
-        <div class="ww-role-guess-heading">
-          <div>
-            <h3>本局角色配置（{{ view.seatIds.length }} 人）</h3>
-            <p>選取角色卡後點擊玩家，或直接拖曳卡片至玩家；註記只暫存在你的畫面，不會同步給其他玩家。</p>
-          </div>
-        </div>
-        <div class="ww-role-guess-cards">
-          <button
-            v-for="role in roleCountEntries"
-            :key="role.id"
-            class="ww-role-guess-card"
-            :class="{ 'is-selected': selectedGuessRole === role.id }"
-            type="button"
-            :disabled="role.count === 0"
-            :draggable="role.count > 0"
-            :aria-pressed="selectedGuessRole === role.id"
-            :aria-label="`選擇${role.name}角色卡，本局有 ${role.count} 位`"
-            @click="selectGuessRole(role.id)"
-            @dragstart="startRoleGuessDrag($event, role.id)"
-          >
-            <WerewolfRoleIcon :role-id="role.id" :size="24" />
-            <span>{{ role.name }}</span>
-            <strong>× {{ role.count }}</strong>
-          </button>
-        </div>
-        <p class="ww-guess-status" role="status">
-          {{
-            selectedGuessRole
-              ? `已選擇${WEREWOLF_ROLES[selectedGuessRole].name}，點擊下方玩家即可註記；再次點擊卡片可取消。`
-              : '角色數量為 0 的卡片不能註記；拖曳角色卡或點選卡片後再點玩家。'
-          }}
-        </p>
-      </section>
 
       <p v-if="priv && !priv.alive" class="ww-notice ww-notice-dead" role="status">
         你已出局。可以繼續旁觀，但請不要透露任何身分資訊。
@@ -567,7 +532,7 @@ function endDiscussion(): void {
         </template>
         <template v-else>
           <h3>🌙 天黑請閉眼</h3>
-          <p>請保持安靜，等待天亮。所有玩家看到的畫面都相同。</p>
+          <p>請保持安靜，等待天亮。</p>
         </template>
       </section>
 
@@ -703,6 +668,41 @@ function endDiscussion(): void {
         @role-drop="dropRoleGuess"
         @clear-guess="clearRoleGuess"
       />
+
+      <section class="ww-panel" aria-label="本局角色配置">
+        <div class="ww-role-guess-heading">
+          <div>
+            <h3>本局角色配置（{{ view.seatIds.length }} 人）</h3>
+            <p>選取或拖曳角色卡可以猜測玩家的角色；註記只暫存在你的畫面</p>
+          </div>
+        </div>
+        <div class="ww-role-guess-cards">
+          <button
+            v-for="role in roleCountEntries"
+            :key="role.id"
+            class="ww-role-guess-card"
+            :class="{ 'is-selected': selectedGuessRole === role.id }"
+            type="button"
+            :disabled="role.count === 0"
+            :draggable="role.count > 0"
+            :aria-pressed="selectedGuessRole === role.id"
+            :aria-label="`選擇${role.name}角色卡，本局有 ${role.count} 位`"
+            @click="selectGuessRole(role.id)"
+            @dragstart="startRoleGuessDrag($event, role.id)"
+          >
+            <WerewolfRoleIcon :role-id="role.id" :size="24" />
+            <span>{{ role.name }}</span>
+            <strong>× {{ role.count }}</strong>
+          </button>
+        </div>
+        <p class="ww-guess-status" role="status">
+          {{
+            selectedGuessRole
+              ? `已選擇${WEREWOLF_ROLES[selectedGuessRole].name}，點擊玩家註記。`
+              : '拖曳角色卡或點選卡片後再點玩家。'
+          }}
+        </p>
+      </section>
     </template>
   </div>
 </template>
