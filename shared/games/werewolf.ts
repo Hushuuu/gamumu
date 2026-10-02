@@ -17,6 +17,8 @@ export type WerewolfPhase =
   | 'hunter-shot'
   | 'day-discussion'
   | 'vote'
+  | 'pk-discussion'
+  | 'pk-vote'
   | 'vote-result'
   | 'finished'
 
@@ -216,9 +218,9 @@ export type WerewolfReplayEvent =
   | { type: 'witch-poison'; day: number; playerId: string; targetId: string }
   | { type: 'night-death'; day: number; playerId: string; cause: 'wolf' | 'poison' }
   | { type: 'night-peace'; day: number }
-  | { type: 'day-vote'; day: number; playerId: string; targetId: string | null }
-  | { type: 'vote-result'; day: number; targetId: string; result: 'exiled' }
-  | { type: 'vote-result'; day: number; targetId: null; result: 'tie' | 'no-votes' }
+  | { type: 'day-vote'; day: number; playerId: string; targetId: string | null; round?: 'pk' }
+  | { type: 'vote-result'; day: number; targetId: string; result: 'exiled'; round?: 'pk' }
+  | { type: 'vote-result'; day: number; targetId: null; result: 'tie' | 'no-votes'; round?: 'pk' }
   | { type: 'hunter-shot'; day: number; playerId: string; roleId: WerewolfRoleId; targetId: string | null }
   | { type: 'player-left'; day: number; playerId: string }
   | { type: 'game-end'; day: number; winner: WerewolfCamp }
@@ -244,6 +246,7 @@ export interface WerewolfView {
   exiledId: string | null
   votes: Record<string, string | null> | null
   votedIds: string[]
+  pkCandidateIds: string[]
   shooterId: string | null
   shooterRoleId: WerewolfRoleId | null
   hunterShot: WerewolfHunterShot | null
@@ -284,8 +287,13 @@ function isWerewolfReplayEvent(value: unknown): value is WerewolfReplayEvent {
   switch (value.type) {
     case 'wolf-choice':
     case 'guard-protect':
-    case 'day-vote':
       return typeof value.playerId === 'string' && isNullableString(value.targetId)
+    case 'day-vote':
+      return (
+        typeof value.playerId === 'string' &&
+        isNullableString(value.targetId) &&
+        (value.round === undefined || value.round === 'pk')
+      )
     case 'wolf-attack':
       return isNullableString(value.targetId)
     case 'seer-check':
@@ -305,9 +313,12 @@ function isWerewolfReplayEvent(value: unknown): value is WerewolfReplayEvent {
     case 'night-peace':
       return true
     case 'vote-result':
-      return value.result === 'exiled'
-        ? typeof value.targetId === 'string'
-        : (value.result === 'tie' || value.result === 'no-votes') && value.targetId === null
+      return (
+        (value.round === undefined || value.round === 'pk') &&
+        (value.result === 'exiled'
+          ? typeof value.targetId === 'string'
+          : (value.result === 'tie' || value.result === 'no-votes') && value.targetId === null)
+      )
     case 'hunter-shot':
       return (
         typeof value.playerId === 'string' &&
@@ -345,6 +356,8 @@ export function isWerewolfView(value: unknown): value is WerewolfView {
     'hunter-shot',
     'day-discussion',
     'vote',
+    'pk-discussion',
+    'pk-vote',
     'vote-result',
     'finished',
   ]
@@ -388,6 +401,7 @@ export function isWerewolfView(value: unknown): value is WerewolfView {
     isNullableString(value.exiledId) &&
     votesValid &&
     isStringArray(value.votedIds) &&
+    isStringArray(value.pkCandidateIds) &&
     isNullableString(value.shooterId) &&
     (value.shooterRoleId === null || isWerewolfRoleId(value.shooterRoleId)) &&
     hunterShotValid &&

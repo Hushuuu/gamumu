@@ -114,10 +114,20 @@ class Bot {
       }
     } else if (game.phase === 'hunter-shot' && priv.canShoot) {
       act('hunter_shoot', { targetId: Math.random() < 0.8 ? pick(others) : null })
-    } else if (game.phase === 'day-discussion' && speaker === this.id) {
-      later(() => act('end_speech'), 1500, 5000)
-    } else if (game.phase === 'vote' && priv.alive) {
-      const targets = priv.camp === 'wolf' ? others.filter((id) => !priv.teammates.includes(id)) : others
+    } else if (
+      (game.phase === 'day-discussion' || game.phase === 'pk-discussion') &&
+      speaker === this.id
+    ) {
+      const minDelay = game.phase === 'pk-discussion' ? 400 : 1500
+      const maxDelay = game.phase === 'pk-discussion' ? 1200 : 5000
+      later(() => act('end_speech'), minDelay, maxDelay)
+    } else if ((game.phase === 'vote' || game.phase === 'pk-vote') && priv.alive) {
+      const eligibleTargets = game.phase === 'pk-vote'
+        ? (game.pkCandidateIds ?? []).filter((id) => id !== this.id && game.aliveIds.includes(id))
+        : others
+      const targets = priv.camp === 'wolf'
+        ? eligibleTargets.filter((id) => !priv.teammates.includes(id))
+        : eligibleTargets
       act('cast_vote', { targetId: targets.length && Math.random() < 0.9 ? pick(targets) : null })
     }
   }

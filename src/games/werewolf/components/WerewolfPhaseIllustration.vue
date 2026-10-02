@@ -52,7 +52,7 @@ const props = defineProps<{
       <path d="M8 40 6.5 35.5 12.5 39z" fill="#61568f" />
     </g>
 
-    <g v-else-if="props.phase === 'day-discussion'">
+    <g v-else-if="props.phase === 'day-discussion' || props.phase === 'pk-discussion'">
       <path class="talk-bubble talk-bubble-back" d="M7.5 11a4 4 0 0 1 4-4h14a4 4 0 0 1 4 4v7a4 4 0 0 1-4 4h-6l-4 4v-4h-4a4 4 0 0 1-4-4z" fill="#eeebff" stroke="#7b6ddd" stroke-linejoin="round" stroke-width="1.6" />
       <circle class="talk-dot talk-dot-one" cx="14" cy="14.5" r="1.2" fill="#7b6ddd" />
       <circle class="talk-dot talk-dot-two" cx="19" cy="14.5" r="1.2" fill="#7b6ddd" />
@@ -63,7 +63,7 @@ const props = defineProps<{
       <circle class="talk-dot talk-dot-six" cx="34.5" cy="29.5" r="1.1" fill="#6e9db5" />
     </g>
 
-    <g v-else-if="props.phase === 'vote'">
+    <g v-else-if="props.phase === 'vote' || props.phase === 'pk-vote'">
       <g class="ballot-paper">
         <rect x="10" y="6" width="28" height="36" rx="5" fill="#fff" stroke="#7564dc" stroke-width="1.7" />
         <rect x="15" y="13" width="7" height="7" rx="1.5" fill="#eeebff" stroke="#988bdf" stroke-width="1.2" />

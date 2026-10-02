@@ -109,10 +109,17 @@ function eventText(event: WerewolfReplayEvent): string {
     case 'night-peace':
       return '平安夜，沒有人出局'
     case 'day-vote':
-      return `${playerName(event.playerId)} 投票給 ${event.targetId === null ? '棄票' : playerName(event.targetId)}`
+      return `${event.round === 'pk' ? 'PK 複投：' : ''}${playerName(event.playerId)} 投票給 ${event.targetId === null ? '棄票' : playerName(event.targetId)}`
     case 'vote-result':
       if (event.result === 'exiled') {
-        return `${playerName(event.targetId)} 被投票放逐`
+        return event.round === 'pk'
+          ? `${playerName(event.targetId)} 在 PK 複投中被放逐`
+          : `${playerName(event.targetId)} 被投票放逐`
+      }
+      if (event.round === 'pk') {
+        return event.result === 'tie'
+          ? 'PK 複投仍平票，無人被放逐'
+          : 'PK 複投無有效投票，無人被放逐'
       }
       return event.result === 'tie' ? '投票平票，無人被放逐' : '無有效投票，無人被放逐'
     case 'hunter-shot':

@@ -180,6 +180,7 @@ function beginNight(game: StoredWerewolf, now: number): void {
   game.nightStep = 0
   game.night = emptyNight()
   game.votes = {}
+  game.pkCandidateIds = []
   game.exiledId = null
   game.lastDeathIds = []
   game.hunterShot = null
@@ -208,6 +209,7 @@ function proceedAfterDeaths(
   now: number,
   next: 'day-discussion' | 'night',
 ): void {
+  game.pkCandidateIds = []
   if (game.pendingShooterId !== null) {
     game.phase = 'hunter-shot'
     game.afterHunter = next
@@ -231,6 +233,7 @@ function proceedAfterDeaths(
 
 function enterDiscussion(game: StoredWerewolf, now: number): void {
   game.phase = 'day-discussion'
+  game.pkCandidateIds = []
   if (game.settings.speechMode) {
     game.speechOrder = shuffle(aliveIds(game))
     game.speakerIndex = 0
@@ -249,16 +252,26 @@ function nextSpeaker(game: StoredWerewolf, now: number): void {
   }
 
   if (index >= game.speechOrder.length) {
-    enterVote(game, now)
+    if (game.phase === 'pk-discussion') {
+      enterPkVote(game, now)
+    } else {
+      enterVote(game, now)
+    }
     return
   }
 
   game.speakerIndex = index
-  game.phaseEndsAt = now + game.settings.speechSeconds * 1_000
+  const seconds = game.phase === 'pk-discussion'
+    ? game.settings.speechSeconds / 2
+    : game.settings.speechSeconds
+  game.phaseEndsAt = now + seconds * 1_000
 }
 
 function currentSpeakerId(game: StoredWerewolf): string | null {
-  return game.phase === 'day-discussion' && game.settings.speechMode
+  const speakingPhase =
+    (game.phase === 'day-discussion' && game.settings.speechMode) ||
+    game.phase === 'pk-discussion'
+  return speakingPhase
     ? (game.speechOrder[game.speakerIndex] ?? null)
     : null
 }
@@ -323,17 +336,63 @@ function endNightStep(game: StoredWerewolf, now: number): void {
 function enterVote(game: StoredWerewolf, now: number): void {
   game.phase = 'vote'
   game.votes = {}
+  game.pkCandidateIds = []
+  game.speechOrder = []
+  game.speakerIndex = 0
+  game.phaseEndsAt = now + game.settings.voteSeconds * 1_000
+}
+
+function enterPkDiscussion(game: StoredWerewolf, tiedIds: string[], now: number): void {
+  const tiedSet = new Set(tiedIds)
+  game.pkCandidateIds = game.playerIds.filter((playerId) => tiedSet.has(playerId) && isAlive(game, playerId))
+  game.votes = {}
+  game.phase = 'pk-discussion'
+  game.speechOrder = [...game.pkCandidateIds]
+  game.speakerIndex = 0
+  game.phaseEndsAt = now + game.settings.speechSeconds * 500
+}
+
+function enterPkVote(game: StoredWerewolf, now: number): void {
+  game.pkCandidateIds = game.playerIds.filter(
+    (playerId) => (game.pkCandidateIds ?? []).includes(playerId) && isAlive(game, playerId),
+  )
+  game.speechOrder = []
+  game.speakerIndex = 0
+  game.votes = {}
+
+  if (game.pkCandidateIds.length === 0) {
+    game.phase = 'vote-result'
+    game.exiledId = null
+    game.lastDeathIds = []
+    game.phaseEndsAt = now + VOTE_RESULT_MS
+    return
+  }
+
+  game.phase = 'pk-vote'
   game.phaseEndsAt = now + game.settings.voteSeconds * 1_000
 }
 
 function tallyVotes(game: StoredWerewolf, now: number): void {
+  const isPkVote = game.phase === 'pk-vote'
+  const pkCandidates = new Set(game.pkCandidateIds ?? [])
   for (const [playerId, targetId] of Object.entries(game.votes)) {
-    recordReplayEvent(game, { type: 'day-vote', day: game.day, playerId, targetId })
+    recordReplayEvent(game, {
+      type: 'day-vote',
+      day: game.day,
+      playerId,
+      targetId,
+      ...(isPkVote ? { round: 'pk' } : {}),
+    })
   }
 
   const counts = new Map<string, number>()
   for (const [voterId, targetId] of Object.entries(game.votes)) {
-    if (targetId !== null && isAlive(game, voterId) && isAlive(game, targetId)) {
+    if (
+      targetId !== null &&
+      isAlive(game, voterId) &&
+      isAlive(game, targetId) &&
+      (!isPkVote || pkCandidates.has(targetId))
+    ) {
       counts.set(targetId, (counts.get(targetId) ?? 0) + 1)
     }
   }
@@ -347,6 +406,7 @@ function tallyVotes(game: StoredWerewolf, now: number): void {
       day: game.day,
       targetId: game.exiledId,
       result: 'exiled',
+      ...(isPkVote ? { round: 'pk' } : {}),
     })
   } else {
     recordReplayEvent(game, {
@@ -354,12 +414,18 @@ function tallyVotes(game: StoredWerewolf, now: number): void {
       day: game.day,
       targetId: null,
       result: highest > 0 ? 'tie' : 'no-votes',
+      ...(isPkVote ? { round: 'pk' } : {}),
     })
   }
   game.lastDeathIds = []
   if (game.exiledId !== null) {
     killPlayer(game, game.exiledId, 'vote')
     game.lastDeathIds.push(game.exiledId)
+  }
+
+  if (!isPkVote && highest > 0 && leaders.length > 1) {
+    enterPkDiscussion(game, leaders.map(([playerId]) => playerId), now)
+    return
   }
 
   game.phase = 'vote-result'
@@ -397,7 +463,11 @@ function advancePhase(room: GameRoomContext, game: StoredWerewolf, now: number):
       }
       return
     case 'vote':
+    case 'pk-vote':
       tallyVotes(game, now)
+      return
+    case 'pk-discussion':
+      nextSpeaker(game, now)
       return
     case 'vote-result':
       proceedAfterDeaths(room, game, now, 'night')
@@ -499,7 +569,8 @@ function dispatchAction(
       return { ok: true, changed: true }
     }
     case 'cast_vote': {
-      if (game.phase !== 'vote') {
+      const isPkVote = game.phase === 'pk-vote'
+      if (game.phase !== 'vote' && !isPkVote) {
         return failure('VOTING_CLOSED', '現在不是投票階段。')
       }
       if (!isAlive(game, playerId)) {
@@ -512,6 +583,9 @@ function dispatchAction(
       }
       if (targetId !== null && (!isAlive(game, targetId) || targetId === playerId)) {
         return failure('INVALID_TARGET', '請選擇一位存活的其他玩家，或選擇棄票。')
+      }
+      if (isPkVote && targetId !== null && !(game.pkCandidateIds ?? []).includes(targetId)) {
+        return failure('INVALID_TARGET', 'PK 投票只能選擇同票候選人。')
       }
 
       game.votes[playerId] = targetId
@@ -544,6 +618,7 @@ function buildPrivateState(game: StoredWerewolf, playerId: string): WerewolfPriv
     alive &&
     role.nightAction !== undefined &&
     (getScript(game.scriptId).nightSteps[game.nightStep]?.includes(roleId) ?? false)
+  const voting = game.phase === 'vote' || game.phase === 'pk-vote'
 
   return {
     stateVersion: game.stateVersion,
@@ -558,8 +633,8 @@ function buildPrivateState(game: StoredWerewolf, playerId: string): WerewolfPriv
     witch: null,
     guard: null,
     canShoot: game.phase === 'hunter-shot' && game.pendingShooterId === playerId,
-    myVote: game.phase === 'vote' ? (game.votes[playerId] ?? null) : null,
-    hasVoted: game.phase === 'vote' && playerId in game.votes,
+    myVote: voting ? (game.votes[playerId] ?? null) : null,
+    hasVoted: voting && playerId in game.votes,
     ...role.privateState?.(game, playerId, acting),
   }
 }
@@ -642,6 +717,7 @@ export const werewolfGame: GameModule = {
       witchPotions: { antidote: true, poison: true },
       seerResults: [],
       votes: {},
+      pkCandidateIds: [],
       lastDeathIds: [],
       exiledId: null,
       pendingShooterId: null,
@@ -711,7 +787,7 @@ export const werewolfGame: GameModule = {
     if (winner) {
       finishGame(room, game, winner)
     } else if (
-      game.phase === 'vote' &&
+      (game.phase === 'vote' || game.phase === 'pk-vote') &&
       Object.keys(game.votes).length > 0 &&
       everyOnlineAliveVoted(room, game)
     ) {
@@ -725,7 +801,7 @@ export const werewolfGame: GameModule = {
     const game = room.game
     const answered =
       game?.gameId === 'werewolf' &&
-      game.phase === 'vote' &&
+      (game.phase === 'vote' || game.phase === 'pk-vote') &&
       isAlive(game, playerId) &&
       playerId in game.votes
     return { answered, correct: false }
@@ -751,14 +827,17 @@ export const werewolfGame: GameModule = {
       lastDeathIds: [...game.lastDeathIds],
       exiledId: game.exiledId,
       votes: game.phase === 'vote-result' ? { ...game.votes } : null,
-      votedIds: game.phase === 'vote' ? Object.keys(game.votes) : [],
+      votedIds:
+        (game.phase === 'vote' || game.phase === 'pk-vote') ? Object.keys(game.votes) : [],
+      pkCandidateIds: [...(game.pkCandidateIds ?? [])],
       shooterId: game.pendingShooterId ?? game.hunterShot?.shooterId ?? null,
       shooterRoleId: game.pendingShooterId
         ? (game.roles[game.pendingShooterId] ?? null)
         : (game.hunterShot?.roleId ?? null),
       hunterShot: game.hunterShot ? { ...game.hunterShot } : null,
       speech:
-        game.phase === 'day-discussion' && game.settings.speechMode
+        ((game.phase === 'day-discussion' && game.settings.speechMode) ||
+          game.phase === 'pk-discussion')
           ? { order: [...game.speechOrder], index: game.speakerIndex }
           : null,
       winner: game.winner,

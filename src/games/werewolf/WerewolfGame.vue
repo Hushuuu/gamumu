@@ -43,6 +43,8 @@ const PHASE_TITLES: Record<WerewolfPhase, string> = {
   'hunter-shot': '開槍時刻',
   'day-discussion': '白天討論',
   vote: '投票放逐',
+  'pk-discussion': '平票 PK 發言',
+  'pk-vote': '平票 PK 複投',
   'vote-result': '投票結果',
   finished: '遊戲結束',
 }
@@ -87,13 +89,14 @@ const mode = computed<PickMode>(() => {
     if (state.role === 'witch') return state.witch?.poison ? 'witch' : 'none'
   }
   if (current.phase === 'hunter-shot' && state.canShoot) return 'hunter'
-  if (current.phase === 'vote' && state.alive) return 'vote'
+  if ((current.phase === 'vote' || current.phase === 'pk-vote') && state.alive) return 'vote'
   return 'none'
 })
 
 const selectable = computed(() => {
   const state = priv.value
-  if (!state) {
+  const current = view.value
+  if (!state || !current) {
     return []
   }
 
@@ -107,8 +110,11 @@ const selectable = computed(() => {
       return [...aliveSet.value].filter((id) => id !== state.guard?.lastTargetId)
     case 'witch':
     case 'hunter':
-    case 'vote':
       return others
+    case 'vote':
+      return current.phase === 'pk-vote'
+        ? current.pkCandidateIds.filter((id) => id !== props.playerId && aliveSet.value.has(id))
+        : others
     default:
       return []
   }
@@ -166,7 +172,12 @@ const seats = computed<PickerSeat[]>(() => {
     if (current.phase === 'night' && state?.teammates.includes(id)) tags.push('狼人同伴')
     const checked = state?.seerResults.find((result) => result.playerId === id)
     if (checked) tags.push(checked.camp === 'wolf' ? '查驗：狼人' : '查驗：好人')
-    if (current.phase === 'vote' && current.votedIds.includes(id)) tags.push('已投票')
+    if (
+      (current.phase === 'vote' || current.phase === 'pk-vote') &&
+      current.votedIds.includes(id)
+    ) {
+      tags.push('已投票')
+    }
     if (state?.camp === 'wolf' && state.acting) {
       const picks = Object.values(state.wolfPicks).filter((target) => target === id).length
       if (picks > 0) tags.push(`狼人選擇 ×${picks}`)
@@ -215,6 +226,12 @@ const voteTally = computed(() => {
     .sort((left, right) => right.voters.length - left.voters.length)
 })
 
+const pkCandidateNames = computed(() =>
+  (view.value?.pkCandidateIds ?? []).map(nameOf).join('、'),
+)
+const pkSpeechSeconds = computed(() =>
+  (view.value?.settings.speechSeconds ?? 0) / 2,
+)
 const teammateNames = computed(() => (priv.value?.teammates ?? []).map(nameOf))
 const seerTonightCamp = computed(() => {
   const state = priv.value
@@ -319,11 +336,18 @@ watch(
   },
 )
 
-watch(() => [view.value?.phase, view.value?.day, view.value?.nightStep], () => {
-  poisonPick.value = null
-  votePick.value = null
-  shootPick.value = null
-})
+watch(
+  [
+    () => view.value?.phase,
+    () => view.value?.day,
+    () => view.value?.nightStep,
+  ],
+  () => {
+    poisonPick.value = null
+    votePick.value = null
+    shootPick.value = null
+  },
+)
 
 onMounted(() => {
   clockTimer = window.setInterval(() => {
@@ -582,6 +606,34 @@ function endDiscussion(): void {
         </template>
       </section>
 
+      <section v-else-if="phase === 'pk-discussion'" class="ww-panel ww-phase-panel" aria-live="polite">
+        <WerewolfPhaseIllustration phase="pk-discussion" />
+        <h3>平票 PK 發言（{{ speakerProgress }}）</h3>
+        <p>同票候選人依座位順序輪流發言，每人 {{ pkSpeechSeconds }} 秒：{{ pkCandidateNames }}。</p>
+        <p class="ww-speaker">
+          <strong>{{ isSpeaker ? '輪到你發言了' : `${nameOf(speakerId)} 發言中` }}</strong>
+        </p>
+        <ol class="ww-speech-order">
+          <li
+            v-for="(id, index) in view.speech?.order ?? view.pkCandidateIds"
+            :key="id"
+            :class="{ 'is-current': index === (view.speech?.index ?? 0), 'is-done': index < (view.speech?.index ?? 0), 'is-dead': !aliveSet.has(id) }"
+          >
+            {{ nameOf(id) }}
+          </li>
+        </ol>
+        <button
+          v-if="isSpeaker || isHost"
+          class="button button-secondary ww-inline-button"
+          type="button"
+          :disabled="!props.canInteract"
+          @click="endSpeech"
+        >
+          {{ isSpeaker ? '結束發言' : '跳過目前發言者' }}
+        </button>
+        <p class="ww-hint">候選人都發言後，所有存活玩家會再投票一次，只能選擇上述候選人。</p>
+      </section>
+
       <section v-else-if="phase === 'day-discussion'" class="ww-panel ww-phase-panel" aria-live="polite">
         <WerewolfPhaseIllustration phase="day-discussion" />
         <template v-if="view.speech">
@@ -656,10 +708,42 @@ function endDiscussion(): void {
         <p class="ww-hint">已投票 {{ view.votedIds.length }} / {{ view.aliveIds.length }} 人</p>
       </section>
 
+      <section v-else-if="phase === 'pk-vote'" class="ww-panel ww-phase-panel" aria-live="polite">
+        <WerewolfPhaseIllustration phase="pk-vote" />
+        <template v-if="priv?.alive">
+          <h3>平票 PK 複投</h3>
+          <p>請只在同票候選人中選擇：{{ pkCandidateNames }}。若再次平票，將無人放逐並繼續遊戲。</p>
+          <div class="ww-actions">
+            <button
+              class="button button-primary ww-inline-button"
+              type="button"
+              :disabled="!canAct || !selected"
+              @click="act('cast_vote', { targetId: selected })"
+            >
+              {{ priv.hasVoted && selected === priv.myVote ? '已複投（可改選）' : '確認複投' }}
+            </button>
+            <button
+              class="button button-secondary ww-inline-button"
+              type="button"
+              :disabled="!canAct"
+              @click="act('cast_vote', { targetId: null })"
+            >
+              {{ priv.hasVoted && priv.myVote === null ? '已棄票' : '棄票' }}
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <h3>平票 PK 複投</h3>
+          <p>存活玩家正在同票候選人中複投。</p>
+        </template>
+        <p class="ww-hint">已投票 {{ view.votedIds.length }} / {{ view.aliveIds.length }} 人</p>
+      </section>
+
       <section v-else-if="phase === 'vote-result'" class="ww-panel ww-phase-panel" aria-live="polite">
         <WerewolfPhaseIllustration phase="vote-result" />
-        <h3>投票結果</h3>
+        <h3>{{ view.pkCandidateIds.length > 0 ? 'PK 複投結果' : '投票結果' }}</h3>
         <p v-if="view.exiledId">{{ nameOf(view.exiledId) }} 被放逐出局。</p>
+        <p v-else-if="view.pkCandidateIds.length > 0">PK 複投仍平票或無有效票，無人放逐，遊戲繼續。</p>
         <p v-else>平票或無人投票，沒有人被放逐。</p>
         <ul class="ww-tally">
           <li v-for="entry in voteTally" :key="entry.targetId ?? 'abstain'">
