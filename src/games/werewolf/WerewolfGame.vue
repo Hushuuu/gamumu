@@ -13,6 +13,7 @@ import type { GameEvent, PlayerView } from '../../../shared/protocol'
 import PlayerPicker from './components/PlayerPicker.vue'
 import RoleCard from './components/RoleCard.vue'
 import WerewolfMomentOverlay from './components/WerewolfMomentOverlay.vue'
+import WerewolfPhaseIllustration from './components/WerewolfPhaseIllustration.vue'
 import WerewolfRoleIcon from './components/WerewolfRoleIcon.vue'
 import {
   ROLE_GUESS_DRAG_TYPE,
@@ -46,6 +47,7 @@ const PHASE_TITLES: Record<WerewolfPhase, string> = {
   finished: '遊戲結束',
 }
 
+const WEREWOLF_MOMENT_OVERLAY_ENABLED = false
 const now = ref(Date.now())
 const privateState = ref<WerewolfPrivateState | null>(null)
 const poisonPick = ref<string | null>(null)
@@ -138,6 +140,9 @@ function nameOf(playerId: string | null): string {
 }
 
 function showMoment(kind: WerewolfMoment['kind'], title: string, detail: string): void {
+  if (!WEREWOLF_MOMENT_OVERLAY_ENABLED) {
+    return
+  }
   momentQueue.value.push({ id: ++momentSequence, kind, title, detail })
 }
 
@@ -429,7 +434,7 @@ function endDiscussion(): void {
 <template>
   <div class="playing-state ww-state" :class="{ 'is-night': phase === 'night' }">
     <WerewolfMomentOverlay
-      v-if="activeMoment"
+      v-if="WEREWOLF_MOMENT_OVERLAY_ENABLED && activeMoment"
       :key="activeMoment.id"
       :moment="activeMoment"
       @complete="completeMoment"
@@ -454,12 +459,14 @@ function endDiscussion(): void {
         你已出局。可以繼續旁觀，但請不要透露任何身分資訊。
       </p>
 
-      <section v-if="phase === 'role-reveal'" class="ww-panel" aria-live="polite">
+      <section v-if="phase === 'role-reveal'" class="ww-panel ww-phase-panel" aria-live="polite">
+        <WerewolfPhaseIllustration phase="role-reveal" />
         <h3>請記住你的身分</h3>
         <p>按住上方卡片查看身分，放開即隱藏。稍後會進入第一個夜晚。</p>
       </section>
 
-      <section v-else-if="phase === 'night'" class="ww-panel ww-panel-night" aria-live="polite">
+      <section v-else-if="phase === 'night'" class="ww-panel ww-panel-night ww-phase-panel" aria-live="polite">
+        <WerewolfPhaseIllustration phase="night" />
         <template v-if="priv?.acting && priv.camp === 'wolf'">
           <h3><WerewolfRoleIcon role-id="werewolf" :size="18" /> 選擇今晚要襲擊的玩家</h3>
           <p>與同伴討論後點選目標；最高票者被襲擊。</p>
@@ -531,17 +538,19 @@ function endDiscussion(): void {
           </p>
         </template>
         <template v-else>
-          <h3>🌙 天黑請閉眼</h3>
+          <h3>天黑請閉眼</h3>
           <p>請保持安靜，等待天亮。</p>
         </template>
       </section>
 
-      <section v-else-if="phase === 'dawn'" class="ww-panel" aria-live="polite">
-        <h3>☀️ 天亮了</h3>
+      <section v-else-if="phase === 'dawn'" class="ww-panel ww-phase-panel" aria-live="polite">
+        <WerewolfPhaseIllustration phase="dawn" />
+        <h3>天亮了</h3>
         <p>{{ deathText }}</p>
       </section>
 
-      <section v-else-if="phase === 'hunter-shot'" class="ww-panel" aria-live="polite">
+      <section v-else-if="phase === 'hunter-shot'" class="ww-panel ww-phase-panel" aria-live="polite">
+        <WerewolfPhaseIllustration phase="hunter-shot" />
         <template v-if="priv?.canShoot">
           <h3><WerewolfRoleIcon :role-id="priv.role" :size="18" /> 你可以開槍</h3>
           <p>選擇一位玩家帶走，或放棄開槍。</p>
@@ -573,9 +582,10 @@ function endDiscussion(): void {
         </template>
       </section>
 
-      <section v-else-if="phase === 'day-discussion'" class="ww-panel" aria-live="polite">
+      <section v-else-if="phase === 'day-discussion'" class="ww-panel ww-phase-panel" aria-live="polite">
+        <WerewolfPhaseIllustration phase="day-discussion" />
         <template v-if="view.speech">
-          <h3>🎤 輪流發言（{{ speakerProgress }}）</h3>
+          <h3>輪流發言（{{ speakerProgress }}）</h3>
           <p>{{ deathText }}</p>
           <p class="ww-speaker">
             <strong>{{ isSpeaker ? '輪到你發言了' : `${nameOf(speakerId)} 發言中` }}</strong>
@@ -600,7 +610,7 @@ function endDiscussion(): void {
           </button>
         </template>
         <template v-else>
-          <h3>💬 自由討論</h3>
+          <h3>自由討論</h3>
           <p>{{ deathText }}請面對面或用語音討論，找出可疑的玩家。</p>
         </template>
         <p v-if="view.hunterShot" class="ww-hint">{{ hunterText }}</p>
@@ -615,9 +625,10 @@ function endDiscussion(): void {
         </button>
       </section>
 
-      <section v-else-if="phase === 'vote'" class="ww-panel" aria-live="polite">
+      <section v-else-if="phase === 'vote'" class="ww-panel ww-phase-panel" aria-live="polite">
+        <WerewolfPhaseIllustration phase="vote" />
         <template v-if="priv?.alive">
-          <h3>🗳 投票放逐</h3>
+          <h3>投票放逐</h3>
           <p>選擇要放逐的玩家後送出；全員投完會提早結算，票數最高者出局，平票則無人出局。</p>
           <div class="ww-actions">
             <button
@@ -639,14 +650,15 @@ function endDiscussion(): void {
           </div>
         </template>
         <template v-else>
-          <h3>🗳 投票放逐</h3>
+          <h3>投票放逐</h3>
           <p>存活的玩家正在投票。</p>
         </template>
         <p class="ww-hint">已投票 {{ view.votedIds.length }} / {{ view.aliveIds.length }} 人</p>
       </section>
 
-      <section v-else-if="phase === 'vote-result'" class="ww-panel" aria-live="polite">
-        <h3>📊 投票結果</h3>
+      <section v-else-if="phase === 'vote-result'" class="ww-panel ww-phase-panel" aria-live="polite">
+        <WerewolfPhaseIllustration phase="vote-result" />
+        <h3>投票結果</h3>
         <p v-if="view.exiledId">{{ nameOf(view.exiledId) }} 被放逐出局。</p>
         <p v-else>平票或無人投票，沒有人被放逐。</p>
         <ul class="ww-tally">
@@ -725,6 +737,12 @@ function endDiscussion(): void {
 
 .ww-state.is-night .round-heading h2, .ww-state.is-night .round-kicker {
   color: #e9e6ff;
+}
+
+.ww-phase-panel::after {
+  display: block;
+  clear: both;
+  content: '';
 }
 
 .ww-panel {
