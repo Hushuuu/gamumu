@@ -26,6 +26,14 @@ export const GAME_OPTIONS = [
     maxPlayers: ROOM_CAPACITY,
   },
   {
+    id: 'rummikub',
+    name: '拉密',
+    description: '組成數字牌組並重整桌面，搶先出清手牌。',
+    icon: '13',
+    minPlayers: 2,
+    maxPlayers: 4,
+  },
+  {
     id: 'werewolf',
     name: '狼人殺',
     description: '經典社交推理，找出隱藏在村莊裡的狼人。',

@@ -33,6 +33,12 @@ const GAME_PROMOS: Record<GameId, GamePromo> = {
     description: '輪流抽題、盡情作畫，再看朋友能不能讀懂你的神來一筆。每一輪都是新的笑點。',
     stamp: 'DRAW THE FUN',
   },
+  rummikub: {
+    category: '數字牌策略',
+    headline: '先湊出好牌，再把整張桌面重新排列。',
+    description: '用手牌完成 30 分登錄，之後拆組、接牌與換回 Joker，搶先出清手牌。',
+    stamp: 'TILE TACTICS',
+  },
   werewolf: {
     category: '夜幕推理劇場',
     headline: '天亮之前，找出藏在你們之中的狼人。',
@@ -651,6 +657,12 @@ onUnmounted(() => {
     linear-gradient(120deg, #211f3b, #302746 60%, #25213a);
 }
 
+.theme-rummikub {
+  background:
+    radial-gradient(ellipse at 10% 0%, rgb(174 221 175 / 18%), transparent 48%),
+    linear-gradient(120deg, #1e332b, #254438 60%, #20352e);
+}
+
 .game-selection-poster {
   position: relative;
   display: grid;
@@ -695,6 +707,13 @@ onUnmounted(() => {
     radial-gradient(circle at 74% 22%, #f3d47c 0 8%, transparent 8.5%),
     radial-gradient(circle at 20% 85%, rgb(158 148 255 / 55%) 0 12%, transparent 12.5%),
     linear-gradient(145deg, #655ab4, #29294f 72%);
+}
+
+.theme-rummikub .game-selection-poster {
+  background:
+    radial-gradient(circle at 74% 22%, #f3d47c 0 8%, transparent 8.5%),
+    radial-gradient(circle at 20% 85%, rgb(164 223 178 / 58%) 0 12%, transparent 12.5%),
+    linear-gradient(145deg, #6aa47a, #315c4a 72%);
 }
 
 .game-selection-poster::before,
@@ -783,6 +802,13 @@ onUnmounted(() => {
 
 .theme-draw-guess .game-poster-icon {
   transform: rotate(-12deg);
+}
+
+.theme-rummikub .game-poster-icon {
+  border-radius: 24%;
+  color: #39734e;
+  text-shadow: 0 3px 12px rgb(255 255 255 / 50%);
+  transform: rotate(-7deg);
 }
 
 .game-poster-spark {

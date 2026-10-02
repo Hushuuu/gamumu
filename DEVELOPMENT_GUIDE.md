@@ -13,6 +13,7 @@
 | 房主管理       | 等待房間時，房主可以將其他玩家移出房間；房主不能移除自己。                                                                                      |
 | 猜詞派對       | 2–12 人；共 5 題，每題 20 秒；每位玩家每題只能回答一次，答對加 100 分。所有玩家都作答後會提早公布答案，否則時間到後公布；公布階段持續 3 秒。    |
 | 你畫我猜       | 2–12 人；房主可設定繪畫 15–180 秒、每人 1–5 輪、猜答案 10–120 秒。繪圖者可跳過或提早完成；每位猜中者及該題繪圖者各得 50 分。           |
+| 拉密           | 2–4 人；每人起手 14 張，首次登錄至少 30 分；之後可重排桌面牌組，最先出清手牌者獲勝。Joker 留在手牌算 30 分。                                      |
 | 狼人殺         | 6–12 人（依劇本：經典劇本 6–12 人，狼王守衛版 10–12 人）；全自動伺服器法官，不含文字聊天（面對面／語音討論）。基本版「經典劇本」角色為狼人、村民、預言家、女巫、獵人；可選「狼王守衛版」（12 人：3 狼人＋狼王＋4 村民＋預言家／女巫／獵人／守衛；11 人少 1 村民；10 人再少 1 狼人）；屠城制，勝方每位玩家 +100 分。房主可設定自由討論 30–600 秒（或改為輪流發言：每天隨機安排存活玩家依序發言，每人 10–180 秒，發言者可提早結束）、投票 15–180 秒、夜間每步驟 10–60 秒。僅本機開發模式可讓房主自選自己的角色，其餘玩家仍隨機分配。 |
 | 空白測試遊戲   | 1–12 人；可由房主選擇並啟動，顯示擴充測試畫面；房主可結束遊戲以驗證結算流程，目前沒有實際玩法。                                               |
 | 多局與結算     | 遊戲結束後房主可準備下一局；預選上一局的遊戲並保留該遊戲設定，Ready 與本局狀態清除，玩家分數跨局累積保留。                                                  |
@@ -75,7 +76,7 @@ Client game_action
 
 更多 Durable Object 細節請參考 Cloudflare 官方文件：[設計 Durable Objects](https://developers.cloudflare.com/durable-objects/best-practices/rules-of-durable-objects/)、[Hibernatable WebSockets](https://developers.cloudflare.com/durable-objects/best-practices/websockets/) 與 [Alarms API](https://developers.cloudflare.com/durable-objects/api/alarms/)。
 
-猜詞答案及你畫我猜答案在猜題階段都不會放進公開快照；你畫我猜的答案只會以私人 `answer-prompt` 事件傳給繪圖者，進入 `reveal` 後才公開。分數、玩家是否已作答及回合切換也都由伺服器決定。
+猜詞答案及你畫我猜答案在猜題階段都不會放進公開快照；你畫我猜的答案只會以私人 `answer-prompt` 事件傳給繪圖者，進入 `reveal` 後才公開。拉密手牌只透過私人狀態傳給本人，不放進公開快照。分數、玩家是否已作答及回合切換也都由伺服器決定。
 
 ### HTTP 與 WebSocket 介面
 
@@ -117,12 +118,13 @@ Client game_action
 - 全員作答或回合期限到時，伺服器公布答案；公布 3 秒後開始下一題。第五題後房間進入 `finished`。
 - 你畫我猜設定預設為繪畫 60 秒、每人 1 輪、猜答案 30 秒；設定答案階段固定 30 秒，揭曉階段固定 3 秒。設定答案逾時會跳過該題；繪圖者可手動跳過或提早結束繪圖。
 - 你畫我猜依開局玩家順序輪流繪圖，總題數為開局玩家數乘以每人輪數。每位猜中的玩家各得 50 分；同一題第一次有人猜中時繪圖者得 50 分。所有在線猜題玩家都猜中會提早揭曉，否則猜題時間到才揭曉。
+- 拉密使用 106 張數字牌與 2 張 Joker，每人起手 14 張。Worker 驗證 Group／Run、30 分初次登錄、桌面牌完整重排與 Joker 替換；抽牌、牌堆耗盡後連續跳過、勝負與剩餘牌值計分皆由伺服器決定。
 - 狼人殺流程為 `role-reveal → night（依劇本步驟）→ dawn → [hunter-shot] → day-discussion → vote → vote-result → … → finished`。夜間各步驟固定等滿設定秒數、不提早結束，避免以時間洩漏誰有能力或誰已死亡；輪流發言時每天重新隨機排序存活玩家，發言者或房主可用 `end_speech` 結束目前發言，房主仍可提早進入投票；平票無人出局；玩家明確離房視為死亡（不公開身分）；分配角色使用 `crypto.getRandomValues` 洗牌。真實角色、夜間選擇與女巫藥水只存在 `room.game`，公開快照只在 `finished` 才附上全員身分與勝方；個人資訊透過私人 `private-state` 事件傳送。狼人殺結束時保留 `room.game`（`phase: 'finished'`）供結算畫面使用，`prepare_next_game` 才會清除。
 - 繪圖筆畫以正規化座標分批透過 WebSocket 廣播給房內其他玩家，不回送給繪圖者，也不寫入房間狀態；重新連線不會重播或還原畫布。繪圖者在繪畫中斷線時仍保留本題，時間到後進入猜答案階段。
 - Durable Object 的單一 alarm 負責推進遊戲階段與處理閒置期限；前端只呈現伺服器期限，不自行裁決遊戲結果。
 - `worker/src/games/registry.ts` 將遊戲 ID 對應到獨立伺服器模組；共用房間流程透過模組介面啟動遊戲、分派操作、處理 alarm／離房及建立公開快照。
 - `worker/src/games/draw-guess/` 與 `src/games/draw-guess/` 分別實作你畫我猜的伺服器規則與獨立 Vue 畫面；`worker/src/games/blank/` 則是沒有實際玩法的擴充測試模組。
-- 結束時（狼人殺除外，見上）會清除本局的 `game` 狀態；準備下一局時會預選 `word-guess` 並清除 Ready，但保留每位玩家的 `score`。分數會跨不同遊戲累積，不會在開始新局時歸零。
+- 結束時（狼人殺與拉密除外，見上）會清除本局的 `game` 狀態；準備下一局時會預選 `word-guess` 並清除 Ready，但保留每位玩家的 `score`。分數會跨不同遊戲累積，不會在開始新局時歸零。
 - 房間資料目前以 `GameRoom` 的 Storage API 讀寫在單一 `room` key。`wrangler.jsonc` 將 Durable Object 設為 SQLite 類別，但目前程式沒有自行建立或查詢 SQL 資料表，也沒有 D1 或外部資料庫。
 - 新房間資料使用 schema version 2；既有猜詞房間載入時會補上預設頭像、未 Ready 狀態與預設遊戲，保留仍有效的房間。
 
@@ -139,6 +141,7 @@ src/
     registry.ts              遊戲 ID 到遊戲畫面元件的註冊表
     word-guess/              猜詞遊戲與結算 Vue 元件
     draw-guess/              你畫我猜設定、進行、Canvas 與結算 Vue 元件
+    rummikub/                拉密牌桌、私人手牌與結算 Vue 元件
     werewolf/                狼人殺設定、進行、結算 Vue 元件與 components/（身分卡、目標選擇）
     blank/                   空白測試遊戲與結算 Vue 元件
   services/
@@ -157,6 +160,7 @@ shared/
     types.ts                 公開遊戲狀態型別聯集
     word-guess.ts            猜詞遊戲公開狀態型別與驗證
     draw-guess.ts            你畫我猜設定與公開狀態型別、驗證
+    rummikub.ts              拉密牌面、公開／私人狀態與合法組合驗證
     werewolf.ts              狼人殺角色／劇本 metadata、設定、公開與私人狀態型別、驗證
     blank.ts                 空白遊戲公開狀態型別與驗證
 
@@ -172,6 +176,7 @@ worker/src/
     types.ts                 遊戲模組介面與共用遊戲狀態聯集
     word-guess/              猜詞遊戲邏輯及獨立保存狀態型別
     draw-guess/              你畫我猜規則及獨立保存狀態型別
+    rummikub/                拉密規則及獨立保存狀態型別
     werewolf/                狼人殺階段機（index.ts）、roles/ 角色定義、scripts/ 劇本定義
     blank/                   空白測試遊戲邏輯及獨立保存狀態型別
 
@@ -259,7 +264,7 @@ npm run worker:check  # 產生 Wrangler 型別並檢查 Worker TypeScript
 | 伺服器權威狀態 | `room.game`，型別加入 `StoredGame` | 回合、phase、答案、分數判定依據；只由伺服器規則變更，不直接整份回傳給前端。 |
 | 公開即時狀態 | `GameView` 與 `toView()` | 顯示給整個房間；只輸出 UI 必需資料，移除答案、私有選擇等秘密。 |
 | 本局設定 | `room.gameSettings`、`publicSettings()` | 等待階段供玩家查看；由模組驗證設定值，開始後不可再改。 |
-| 玩家私人資料 | `privateState(room, playerId)` | 玩家驗證／重連後，只送給該玩家，例如繪圖者自己的題目。若模組宣告 `pushPrivateState: true`，每次 `broadcastState()` 後也會重送給每位已連線玩家（狼人殺使用；私人快照與公開快照都帶 `stateVersion`，前端只採用相符版本）。 |
+| 玩家私人資料 | `privateState(room, playerId)` | 玩家驗證／重連後，只送給該玩家，例如繪圖者自己的題目或拉密手牌。若模組宣告 `pushPrivateState: true`，每次 `broadcastState()` 後也會重送給每位已連線玩家（狼人殺與拉密使用；狼人殺以 `stateVersion` 對齊私人與公開快照）。 |
 | 暫時即時事件 | `GameActionResult.event` | 動畫、筆畫或私人操作回饋；明確指定接收者，不會因 `changed: false` 被保存或重播。 |
 
 #### Worker 與遊戲模組的實作流程
@@ -287,6 +292,7 @@ npm run worker:check  # 產生 Wrangler 型別並檢查 Worker TypeScript
 - 非房主設定、非法設定、錯誤 `gameId`、非法 payload、非當前操作者操作、重複操作及錯誤 phase 操作都會被伺服器拒絕。
 - 正常完整流程、提早結束、各階段逾時、連續／重送 action、alarm 重試，以及遊戲結束後開下一局並確認分數保留。
 - 玩家在每個重要 phase 斷線後重連、明確離房、房主離開、私人資料不外洩；若有即時事件，確認收件人正確且沒有意外保存／重播。
+- 拉密另需驗證 2–4 人發牌、30 分初次登錄、牌組重排後的完整合法性、Joker 替換、抽牌與牌堆耗盡計分。
 
 結算元件除了 `players` 外也會收到 `game`（房間結束時保留的公開 `GameView`，多數遊戲為 `null`）；需要使用時請在元件宣告對應 prop。
 
@@ -302,7 +308,7 @@ npm run worker:check  # 產生 Wrangler 型別並檢查 Worker TypeScript
 
 ## 實作與規格的界線
 
-- `gg_spec.md` 是產品與架構目標，不代表其中所有功能已完成。現況有猜詞派對、你畫我猜與狼人殺（經典版與狼王守衛版）三種可玩遊戲，以及一種只驗證啟動／結束流程的空白測試遊戲。
+- `gg_spec.md` 是產品與架構目標，不代表其中所有功能已完成。現況有猜詞派對、你畫我猜、拉密與狼人殺（經典版與狼王守衛版）四種可玩遊戲，以及一種只驗證啟動／結束流程的空白測試遊戲。
 - 目前 Durable Object 以六碼公開房間代碼作為 `idFromName` 名稱；規格提到的獨立內部 UUID 尚未採用。
 - 目前沒有玩家帳號或公開房間大廳；你畫我猜畫布只即時同步筆畫，不保存歷史，也不支援重連後重播。
 - 連線憑證原文由 Worker 回傳並由瀏覽器保存；房間保存的是憑證雜湊。邀請連結只含房間代碼，不要將憑證放進 URL、日誌或公開快照。

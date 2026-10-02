@@ -4,6 +4,7 @@ import type { GameId } from './catalog'
 import { isDrawGuessView } from './draw-guess'
 import { getWerewolfPlayerRange, isWerewolfView } from './werewolf'
 import { isWordGuessView } from './word-guess'
+import { isRummikubView } from './rummikub'
 import type { GameView } from './types'
 
 export { isBlankGameView } from './blank'
@@ -40,6 +41,35 @@ export type {
   WerewolfView,
   WerewolfWitchState,
 } from './werewolf'
+export {
+  getRummikubBoardTilePoints,
+  getRummikubRackTilePoints,
+  isRummikubBoardTile,
+  isRummikubColor,
+  isRummikubFace,
+  isRummikubMeld,
+  isRummikubPrivateState,
+  isRummikubTile,
+  isRummikubView,
+  isValidRummikubMeld,
+  RUMMIKUB_COLORS,
+  RUMMIKUB_PRIVATE_EVENT,
+  RUMMIKUB_TILE_COUNT,
+} from './rummikub'
+export type {
+  RummikubBoardTile,
+  RummikubColor,
+  RummikubEndReason,
+  RummikubFace,
+  RummikubJokerAssignment,
+  RummikubMeld,
+  RummikubMove,
+  RummikubNumberTile,
+  RummikubPlayerState,
+  RummikubPrivateState,
+  RummikubTile,
+  RummikubView,
+} from './rummikub'
 export { DEFAULT_GAME_ID, GAME_OPTIONS, getGameOption, isGameId, ROOM_CAPACITY } from './catalog'
 export type { GameId, GameOption } from './catalog'
 export { isWordGuessView } from './word-guess'
@@ -52,6 +82,7 @@ const GAME_VIEW_VALIDATORS: Record<GameId, (value: unknown) => boolean> = {
   'word-guess': isWordGuessView,
   //blank: isBlankGameView,
   'draw-guess': isDrawGuessView,
+  rummikub: isRummikubView,
   werewolf: isWerewolfView,
 }
 

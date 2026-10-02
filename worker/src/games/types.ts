@@ -4,9 +4,15 @@ import type { StoredBlankGame } from './blank/types'
 import type { StoredDrawGuess } from './draw-guess/types'
 import type { StoredWerewolf } from './werewolf/types'
 import type { StoredWordGuess } from './word-guess/types'
+import type { StoredRummikub } from './rummikub/types'
 import type { WerewolfRoleId } from '../../../shared/games/werewolf'
 
-export type StoredGame = StoredWordGuess | StoredBlankGame | StoredDrawGuess | StoredWerewolf
+export type StoredGame =
+  | StoredWordGuess
+  | StoredBlankGame
+  | StoredDrawGuess
+  | StoredRummikub
+  | StoredWerewolf
 
 export interface GameRoomContext {
   status: RoomStatus
