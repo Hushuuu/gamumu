@@ -41,7 +41,7 @@ function settingNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) ? value : fallback
 }
 
-function saveSettings(): void {
+function applySettings(): void {
   if (disabled.value || !isValid.value) {
     return
   }
@@ -63,7 +63,11 @@ function saveSettings(): void {
       <span class="draw-settings-icon" aria-hidden="true">13</span>
     </div>
 
-    <form class="draw-settings-form" @submit.prevent="saveSettings">
+    <form
+      class="draw-settings-form"
+      @change="applySettings"
+      @submit.prevent="applySettings"
+    >
       <label>
         <span>每回合思考時間（秒）</span>
         <input
@@ -74,7 +78,8 @@ function saveSettings(): void {
           step="1"
           :disabled="disabled || unlimitedTime"
         />
-        <small>15–300 秒，預設 60 秒</small>
+        <small v-if="isValid">15–300 秒，預設 60 秒；有效變更會自動套用</small>
+        <small v-else>請輸入 15–300 秒的整數，才會套用設定</small>
       </label>
       <label class="rummikub-unlimited-setting">
         <span class="rummikub-unlimited-toggle">
@@ -83,16 +88,9 @@ function saveSettings(): void {
         </span>
         <small>不會因思考時間結束而自動抽牌</small>
       </label>
-      <button
-        class="button button-secondary draw-settings-save"
-        type="submit"
-        :disabled="disabled || !isValid"
-      >
-        {{ isHost ? '儲存設定' : '由房主設定' }}
-      </button>
     </form>
     <p class="draw-settings-note">
-      {{ isHost ? '儲存變更會清除所有人的準備狀態。' : '設定變更後需要重新準備。' }}
+      {{ isHost ? '有效設定變更會自動套用，並清除所有人的準備狀態。' : '設定變更後需要重新準備。' }}
       逾時時未提交的桌面編輯會還原；牌堆已空則自動跳過。
     </p>
   </section>
