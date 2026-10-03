@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import * as Tone from 'tone'
 import { getRummikubComboTier } from '../../../shared/games/rummikub'
 import {
   getRummikubBoardTilePoints,
@@ -41,6 +42,12 @@ const COLOR_ORDER: Record<RummikubColor, number> = {
   yellow: 3,
 }
 
+const HIT_SOUND_NOTES = ['C5', 'D5', 'E5', 'G5', 'A5', 'C6', 'D6'] as const
+const hitSynth = new Tone.Synth({
+  oscillator: { type: 'triangle' },
+  envelope: { attack: 0.005, decay: 0.08, sustain: 0, release: 0.12 },
+}).toDestination()
+
 const props = defineProps<{
   game: GameView
   gameEvent: GameEvent | null
@@ -70,14 +77,77 @@ const originalTableTileIds = ref(new Set<number>())
 let lastComboSignature: string | null = null
 let nextDraftMeldId = 1
 let turnClockInterval: number | null = null
+let hitAudioStartPromise: Promise<void> | null = null
+let isHitAudioReady = false
+let isHitAudioDisposed = false
+let nextHitSoundAt = 0
+const pendingHitNotes: (typeof HIT_SOUND_NOTES)[number][] = []
+
+function scheduleHitNote(note: (typeof HIT_SOUND_NOTES)[number]): void {
+  const playAt = Math.max(Tone.now(), nextHitSoundAt)
+  hitSynth.triggerAttackRelease(note, '16n', playAt)
+  nextHitSoundAt = playAt + 0.14
+}
+
+function playPendingHitNotes(): void {
+  pendingHitNotes.splice(0).forEach(scheduleHitNote)
+}
+
+function unlockHitAudio(): void {
+  if (hitAudioStartPromise || isHitAudioReady || isHitAudioDisposed) {
+    return
+  }
+
+  hitAudioStartPromise = Tone.start()
+    .then(() => {
+      if (isHitAudioDisposed) {
+        return
+      }
+
+      isHitAudioReady = true
+      window.removeEventListener('pointerdown', unlockHitAudio)
+      window.removeEventListener('keydown', unlockHitAudio)
+      playPendingHitNotes()
+    })
+    .catch((error: unknown) => {
+      hitAudioStartPromise = null
+      pendingHitNotes.length = 0
+      console.error('Unable to start Rummikub hit audio.', error)
+    })
+}
+
+function playHitSound(hitCount: number): void {
+  const note = HIT_SOUND_NOTES[Math.min(hitCount, HIT_SOUND_NOTES.length) - 1]
+  if (note === undefined) {
+    throw new RangeError(`Cannot play Rummikub hit sound for count ${hitCount}`)
+  }
+
+  if (!isHitAudioReady) {
+    if (hitAudioStartPromise) {
+      pendingHitNotes.push(note)
+    }
+    return
+  }
+
+  scheduleHitNote(note)
+}
 
 onMounted(() => {
+  // Web Audio must be started in response to a user gesture.
+  window.addEventListener('pointerdown', unlockHitAudio)
+  window.addEventListener('keydown', unlockHitAudio)
   turnClockInterval = window.setInterval(() => {
     clockNow.value = Date.now()
   }, 1000)
 })
 
 onUnmounted(() => {
+  window.removeEventListener('pointerdown', unlockHitAudio)
+  window.removeEventListener('keydown', unlockHitAudio)
+  isHitAudioDisposed = true
+  pendingHitNotes.length = 0
+  hitSynth.dispose()
+
   if (turnClockInterval !== null) {
     window.clearInterval(turnClockInterval)
   }
@@ -260,6 +330,32 @@ watch(
     privateHand.value = sortHand(event.payload.hand)
   },
   { immediate: true },
+)
+
+watch(
+  () => ({
+    playerId: activeCombo.value?.playerId,
+    turnNumber: game.value?.turnNumber,
+    count: activeCombo.value?.count,
+  }),
+  (combo, previousCombo) => {
+    if (combo.playerId === undefined || combo.count === undefined) {
+      return
+    }
+
+    const isSameCombo = (
+      combo.playerId === previousCombo.playerId &&
+      combo.turnNumber === previousCombo.turnNumber
+    )
+    const previousCount = isSameCombo ? previousCombo.count ?? 0 : 0
+    if (combo.count <= previousCount) {
+      return
+    }
+
+    for (let hitCount = previousCount + 1; hitCount <= combo.count; hitCount += 1) {
+      playHitSound(hitCount)
+    }
+  },
 )
 
 watch(() => game.value?.turnNumber, (turnNumber, previousTurnNumber) => {
