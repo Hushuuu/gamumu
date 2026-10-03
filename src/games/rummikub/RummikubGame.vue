@@ -613,18 +613,6 @@ function drawOrPass(): void {
       </div>
       <div class="rummikub-status-metrics">
         <div
-          v-if="activeCombo"
-          :key="`${activeCombo.playerId}-${activeCombo.count}`"
-          class="rummikub-combo-effect"
-          :class="`is-${activeCombo.tier}`"
-          role="status"
-          aria-live="polite"
-          :aria-label="`Combo ${activeCombo.count}`"
-        >
-          <span>COMBO</span>
-          <strong>{{ activeCombo.count }}</strong>
-        </div>
-        <div
           class="rummikub-turn-countdown"
           :class="{ 'is-expiring': remainingTurnSeconds !== null && remainingTurnSeconds <= 10 }"
           role="timer"
@@ -671,6 +659,20 @@ function drawOrPass(): void {
     </section>
 
     <section class="rummikub-panel rummikub-board-panel">
+      <div
+        v-if="activeCombo"
+        :key="`${activeCombo.playerId}-${activeCombo.count}`"
+        class="rummikub-hit"
+        :class="`is-${activeCombo.tier}`"
+        role="status"
+        aria-live="polite"
+        :aria-label="`Hit ${activeCombo.count}`"
+      >
+        <span class="rummikub-hit-ring" aria-hidden="true"></span>
+        <span class="rummikub-hit-sparks" aria-hidden="true"></span>
+        <strong aria-hidden="true">{{ activeCombo.count }}</strong>
+        <em aria-hidden="true">HIT</em>
+      </div>
       <header class="rummikub-panel-heading">
         <div>
           <p class="rummikub-kicker">SHARED TABLE</p>
@@ -771,7 +773,7 @@ function drawOrPass(): void {
               :disabled="!props.canInteract || selectedTileCount === 0"
               @click="moveSelectedToNewMeld"
             >
-              建立新組合
+              建立新組合⬆
             </button>
             <button
               class="button button-secondary"
@@ -779,7 +781,7 @@ function drawOrPass(): void {
               :disabled="!props.canInteract || !canReturnSelectedTiles"
               @click="returnSelectedTilesToHand"
             >
-              撤回所選手牌
+              撤回所選手牌⬇
             </button>
           </div>
         </div>
@@ -967,141 +969,203 @@ function drawOrPass(): void {
   gap: 7px;
 }
 
-.rummikub-combo-effect {
+.rummikub-board-panel {
   position: relative;
-  isolation: isolate;
-  display: flex;
-  min-width: 112px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border: 1px solid transparent;
-  border-radius: 14px;
-  font-weight: 900;
-  transform-origin: center;
-  white-space: nowrap;
 }
 
-.rummikub-combo-effect > strong {
-  font-size: 29px;
-  line-height: 1;
+.rummikub-board-panel:has(.rummikub-hit) .rummikub-panel-heading {
+  margin-bottom: 18px;
+  padding-right: 96px;
 }
 
-.rummikub-combo-effect > span {
-  font-size: 10px;
-  letter-spacing: 0.13em;
-}
-
-.rummikub-combo-effect::before,
-.rummikub-combo-effect::after {
+.rummikub-hit {
   position: absolute;
-  z-index: -1;
-  inset: -5px;
-  border-radius: inherit;
-  content: '';
+  z-index: 4;
+  top: 9px;
+  right: 9px;
+  display: grid;
+  min-width: 64px;
+  justify-items: center;
+  padding: 7px 10px 6px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  pointer-events: none;
+  transform-origin: 80% 20%;
+  animation: rummikub-hit-land 560ms cubic-bezier(0.16, 1.25, 0.32, 1) both;
+}
+
+.rummikub-hit strong {
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  animation: rummikub-hit-number 480ms cubic-bezier(0.2, 1.45, 0.36, 1) both;
+}
+
+.rummikub-hit em {
+  margin-top: 1px;
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+
+.rummikub-hit-ring,
+.rummikub-hit-sparks {
+  position: absolute;
   pointer-events: none;
 }
 
-.rummikub-combo-effect::before {
+.rummikub-hit-ring {
+  inset: -5px;
+  border: 1.5px solid currentColor;
+  border-radius: inherit;
+  opacity: 0;
+  animation: rummikub-hit-ring 680ms ease-out both;
+}
+
+.rummikub-hit-sparks {
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px;
+  border-radius: 50%;
   background: currentColor;
-  filter: blur(10px);
-  opacity: 0.55;
+  opacity: 0;
+  box-shadow:
+    0 -16px 0 currentColor,
+    14px -8px 0 currentColor,
+    12px 12px 0 currentColor,
+    -14px 9px 0 currentColor,
+    -15px -7px 0 currentColor;
+  animation: rummikub-hit-sparks 720ms ease-out both;
 }
 
-.rummikub-combo-effect::after {
-  border: 1px solid currentColor;
-  opacity: 0.4;
-  animation: rummikub-combo-ring 1.2s ease-out infinite;
+.rummikub-hit.is-spark {
+  border-color: #efd48a;
+  background: linear-gradient(160deg, #fffaf0, #ffe7a3);
+  box-shadow: 0 10px 18px rgb(176 122 28 / 22%);
+  color: #8a5410;
 }
 
-.rummikub-combo-effect.is-spark {
-  border-color: #f1cf71;
-  background: linear-gradient(135deg, #fff9dc, #ffd968);
-  box-shadow: 0 7px 18px rgb(193 142 28 / 24%);
-  color: #80520c;
-  animation: rummikub-combo-spark 1.25s ease-in-out infinite;
+.rummikub-hit.is-surge {
+  border-color: #ffc07a;
+  background: linear-gradient(145deg, #fff1d2, #ffb15a 55%, #ff7a45);
+  box-shadow: 0 12px 22px rgb(214 92 32 / 32%);
+  color: #fffaf3;
+  text-shadow: 0 1px 0 rgb(120 42 12 / 28%);
+  animation:
+    rummikub-hit-land 560ms cubic-bezier(0.16, 1.25, 0.32, 1) both,
+    rummikub-hit-glow 1.5s ease-in-out 560ms infinite;
 }
 
-.rummikub-combo-effect.is-surge {
-  border-color: #ffc16e;
-  background: linear-gradient(135deg, #ffdf86, #ff8c42 52%, #ee4f45);
-  box-shadow: 0 0 18px rgb(255 117 47 / 45%), 0 7px 20px rgb(193 67 35 / 28%);
-  color: #fffdf5;
-  animation: rummikub-combo-surge 850ms cubic-bezier(0.25, 1.5, 0.4, 1) infinite;
-}
-
-.rummikub-combo-effect.is-overdrive {
-  border-color: #ffe68e;
-  background: linear-gradient(120deg, #ff3e83, #953de3 55%, #3a53e8);
-  box-shadow: 0 0 24px rgb(204 58 222 / 58%), 0 7px 22px rgb(78 43 182 / 38%);
+.rummikub-hit.is-overdrive {
+  border-color: #ffe7a2;
+  background: linear-gradient(145deg, #4a2f86, #c43d73 58%, #ff8a3d);
+  box-shadow: 0 14px 26px rgb(120 42 170 / 36%);
   color: #fff;
-  animation: rummikub-combo-overdrive 620ms cubic-bezier(0.25, 1.7, 0.35, 1) infinite;
+  animation:
+    rummikub-hit-land 520ms cubic-bezier(0.16, 1.35, 0.3, 1) both,
+    rummikub-hit-glow 1.1s ease-in-out 520ms infinite;
 }
 
-.rummikub-combo-effect.is-overdrive::before {
-  inset: -8px;
-  background: conic-gradient(from 0deg, #ffce46, #ff43b0, #7546ff, #43dcff, #ffce46);
-  animation: rummikub-combo-spin 1.6s linear infinite;
+.rummikub-hit.is-overdrive::before {
+  position: absolute;
+  z-index: -1;
+  inset: -3px;
+  border-radius: 18px;
+  background: conic-gradient(from 0deg, #ffe08a, #ff5f8a, #7d5cff, #5ad0ff, #ffe08a);
+  content: '';
+  animation: rummikub-hit-spin 1.8s linear infinite;
 }
 
-@keyframes rummikub-combo-spark {
-  0%,
-  100% {
-    transform: scale(1) rotate(-1deg);
-  }
-
-  50% {
-    transform: scale(1.08) rotate(1deg);
-  }
+.rummikub-hit.is-surge .rummikub-hit-ring,
+.rummikub-hit.is-overdrive .rummikub-hit-ring {
+  border-width: 2px;
 }
 
-@keyframes rummikub-combo-surge {
-  0%,
-  100% {
-    transform: scale(1) rotate(-1deg);
-  }
-
-  40% {
-    transform: scale(1.14) rotate(2deg);
-  }
-
-  72% {
-    transform: scale(0.97) rotate(-1deg);
-  }
-}
-
-@keyframes rummikub-combo-overdrive {
-  0%,
-  100% {
-    transform: scale(1) rotate(-2deg);
-    filter: hue-rotate(0);
-  }
-
-  35% {
-    transform: scale(1.18) rotate(3deg);
-    filter: hue-rotate(28deg);
-  }
-
-  68% {
-    transform: scale(0.96) rotate(-2deg);
-    filter: hue-rotate(-18deg);
-  }
-}
-
-@keyframes rummikub-combo-ring {
+@keyframes rummikub-hit-land {
   0% {
-    opacity: 0.45;
-    transform: scale(0.94);
+    opacity: 0;
+    filter: blur(2px);
+    transform: translateY(-12px) scale(1.42) rotate(10deg);
+  }
+
+  58% {
+    opacity: 1;
+    filter: none;
+    transform: translateY(1px) scale(0.92) rotate(-9deg);
+  }
+
+  78% {
+    transform: translateY(-1px) scale(1.05) rotate(-4deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(-6deg);
+  }
+}
+
+@keyframes rummikub-hit-number {
+  0% {
+    opacity: 0;
+    transform: scale(0.35) translateY(4px);
+  }
+
+  55% {
+    opacity: 1;
+    transform: scale(1.22);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes rummikub-hit-ring {
+  0% {
+    opacity: 0.75;
+    transform: scale(0.72);
   }
 
   100% {
     opacity: 0;
-    transform: scale(1.27);
+    transform: scale(1.65);
   }
 }
 
-@keyframes rummikub-combo-spin {
+@keyframes rummikub-hit-sparks {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+
+  18% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+@keyframes rummikub-hit-glow {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+
+  50% {
+    filter: brightness(1.08);
+  }
+}
+
+@keyframes rummikub-hit-spin {
   to {
     transform: rotate(1turn);
   }
@@ -1553,13 +1617,34 @@ function drawOrPass(): void {
     display: grid;
     grid-template-columns: 1fr;
   }
+
+  .rummikub-hit {
+    top: 8px;
+    right: 8px;
+    min-width: 54px;
+    padding: 6px 8px 5px;
+  }
+
+  .rummikub-hit strong {
+    font-size: 22px;
+  }
+
+  .rummikub-board-panel:has(.rummikub-hit) .rummikub-panel-heading {
+    padding-right: 72px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rummikub-combo-effect,
-  .rummikub-combo-effect::after,
-  .rummikub-combo-effect.is-overdrive::before {
+  .rummikub-hit,
+  .rummikub-hit strong,
+  .rummikub-hit-ring,
+  .rummikub-hit-sparks,
+  .rummikub-hit.is-overdrive::before {
     animation: none;
+  }
+
+  .rummikub-hit {
+    transform: rotate(-6deg);
   }
 }
 </style>

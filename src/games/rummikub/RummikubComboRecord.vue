@@ -12,11 +12,11 @@ const tier = computed(() => getRummikubComboTier(props.combo.count))
 const message = computed(() => {
   switch (tier.value) {
     case 'spark':
-      return `${props.playerName} 在剛剛達成了 ${props.combo.count} 次 Combo，漂亮出牌！`
+      return `${props.playerName} 剛剛打出 ${props.combo.count} Hit，漂亮出牌！`
     case 'surge':
-      return `${props.playerName} 攻勢大爆發，剛剛達成 ${props.combo.count} 次 Combo！`
+      return `${props.playerName} 攻勢大爆發，剛剛打出 ${props.combo.count} Hit！`
     case 'overdrive':
-      return `${props.playerName} 火力全開，剛剛創下 ${props.combo.count} 次 Combo 連擊！！！`
+      return `${props.playerName} 火力全開，剛剛創下 ${props.combo.count} Hit！！！`
   }
 })
 </script>
