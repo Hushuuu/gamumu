@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as Tone from 'tone'
 import { getRummikubComboTier } from '../../../shared/games/rummikub'
 import {
@@ -18,6 +18,12 @@ import type {
   RummikubTile,
 } from '../../../shared/games/rummikub'
 import type { GameEvent, GameView, PlayerView } from '../../../shared/protocol'
+import {
+  loadRummikubSettings,
+  saveRummikubSettings,
+  type RummikubHandTheme,
+  type RummikubPersonalSettings,
+} from '../../services/rummikubSettings'
 import RummikubComboRecord from './RummikubComboRecord.vue'
 
 interface DraftMeld {
@@ -42,8 +48,35 @@ const COLOR_ORDER: Record<RummikubColor, number> = {
   yellow: 3,
 }
 
+const HAND_THEMES = [
+  {
+    id: 'sage',
+    name: '晨霧鼠尾草',
+    description: '暖白陶瓷牌面與細緻金線花角',
+  },
+  {
+    id: 'mist',
+    name: '月光霧藍',
+    description: '霧藍瓷白牌面與低調銀藍雙框',
+  },
+] as const satisfies readonly {
+  id: RummikubHandTheme
+  name: string
+  description: string
+}[]
+
 const HIT_SOUND_NOTES = ['C5', 'D5', 'E5', 'G5', 'A5', 'C6', 'D6'] as const
+const loadedSettings = loadRummikubSettings()
+const hitVolume = ref(loadedSettings.settings.hitVolume)
+const handTheme = ref(loadedSettings.settings.handTheme)
+const settingsNotice = ref(loadedSettings.error ?? '')
+
+function hitVolumeToDecibels(volume: number): number {
+  return volume === 0 ? -Infinity : 20 * Math.log10(volume / 100)
+}
+
 const hitSynth = new Tone.Synth({
+  volume: hitVolumeToDecibels(hitVolume.value),
   oscillator: { type: 'triangle' },
   envelope: { attack: 0.005, decay: 0.08, sustain: 0, release: 0.12 },
 }).toDestination()
@@ -56,10 +89,12 @@ const props = defineProps<{
   gameName: string
   isHost: boolean
   canInteract: boolean
+  settingsOpen: boolean
 }>()
 
 const emit = defineEmits<{
   'game-action': [action: string, payload: Record<string, unknown>]
+  'close-settings': []
 }>()
 
 const game = computed(() => props.game.gameId === 'rummikub' ? props.game : null)
@@ -74,6 +109,8 @@ const originalHand = ref<RummikubTile[]>([])
 const originalMelds = ref<RummikubMeld[]>([])
 const originalHandTileIds = ref(new Set<number>())
 const originalTableTileIds = ref(new Set<number>())
+const settingsDialog = ref<HTMLDialogElement | null>(null)
+const hitVolumeSlider = ref<HTMLInputElement | null>(null)
 let lastComboSignature: string | null = null
 let nextDraftMeldId = 1
 let turnClockInterval: number | null = null
@@ -131,6 +168,43 @@ function playHitSound(hitCount: number): void {
 
   scheduleHitNote(note)
 }
+
+function closeSettings(): void {
+  emit('close-settings')
+}
+
+watch(hitVolume, (volume) => {
+  hitSynth.volume.rampTo(hitVolumeToDecibels(volume), 0.05)
+}, { flush: 'sync' })
+
+watch([hitVolume, handTheme], ([volume, selectedTheme]) => {
+  const settings: RummikubPersonalSettings = {
+    hitVolume: volume,
+    handTheme: selectedTheme,
+  }
+  settingsNotice.value = saveRummikubSettings(settings) ?? ''
+})
+
+watch(() => props.settingsOpen, (isOpen) => {
+  if (!isOpen) {
+    return
+  }
+
+  void nextTick(() => {
+    if (!props.settingsOpen) {
+      return
+    }
+
+    const dialog = settingsDialog.value
+    if (!dialog) {
+      return
+    }
+    if (!dialog.open) {
+      dialog.showModal()
+    }
+    hitVolumeSlider.value?.focus()
+  })
+})
 
 onMounted(() => {
   // Web Audio must be started in response to a user gesture.
@@ -689,7 +763,7 @@ function drawOrPass(): void {
 </script>
 
 <template>
-  <div class="playing-state rummikub-game">
+  <div class="playing-state rummikub-game" :class="`hand-theme-${handTheme}`">
     <section class="rummikub-status-panel">
       <div>
         <p class="rummikub-kicker">{{ gameName }} · 第 {{ game?.turnNumber ?? 1 }} 回合</p>
@@ -1000,6 +1074,102 @@ function drawOrPass(): void {
     <p v-else-if="!isEditing && !isMyTurn" class="rummikub-waiting-note">
       等待目前玩家出牌、抽牌或結束回合。
     </p>
+
+    <Teleport to="body">
+      <dialog
+        v-if="props.settingsOpen"
+        ref="settingsDialog"
+        class="rummikub-settings-dialog"
+        aria-labelledby="rummikub-settings-title"
+        @cancel.prevent="closeSettings"
+        @click.self="closeSettings"
+      >
+        <div class="rummikub-settings-content">
+          <header class="rummikub-settings-header">
+            <div>
+              <p class="rummikub-kicker">YOUR TABLE · YOUR STYLE</p>
+              <h2 id="rummikub-settings-title">個人設定</h2>
+            </div>
+            <button
+              class="rummikub-settings-close"
+              type="button"
+              aria-label="關閉個人設定"
+              @click="closeSettings"
+            >
+              ×
+            </button>
+          </header>
+
+          <section class="rummikub-settings-block" aria-labelledby="rummikub-volume-title">
+            <div class="rummikub-settings-block-heading">
+              <label id="rummikub-volume-title" for="rummikub-hit-volume">Hit 音效音量</label>
+              <output for="rummikub-hit-volume">
+                {{ hitVolume === 0 ? '靜音' : `${hitVolume}%` }}
+              </output>
+            </div>
+            <input
+              id="rummikub-hit-volume"
+              ref="hitVolumeSlider"
+              v-model.number="hitVolume"
+              class="rummikub-settings-volume-slider"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              :aria-valuetext="hitVolume === 0 ? '靜音' : `音量 ${hitVolume}%`"
+            />
+            <div class="rummikub-settings-volume-labels" aria-hidden="true">
+              <span>靜音</span>
+              <span>最大</span>
+            </div>
+          </section>
+
+          <section class="rummikub-settings-block" aria-labelledby="rummikub-theme-title">
+            <div class="rummikub-settings-block-heading">
+              <h3 id="rummikub-theme-title">牌面主題</h3>
+              <span>只改變你看到的所有牌面</span>
+            </div>
+            <div class="rummikub-theme-options" role="radiogroup" aria-labelledby="rummikub-theme-title">
+              <label
+                v-for="theme in HAND_THEMES"
+                :key="theme.id"
+                class="rummikub-theme-option"
+                :class="[
+                  `theme-${theme.id}`,
+                  { 'is-selected': handTheme === theme.id },
+                ]"
+              >
+                <input
+                  v-model="handTheme"
+                  type="radio"
+                  name="rummikub-hand-theme"
+                  :value="theme.id"
+                />
+                <span class="rummikub-theme-preview" :class="`theme-${theme.id}`" aria-hidden="true">
+                  <span class="rummikub-theme-preview-tile tile-red">3</span>
+                  <span class="rummikub-theme-preview-tile tile-blue">8</span>
+                  <span class="rummikub-theme-preview-tile tile-yellow">12</span>
+                </span>
+                <span class="rummikub-theme-copy">
+                  <strong>{{ theme.name }}</strong>
+                  <small>{{ theme.description }}</small>
+                </span>
+              </label>
+            </div>
+          </section>
+
+          <p v-if="settingsNotice" class="rummikub-settings-notice" role="status">
+            {{ settingsNotice }}
+          </p>
+          <footer class="rummikub-settings-footer">
+            <span>設定只套用於此裝置</span>
+            <button class="button button-primary" type="button" @click="closeSettings">
+              完成
+            </button>
+          </footer>
+        </div>
+      </dialog>
+    </Teleport>
   </div>
 </template>
 
@@ -1425,6 +1595,32 @@ function drawOrPass(): void {
   color: #4f704a;
 }
 
+.rummikub-settings-trigger {
+  min-height: 29px;
+  padding: 0 9px;
+  border: 1px solid #e4e7de;
+  border-radius: 8px;
+  background: #fff;
+  color: #62675d;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rummikub-settings-trigger:hover {
+  border-color: #d0d9ca;
+  background: #f7f9f4;
+  color: #4f704a;
+}
+
+.rummikub-settings-trigger:focus-visible,
+.rummikub-settings-close:focus-visible,
+.rummikub-settings-footer .button:focus-visible {
+  outline: 2px solid #819975;
+  outline-offset: 2px;
+}
+
 .rummikub-empty-board,
 .rummikub-empty-hand,
 .rummikub-waiting-note,
@@ -1595,6 +1791,369 @@ function drawOrPass(): void {
   border: 1px dashed #dce3d2;
   border-radius: 11px;
   background: #f8faf4;
+}
+
+.rummikub-game.hand-theme-sage .rummikub-hand {
+  border-color: #dce4d6;
+  background: #f5f8f1;
+}
+
+.rummikub-game.hand-theme-sage .rummikub-tile {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-color: #ded7c5;
+  background:
+    radial-gradient(circle at 4px 4px, rgb(160 126 66 / 34%) 0 1px, transparent 1.5px),
+    radial-gradient(circle at calc(100% - 4px) 4px, rgb(160 126 66 / 34%) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 4px calc(100% - 4px), rgb(160 126 66 / 34%) 0 1px, transparent 1.5px),
+    radial-gradient(circle at calc(100% - 4px) calc(100% - 4px), rgb(160 126 66 / 34%) 0 1px, transparent 1.5px),
+    linear-gradient(155deg, #fffefa, #f8f5eb);
+}
+
+.rummikub-game.hand-theme-sage .rummikub-tile::before {
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgb(160 126 66 / 24%);
+  border-radius: 4px;
+  content: '';
+  pointer-events: none;
+}
+
+.rummikub-game.hand-theme-sage .rummikub-tile.is-joker {
+  border-color: #e3d9a9;
+  background:
+    radial-gradient(circle at 4px 4px, rgb(160 126 66 / 36%) 0 1px, transparent 1.5px),
+    radial-gradient(circle at calc(100% - 4px) 4px, rgb(160 126 66 / 36%) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 4px calc(100% - 4px), rgb(160 126 66 / 36%) 0 1px, transparent 1.5px),
+    radial-gradient(circle at calc(100% - 4px) calc(100% - 4px), rgb(160 126 66 / 36%) 0 1px, transparent 1.5px),
+    linear-gradient(150deg, #fffef6, #f7f1d8);
+}
+
+.rummikub-game.hand-theme-sage .rummikub-tile.is-selected {
+  border-color: #779e6d;
+  box-shadow: 0 0 0 2px rgb(119 158 109 / 23%), 0 5px 11px rgb(50 49 42 / 12%);
+}
+
+.rummikub-game.hand-theme-mist .rummikub-hand-panel {
+  border-color: #e1e5ed;
+  background: #fbfcff;
+}
+
+.rummikub-game.hand-theme-mist .rummikub-hand-panel.is-editing {
+  border-color: #d7deeb;
+  background: #f9fbff;
+}
+
+.rummikub-game.hand-theme-mist .rummikub-hand {
+  border-color: #d8dfec;
+  background: linear-gradient(135deg, #f2f5fa, #f7f8fc);
+}
+
+.rummikub-game.hand-theme-mist .rummikub-tile {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 2px double #d4ddeb;
+  background:
+    radial-gradient(circle at 50% 4px, rgb(118 140 176 / 30%) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 50% calc(100% - 4px), rgb(118 140 176 / 30%) 0 1px, transparent 1.5px),
+    linear-gradient(155deg, #fff, #f3f6fb);
+}
+
+.rummikub-game.hand-theme-mist .rummikub-tile::before {
+  position: absolute;
+  inset: 3px;
+  border: 1px dashed rgb(118 140 176 / 24%);
+  border-radius: 4px;
+  content: '';
+  pointer-events: none;
+}
+
+.rummikub-game.hand-theme-mist .rummikub-tile.is-joker {
+  border-color: #ded8c0;
+  background:
+    radial-gradient(circle at 50% 4px, rgb(118 140 176 / 34%) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 50% calc(100% - 4px), rgb(118 140 176 / 34%) 0 1px, transparent 1.5px),
+    linear-gradient(155deg, #fffef8, #f2f0e7);
+}
+
+.rummikub-game.hand-theme-mist .rummikub-tile.is-selected {
+  border-color: #8799bb;
+  box-shadow: 0 0 0 2px rgb(135 153 187 / 22%), 0 5px 11px rgb(50 49 42 / 12%);
+}
+
+.rummikub-settings-dialog {
+  width: min(460px, calc(100vw - 28px));
+  max-width: none;
+  max-height: min(86vh, 700px);
+  overflow-y: auto;
+  padding: 0;
+  border: 1px solid #e6e8df;
+  border-radius: 20px;
+  background: #fffefa;
+  color: #45483f;
+  box-shadow: 0 24px 75px rgb(34 39 30 / 24%);
+}
+
+.rummikub-settings-dialog::backdrop {
+  background: rgb(24 29 26 / 52%);
+  backdrop-filter: blur(3px);
+}
+
+.rummikub-settings-content {
+  display: grid;
+  gap: 15px;
+  padding: 22px;
+}
+
+.rummikub-settings-header,
+.rummikub-settings-block-heading,
+.rummikub-settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rummikub-settings-header {
+  padding-bottom: 14px;
+  border-bottom: 1px solid #eeeee7;
+}
+
+.rummikub-settings-header .rummikub-kicker {
+  margin-bottom: 4px;
+}
+
+.rummikub-settings-header h2 {
+  margin: 0;
+  color: #353c35;
+  font-size: 21px;
+  letter-spacing: -0.03em;
+}
+
+.rummikub-settings-close {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #e8e9e2;
+  border-radius: 9px;
+  background: #fff;
+  color: #74786e;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.rummikub-settings-block {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid #eceee6;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #fff, #fcfdf9);
+}
+
+.rummikub-settings-block-heading label,
+.rummikub-settings-block-heading h3 {
+  margin: 0;
+  color: #4e5448;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.rummikub-settings-block-heading output {
+  color: #708366;
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.rummikub-settings-block-heading > span {
+  color: #85897d;
+  font-size: 9px;
+  text-align: right;
+}
+
+.rummikub-settings-volume-slider {
+  width: 100%;
+  margin: 0;
+  accent-color: #778d6c;
+  cursor: pointer;
+}
+
+.rummikub-settings-volume-labels {
+  display: flex;
+  justify-content: space-between;
+  color: #8b8f83;
+  font-size: 9px;
+}
+
+.rummikub-theme-options {
+  display: grid;
+  gap: 8px;
+}
+
+.rummikub-theme-option {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 16px 78px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid #e9ebe4;
+  border-radius: 11px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.rummikub-theme-option.is-selected.theme-sage {
+  border-color: #cbd8c4;
+  background: #fcfdfb;
+  box-shadow: 0 0 0 2px rgb(137 160 125 / 12%);
+}
+
+.rummikub-theme-option.is-selected.theme-mist {
+  border-color: #cbd5e4;
+  background: #fcfcff;
+  box-shadow: 0 0 0 2px rgb(135 153 187 / 12%);
+}
+
+.rummikub-theme-option:focus-within {
+  outline: 2px solid #819975;
+  outline-offset: 2px;
+}
+
+.rummikub-theme-option input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #778d6c;
+}
+
+.rummikub-theme-option.theme-mist input {
+  accent-color: #8394b3;
+}
+
+.rummikub-theme-preview {
+  display: flex;
+  width: 78px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid;
+  border-radius: 9px;
+}
+
+.rummikub-theme-preview.theme-sage {
+  border-color: #dce4d6;
+  background: #f3f6ef;
+}
+
+.rummikub-theme-preview.theme-mist {
+  border-color: #d8dfec;
+  background: #f0f3f8;
+}
+
+.rummikub-theme-preview-tile {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  width: 17px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgb(50 49 42 / 9%);
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.rummikub-theme-preview.theme-sage .rummikub-theme-preview-tile {
+  border-color: #ded7c5;
+  background:
+    radial-gradient(circle at 3px 3px, rgb(160 126 66 / 38%) 0 0.8px, transparent 1.2px),
+    radial-gradient(circle at calc(100% - 3px) calc(100% - 3px), rgb(160 126 66 / 38%) 0 0.8px, transparent 1.2px),
+    linear-gradient(155deg, #fffefa, #f8f5eb);
+}
+
+.rummikub-theme-preview.theme-sage .rummikub-theme-preview-tile::before {
+  position: absolute;
+  inset: 2px;
+  border: 1px solid rgb(160 126 66 / 28%);
+  border-radius: 2px;
+  content: '';
+}
+
+.rummikub-theme-preview.theme-mist .rummikub-theme-preview-tile {
+  border: 2px double #d4ddeb;
+  background:
+    radial-gradient(circle at 50% 3px, rgb(118 140 176 / 32%) 0 0.8px, transparent 1.2px),
+    linear-gradient(155deg, #fff, #f3f6fb);
+}
+
+.rummikub-theme-preview.theme-mist .rummikub-theme-preview-tile::before {
+  position: absolute;
+  inset: 2px;
+  border: 1px dashed rgb(118 140 176 / 30%);
+  border-radius: 2px;
+  content: '';
+}
+
+.rummikub-theme-preview-tile.tile-red {
+  color: #d14e4e;
+}
+
+.rummikub-theme-preview-tile.tile-blue {
+  color: #4777bd;
+}
+
+.rummikub-theme-preview-tile.tile-yellow {
+  color: #be941f;
+}
+
+.rummikub-theme-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.rummikub-theme-copy strong {
+  color: #4b5147;
+  font-size: 10px;
+}
+
+.rummikub-theme-copy small {
+  color: #83877b;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.rummikub-settings-notice {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: #fff8e7;
+  color: #826820;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.rummikub-settings-footer {
+  justify-content: space-between;
+  color: #85897d;
+  font-size: 9px;
+}
+
+.rummikub-settings-footer .button {
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: 9px;
+  font-size: 10px;
 }
 
 .rummikub-joker-settings {

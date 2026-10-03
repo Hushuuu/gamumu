@@ -61,6 +61,7 @@ const isInviteJoinPromptOpen = ref(false)
 const shouldPromptForInviteJoin = ref(false)
 const inviteJoinDialog = ref<HTMLDialogElement | null>(null)
 const inviteJoinNameInput = ref<HTMLInputElement | null>(null)
+const isRummikubSettingsOpen = ref(false)
 const isLoading = ref(false)
 const pageError = ref('')
 const pageNotice = ref('')
@@ -183,9 +184,11 @@ watch(devRoleOptions, (options) => {
   }
 })
 watch(() => snapshot.value?.status, (status) => {
-  if (status === 'playing') {
-    devRoleId.value = ''
+  if (status !== 'playing') {
+    isRummikubSettingsOpen.value = false
+    return
   }
+  devRoleId.value = ''
 })
 watch(gameAbortedCount, (count, previousCount) => {
   if (count > previousCount) {
@@ -860,6 +863,16 @@ function connectionLabel(): string {
               }}
             </span>
             <div class="game-panel-heading-actions">
+              <button
+                v-if="snapshot.status === 'playing' && selectedGame.id === 'rummikub'"
+                class="button button-secondary rummikub-personal-settings-trigger"
+                type="button"
+                aria-haspopup="dialog"
+                :aria-expanded="isRummikubSettingsOpen"
+                @click="isRummikubSettingsOpen = true"
+              >
+                個人設定
+              </button>
               <GameRulesDialog
                 v-if="snapshot.status !== 'waiting' || isHost || snapshot.gameSelectionConfirmed"
                 :game-id="selectedGame.id"
@@ -1015,6 +1028,21 @@ function connectionLabel(): string {
               </button>
             </div>
             <component
+              v-if="selectedGame.id === 'rummikub'"
+              :is="gameComponents.playing"
+              :game="snapshot.game"
+              :game-event="gameEvent"
+              :players="snapshot.players"
+              :player-id="playerId"
+              :game-name="selectedGame.name"
+              :is-host="isHost"
+              :can-interact="connectionStatus === 'connected'"
+              :settings-open="isRummikubSettingsOpen"
+              @close-settings="isRummikubSettingsOpen = false"
+              @game-action="sendGameAction"
+            />
+            <component
+              v-else
               :is="gameComponents.playing"
               :game="snapshot.game"
               :game-event="gameEvent"
@@ -1908,6 +1936,14 @@ function connectionLabel(): string {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.rummikub-personal-settings-trigger {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 .player-count, .capacity-pill {
