@@ -82,6 +82,7 @@ export interface RummikubView {
   currentPlayerId: string | null
   combo?: RummikubComboState | null
   lastTurnCombo?: RummikubComboState | null
+  lastTurnChangedMelds?: number[][]
   turnDeadlineAt: number | null
   turnNumber: number
   drawPileCount: number
@@ -107,6 +108,27 @@ function isRummikubComboState(value: unknown): value is RummikubComboState {
     Number(value.count) >= 1 &&
     Number(value.count) <= RUMMIKUB_TILE_COUNT
   )
+}
+
+function isRummikubMeldTileIds(value: unknown): value is number[] {
+  return (
+    Array.isArray(value) &&
+    value.length >= 3 &&
+    value.length <= 13 &&
+    value.every((tileId) => {
+      return (
+        typeof tileId === 'number' &&
+        Number.isInteger(tileId) &&
+        tileId >= 0 &&
+        tileId < RUMMIKUB_TILE_COUNT
+      )
+    }) &&
+    new Set(value).size === value.length
+  )
+}
+
+function isRummikubMeldTileIdGroups(value: unknown): value is number[][] {
+  return Array.isArray(value) && value.every(isRummikubMeldTileIds)
 }
 
 export function isRummikubSettings(value: unknown): value is RummikubSettings {
@@ -200,6 +222,35 @@ export function isValidRummikubMeld(tiles: readonly RummikubBoardTile[]): boolea
   return values.every((value, index) => value === values[0]! + index)
 }
 
+export function areRummikubMeldsEqual(
+  left: Pick<RummikubMeld, 'tiles'>,
+  right: Pick<RummikubMeld, 'tiles'>,
+): boolean {
+  if (left.tiles.length !== right.tiles.length) {
+    return false
+  }
+
+  const rightTilesById = new Map(right.tiles.map((tile) => [tile.id, tile]))
+  return left.tiles.every((leftTile) => {
+    const rightTile = rightTilesById.get(leftTile.id)
+    if (!rightTile || rightTile.kind !== leftTile.kind) {
+      return false
+    }
+    if (leftTile.kind === 'number') {
+      return (
+        rightTile.kind === 'number' &&
+        leftTile.color === rightTile.color &&
+        leftTile.value === rightTile.value
+      )
+    }
+    return (
+      rightTile.kind === 'joker' &&
+      leftTile.representedAs.color === rightTile.representedAs.color &&
+      leftTile.representedAs.value === rightTile.representedAs.value
+    )
+  })
+}
+
 export function isRummikubMeld(value: unknown): value is RummikubMeld {
   return (
     isRecord(value) &&
@@ -240,12 +291,17 @@ export function isRummikubView(value: unknown): value is RummikubView {
 
   const combo = value.combo
   const lastTurnCombo = value.lastTurnCombo
+  const lastTurnChangedMelds = value.lastTurnChangedMelds
   if (
     (combo !== undefined && combo !== null && !isRummikubComboState(combo)) ||
     (
       lastTurnCombo !== undefined &&
       lastTurnCombo !== null &&
       !isRummikubComboState(lastTurnCombo)
+    ) ||
+    (
+      lastTurnChangedMelds !== undefined &&
+      !isRummikubMeldTileIdGroups(lastTurnChangedMelds)
     )
   ) {
     return false
@@ -340,6 +396,7 @@ export function isRummikubView(value: unknown): value is RummikubView {
   }
 
   const tileIds = new Set<number>()
+  const tableMeldTileIdSignatures = new Set<string>()
   for (const meld of value.table) {
     if (!isRummikubMeld(meld)) {
       return false
@@ -349,6 +406,23 @@ export function isRummikubView(value: unknown): value is RummikubView {
         return false
       }
       tileIds.add(tile.id)
+    }
+    tableMeldTileIdSignatures.add(
+      meld.tiles.map((tile) => tile.id).sort((left, right) => left - right).join(','),
+    )
+  }
+
+  if (lastTurnChangedMelds !== undefined) {
+    const changedMeldSignatures = new Set<string>()
+    for (const changedMeldTileIds of lastTurnChangedMelds) {
+      const signature = [...changedMeldTileIds].sort((left, right) => left - right).join(',')
+      if (
+        !tableMeldTileIdSignatures.has(signature) ||
+        changedMeldSignatures.has(signature)
+      ) {
+        return false
+      }
+      changedMeldSignatures.add(signature)
     }
   }
 

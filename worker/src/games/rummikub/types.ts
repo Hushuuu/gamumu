@@ -2,6 +2,7 @@ import type {
   RummikubComboState,
   RummikubEndReason,
   RummikubMeld,
+  RummikubMove,
   RummikubTile,
 } from '../../../../shared/games/rummikub'
 
@@ -13,6 +14,12 @@ export interface StoredRummikub {
   table: RummikubMeld[]
   combo?: RummikubComboState | null
   lastTurnCombo?: RummikubComboState | null
+  lastTurnChangedMelds?: number[][]
+  pendingTurnMove?: {
+    playerId: string
+    turnNumber: number
+    move: RummikubMove
+  } | null
   turnOrder: string[]
   currentPlayerId: string | null
   turnTimeSeconds?: number | null

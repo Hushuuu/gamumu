@@ -1,4 +1,5 @@
 import {
+  areRummikubMeldsEqual,
   DEFAULT_RUMMIKUB_SETTINGS,
   getRummikubBoardTilePoints,
   getRummikubRackTilePoints,
@@ -15,6 +16,7 @@ import type {
   RummikubComboState,
   RummikubFace,
   RummikubMeld,
+  RummikubMove,
   RummikubSettings,
   RummikubTile,
   RummikubView,
@@ -32,6 +34,8 @@ type UnidentifiedTile =
 type BoardParseResult =
   | { ok: true; melds: RummikubMeld[]; tileIds: Set<number> }
   | { ok: false; code: string; message: string }
+
+type RummikubTimeoutResult = 'not-due' | 'auto-played' | 'drew' | 'passed'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -248,25 +252,6 @@ function parseBoard(game: StoredRummikub, payload: Record<string, unknown>): Boa
   return { ok: true, melds, tileIds }
 }
 
-function sameFace(left: RummikubFace, right: RummikubFace): boolean {
-  return left.color === right.color && left.value === right.value
-}
-
-function sameMeld(left: RummikubMeld, right: RummikubMeld): boolean {
-  if (left.tiles.length !== right.tiles.length) {
-    return false
-  }
-
-  return left.tiles.every((leftTile) => {
-    const rightTile = right.tiles.find((tile) => tile.id === leftTile.id)
-    if (!rightTile || rightTile.kind !== leftTile.kind) {
-      return false
-    }
-    return leftTile.kind === 'number' ||
-      (rightTile.kind === 'joker' && sameFace(leftTile.representedAs, rightTile.representedAs))
-  })
-}
-
 function preservesOriginalMelds(
   originalMelds: readonly RummikubMeld[],
   submittedMelds: readonly RummikubMeld[],
@@ -275,7 +260,9 @@ function preservesOriginalMelds(
   const unmatchedMelds = [...submittedMelds]
 
   for (const originalMeld of originalMelds) {
-    const matchingIndex = unmatchedMelds.findIndex((meld) => sameMeld(originalMeld, meld))
+    const matchingIndex = unmatchedMelds.findIndex((meld) => {
+      return areRummikubMeldsEqual(originalMeld, meld)
+    })
     if (matchingIndex < 0) {
       return false
     }
@@ -285,64 +272,6 @@ function preservesOriginalMelds(
   return unmatchedMelds.every((meld) => {
     return meld.tiles.every((tile) => !originalTileIds.has(tile.id))
   })
-}
-
-function preservesJokerAssignments(
-  game: StoredRummikub,
-  originalMelds: readonly RummikubMeld[],
-  submittedMelds: readonly RummikubMeld[],
-  usedHandTileIds: ReadonlySet<number>,
-): boolean {
-  const submittedTiles = new Map(
-    submittedMelds.flatMap((meld) => meld.tiles.map((tile) => [tile.id, tile] as const)),
-  )
-  const reservedReplacementIds = new Set<number>()
-
-  for (const meld of originalMelds) {
-    for (const tile of meld.tiles) {
-      if (tile.kind !== 'joker') {
-        continue
-      }
-
-      const submittedTile = submittedTiles.get(tile.id)
-      if (!submittedTile || submittedTile.kind !== 'joker') {
-        return false
-      }
-      const remainsInOriginalMeld = submittedMelds.some((submittedMeld) => {
-        const submittedJoker = submittedMeld.tiles.find((candidate) => candidate.id === tile.id)
-        return (
-          submittedJoker?.kind === 'joker' &&
-          sameFace(tile.representedAs, submittedJoker.representedAs) &&
-          meld.tiles.every((originalTile) => {
-            return submittedMeld.tiles.some((candidate) => candidate.id === originalTile.id)
-          })
-        )
-      })
-      if (remainsInOriginalMeld) {
-        continue
-      }
-
-      const replacementId = [...usedHandTileIds].find((tileId) => {
-        if (reservedReplacementIds.has(tileId)) {
-          return false
-        }
-        const replacement = getTile(game, tileId)
-        return (
-          replacement.kind === 'number' &&
-          sameFace(
-            { color: replacement.color, value: replacement.value },
-            tile.representedAs,
-          )
-        )
-      })
-      if (replacementId === undefined) {
-        return false
-      }
-      reservedReplacementIds.add(replacementId)
-    }
-  }
-
-  return true
 }
 
 function scoreRack(game: StoredRummikub, playerId: string): number {
@@ -363,6 +292,7 @@ function settleGame(
   awardScores: boolean,
 ): void {
   clearCombo(game)
+  game.pendingTurnMove = null
   const roundScores: Record<string, number> = {}
   if (winnerId !== null && awardScores) {
     const remainingPoints = new Map(
@@ -412,10 +342,44 @@ function advanceTurn(
   }
 
   clearCombo(game)
+  game.pendingTurnMove = null
   game.lastTurnCombo = lastTurnCombo
   game.currentPlayerId = activeOrder[(currentIndex + 1) % activeOrder.length]!
   game.turnNumber += 1
   setTurnDeadline(game, now)
+}
+
+function createMoveFromMelds(melds: readonly RummikubMeld[]): RummikubMove {
+  const jokers: RummikubMove['jokers'] = []
+  for (const meld of melds) {
+    for (const tile of meld.tiles) {
+      if (tile.kind !== 'joker') {
+        continue
+      }
+      jokers.push({
+        tileId: tile.id,
+        representedAs: { ...tile.representedAs },
+      })
+    }
+  }
+
+  return {
+    melds: melds.map((meld) => meld.tiles.map((tile) => tile.id)),
+    jokers,
+  }
+}
+
+function samePendingTurnMove(
+  current: StoredRummikub['pendingTurnMove'],
+  next: NonNullable<StoredRummikub['pendingTurnMove']> | null,
+): boolean {
+  if (current == null || next === null) {
+    return current == null && next === null
+  }
+
+  return current.playerId === next.playerId &&
+    current.turnNumber === next.turnNumber &&
+    JSON.stringify(current.move) === JSON.stringify(next.move)
 }
 
 function updateComboPreview(
@@ -425,12 +389,17 @@ function updateComboPreview(
 ): GameActionResult {
   const hand = getHand(game, playerId)
   const rawTileIds = payload.tileIds
-  if (
-    payload.turnNumber !== game.turnNumber ||
-    !Array.isArray(rawTileIds) ||
-    rawTileIds.length > hand.length
-  ) {
+  if (payload.turnNumber !== game.turnNumber) {
     return actionError('INVALID_COMBO', 'Combo 同步資訊無效，請重新整理後再試。')
+  }
+  if (!Array.isArray(rawTileIds) || rawTileIds.length > hand.length) {
+    const pendingMoveChanged = game.pendingTurnMove != null
+    game.pendingTurnMove = null
+    return actionError(
+      'INVALID_COMBO',
+      'Combo 同步資訊無效，請重新整理後再試。',
+      pendingMoveChanged,
+    )
   }
 
   const handTileIds = new Set(hand)
@@ -442,23 +411,51 @@ function updateComboPreview(
       !handTileIds.has(rawTileId) ||
       comboTileIds.has(rawTileId)
     ) {
-      return actionError('INVALID_COMBO', 'Combo 同步資訊無效，請重新整理後再試。')
+      const pendingMoveChanged = game.pendingTurnMove != null
+      game.pendingTurnMove = null
+      return actionError(
+        'INVALID_COMBO',
+        'Combo 同步資訊無效，請重新整理後再試。',
+        pendingMoveChanged,
+      )
     }
     comboTileIds.add(rawTileId)
+  }
+
+  let nextPendingMove: NonNullable<StoredRummikub['pendingTurnMove']> | null = null
+  if (isRecord(payload.move)) {
+    const parsedMove = parseBoard(game, payload.move)
+    if (parsedMove.ok) {
+      const usedHandTileIds = new Set(
+        [...parsedMove.tileIds].filter((tileId) => handTileIds.has(tileId)),
+      )
+      const comboMatchesMove = usedHandTileIds.size === comboTileIds.size &&
+        [...usedHandTileIds].every((tileId) => comboTileIds.has(tileId))
+      if (comboMatchesMove) {
+        nextPendingMove = {
+          playerId,
+          turnNumber: game.turnNumber,
+          move: createMoveFromMelds(parsedMove.melds),
+        }
+      }
+    }
   }
 
   const nextCombo: RummikubComboState | null = comboTileIds.size === 0
     ? null
     : { playerId, count: comboTileIds.size }
   const currentCombo = game.combo ?? null
-  if (
+  const comboChanged = !(
     currentCombo?.playerId === nextCombo?.playerId &&
     currentCombo?.count === nextCombo?.count
-  ) {
+  )
+  const pendingMoveChanged = !samePendingTurnMove(game.pendingTurnMove, nextPendingMove)
+  if (!comboChanged && !pendingMoveChanged) {
     return { ok: true, changed: false }
   }
 
   game.combo = nextCombo
+  game.pendingTurnMove = nextPendingMove
   return { ok: true, changed: true }
 }
 
@@ -522,13 +519,15 @@ function playTurn(
         '第一次登錄必須只用自己的牌，且一次出牌總值至少 30 分。',
       )
     }
-  } else if (!preservesJokerAssignments(game, game.table, parsedBoard.melds, usedHandTileIds)) {
-    return actionError(
-      'JOKER_MUST_BE_REPLACED',
-      '換回桌面上的 Joker 時，必須用該 Joker 原本代表的實體牌替換，並在同一回合出掉 Joker。',
-    )
   }
 
+  game.lastTurnChangedMelds = parsedBoard.melds
+    .filter((meld) => {
+      return !game.table.some((originalMeld) => {
+        return areRummikubMeldsEqual(originalMeld, meld)
+      })
+    })
+    .map((meld) => meld.tiles.map((tile) => tile.id).sort((left, right) => left - right))
   game.table = parsedBoard.melds
   game.hands[playerId] = hand.filter((tileId) => !usedHandTileIds.has(tileId))
   if (!hasOpened) {
@@ -583,9 +582,13 @@ function passTurn(
   return { ok: true, changed: true }
 }
 
-function timeoutTurn(room: GameRoomContext, game: StoredRummikub, now: number): boolean {
+function timeoutTurn(
+  room: GameRoomContext,
+  game: StoredRummikub,
+  now: number,
+): RummikubTimeoutResult {
   if (game.turnDeadlineAt == null || game.turnDeadlineAt > now) {
-    return false
+    return 'not-due'
   }
 
   const playerId = game.currentPlayerId
@@ -593,7 +596,25 @@ function timeoutTurn(room: GameRoomContext, game: StoredRummikub, now: number): 
     throw new Error('Rummikub timed-out turn has no active player.')
   }
 
-  const result = game.drawPile.length > 0
+  const pendingMove = game.pendingTurnMove
+  if (
+    pendingMove?.playerId === playerId &&
+    pendingMove.turnNumber === game.turnNumber
+  ) {
+    const playResult = playTurn(room, playerId, game, {
+      melds: pendingMove.move.melds,
+      jokers: pendingMove.move.jokers,
+    }, now)
+    if (playResult.ok) {
+      if (!playResult.changed) {
+        throw new Error('Timed-out Rummikub move did not change the game state.')
+      }
+      return 'auto-played'
+    }
+  }
+
+  const shouldDraw = game.drawPile.length > 0
+  const result = shouldDraw
     ? drawTile(room, playerId, game, now)
     : passTurn(room, game, now)
   if (!result.ok) {
@@ -602,7 +623,7 @@ function timeoutTurn(room: GameRoomContext, game: StoredRummikub, now: number): 
   if (!result.changed) {
     throw new Error('Timed-out Rummikub turn did not change the game state.')
   }
-  return true
+  return shouldDraw ? 'drew' : 'passed'
 }
 
 function startRummikub(room: GameRoomContext, now: number): void {
@@ -635,6 +656,8 @@ function startRummikub(room: GameRoomContext, now: number): void {
     table: [],
     combo: null,
     lastTurnCombo: null,
+    lastTurnChangedMelds: [],
+    pendingTurnMove: null,
     turnOrder,
     currentPlayerId: turnOrder[0]!,
     turnTimeSeconds: settings.turnTimeSeconds,
@@ -667,11 +690,21 @@ function handleRummikubAction(
   }
 
   if (game.turnDeadlineAt != null && game.turnDeadlineAt <= now) {
-    const willDraw = game.drawPile.length > 0
-    if (timeoutTurn(room, game, now)) {
+    const timedOutPlayerId = game.currentPlayerId
+    const timeoutResult = timeoutTurn(room, game, now)
+    if (timeoutResult === 'auto-played') {
+      return playerId === timedOutPlayerId
+        ? { ok: true, changed: true }
+        : actionError(
+            'TURN_TIMED_OUT',
+            '思考時間已結束，合法的桌面草稿已自動確認。',
+            true,
+          )
+    }
+    if (timeoutResult !== 'not-due') {
       return actionError(
         'TURN_TIMED_OUT',
-        willDraw
+        timeoutResult === 'drew'
           ? '思考時間已結束，未提交的桌面編輯已還原並自動抽牌。'
           : '思考時間已結束，牌堆已空，本回合已自動跳過。',
         true,
@@ -756,7 +789,7 @@ export const rummikubGame: GameModule = {
     if (room.status !== 'playing' || game?.gameId !== 'rummikub') {
       return false
     }
-    return timeoutTurn(room, game, now)
+    return timeoutTurn(room, game, now) !== 'not-due'
   },
   onPlayerLeave(room, playerId, _now) {
     const game = room.game
@@ -782,6 +815,7 @@ export const rummikubGame: GameModule = {
       table: game.table,
       combo: game.combo ?? null,
       lastTurnCombo: game.lastTurnCombo ?? null,
+      lastTurnChangedMelds: game.lastTurnChangedMelds ?? [],
       players: room.players.map((player) => ({
         id: player.id,
         tileCount: getHand(game, player.id).length,

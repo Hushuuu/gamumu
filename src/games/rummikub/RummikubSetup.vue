@@ -91,7 +91,7 @@ function applySettings(): void {
     </form>
     <p class="draw-settings-note">
       {{ isHost ? '有效設定變更會自動套用，並清除所有人的準備狀態。' : '設定變更後需要重新準備。' }}
-      逾時時未提交的桌面編輯會還原；牌堆已空則自動跳過。
+      限時逾時時，合法且有出牌的桌面草稿會自動確認；否則還原編輯並抽牌，牌堆已空則自動跳過。
     </p>
   </section>
 </template>

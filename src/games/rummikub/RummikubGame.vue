@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as Tone from 'tone'
-import { getRummikubComboTier } from '../../../shared/games/rummikub'
+import {
+  areRummikubMeldsEqual,
+  getRummikubComboTier,
+} from '../../../shared/games/rummikub'
 import {
   getRummikubBoardTilePoints,
   isRummikubColor,
@@ -67,6 +70,7 @@ const HAND_THEMES = [
 }[]
 
 const HIT_SOUND_NOTES = ['C5', 'D5', 'E5', 'G5', 'A5', 'C6', 'D6'] as const
+const TURN_REMINDER_NOTES = ['C6', 'D6'] as const
 const loadedSettings = loadRummikubSettings()
 const hitVolume = ref(loadedSettings.settings.hitVolume)
 const handTheme = ref(loadedSettings.settings.handTheme)
@@ -102,6 +106,7 @@ const emit = defineEmits<{
 const game = computed(() => props.game.gameId === 'rummikub' ? props.game : null)
 const clockNow = ref(Date.now())
 const privateHand = ref<RummikubTile[]>([])
+const latestDrawnTileId = ref<number | null>(null)
 const rackSortMode = ref<RackSortMode>('color')
 const isEditing = ref(false)
 const draftHand = ref<RummikubTile[]>([])
@@ -113,12 +118,13 @@ const originalHandTileIds = ref(new Set<number>())
 const originalTableTileIds = ref(new Set<number>())
 const settingsDialog = ref<HTMLDialogElement | null>(null)
 const hitVolumeSlider = ref<HTMLInputElement | null>(null)
-let lastComboSignature: string | null = null
+let lastDraftSignature: string | null = null
 let nextDraftMeldId = 1
 let turnClockInterval: number | null = null
 let hitAudioStartPromise: Promise<void> | null = null
 let isHitAudioReady = false
 let isHitAudioDisposed = false
+let pendingTurnReminderTurnNumber: number | null = null
 let nextHitSoundAt = 0
 const pendingHitNotes: (typeof HIT_SOUND_NOTES)[number][] = []
 
@@ -130,6 +136,41 @@ function scheduleHitNote(note: (typeof HIT_SOUND_NOTES)[number]): void {
 
 function playPendingHitNotes(): void {
   pendingHitNotes.splice(0).forEach(scheduleHitNote)
+}
+
+function playTurnReminderNotes(): void {
+  TURN_REMINDER_NOTES.forEach(scheduleHitNote)
+}
+
+function playPendingTurnReminder(): void {
+  const turnNumber = pendingTurnReminderTurnNumber
+  pendingTurnReminderTurnNumber = null
+
+  const currentGame = game.value
+  if (
+    turnNumber === null ||
+    !currentGame ||
+    currentGame.turnNumber !== turnNumber ||
+    currentGame.currentPlayerId !== props.playerId
+  ) {
+    return
+  }
+
+  playTurnReminderNotes()
+}
+
+function playTurnReminder(): void {
+  const currentGame = game.value
+  if (!currentGame || currentGame.currentPlayerId !== props.playerId) {
+    return
+  }
+
+  if (!isHitAudioReady) {
+    pendingTurnReminderTurnNumber = currentGame.turnNumber
+    return
+  }
+
+  playTurnReminderNotes()
 }
 
 function unlockHitAudio(): void {
@@ -147,6 +188,7 @@ function unlockHitAudio(): void {
       window.removeEventListener('pointerdown', unlockHitAudio)
       window.removeEventListener('keydown', unlockHitAudio)
       playPendingHitNotes()
+      playPendingTurnReminder()
     })
     .catch((error: unknown) => {
       hitAudioStartPromise = null
@@ -221,6 +263,7 @@ onUnmounted(() => {
   window.removeEventListener('pointerdown', unlockHitAudio)
   window.removeEventListener('keydown', unlockHitAudio)
   isHitAudioDisposed = true
+  pendingTurnReminderTurnNumber = null
   pendingHitNotes.length = 0
   hitSynth.dispose()
 
@@ -238,6 +281,37 @@ const ownGamePlayer = computed(() => {
 const isMyTurn = computed(() => {
   return Boolean(game.value && game.value.currentPlayerId === props.playerId)
 })
+watch(
+  () => ({
+    turnNumber: game.value?.turnNumber ?? null,
+    currentPlayerId: game.value?.currentPlayerId ?? null,
+    playerId: props.playerId,
+  }),
+  (turn, previousTurn) => {
+    if (
+      pendingTurnReminderTurnNumber !== null &&
+      (
+        pendingTurnReminderTurnNumber !== turn.turnNumber ||
+        turn.currentPlayerId !== turn.playerId
+      )
+    ) {
+      pendingTurnReminderTurnNumber = null
+    }
+
+    if (
+      turn.turnNumber !== null &&
+      turn.currentPlayerId === turn.playerId &&
+      (
+        turn.turnNumber !== previousTurn?.turnNumber ||
+        turn.currentPlayerId !== previousTurn?.currentPlayerId ||
+        turn.playerId !== previousTurn?.playerId
+      )
+    ) {
+      playTurnReminder()
+    }
+  },
+  { immediate: true },
+)
 const remainingTurnSeconds = computed(() => {
   const deadlineAt = game.value?.turnDeadlineAt
   return deadlineAt == null
@@ -290,6 +364,30 @@ const visibleMelds = computed<DraftMeld[]>(() => {
     tiles: meld.tiles,
   }))
 })
+const previewChangedMeldSignatures = computed(() => {
+  if (!isEditing.value) {
+    return new Set<string>()
+  }
+
+  return new Set(
+    draftMelds.value
+      .filter((meld) => {
+        return !originalMelds.value.some((originalMeld) => {
+          return areRummikubMeldsEqual(originalMeld, meld)
+        })
+      })
+      .map((meld) => getTileIdsSignature(meld.tiles.map((tile) => tile.id))),
+  )
+})
+
+const changedMeldSignatures = computed(() => {
+  return new Set(
+    [
+      ...(game.value?.lastTurnChangedMelds ?? []).map(getTileIdsSignature),
+      ...previewChangedMeldSignatures.value,
+    ],
+  )
+})
 const visibleHand = computed(() => {
   return sortHand(
     isEditing.value ? draftHand.value : privateHand.value,
@@ -334,52 +432,6 @@ const draftHasAllOriginalTableTiles = computed(() => {
   const currentTileIds = new Set(draftMelds.value.flatMap((meld) => meld.tiles.map((tile) => tile.id)))
   return [...originalTableTileIds.value].every((tileId) => currentTileIds.has(tileId))
 })
-const draftPreservesJokers = computed(() => {
-  const currentTiles = draftMelds.value.flatMap((meld) => meld.tiles)
-  const currentTileById = new Map(currentTiles.map((tile) => [tile.id, tile]))
-  const reservedReplacementIds = new Set<number>()
-
-  for (const meld of originalMelds.value) {
-    for (const tile of meld.tiles) {
-      if (tile.kind !== 'joker') {
-        continue
-      }
-
-      const replacement = currentTileById.get(tile.id)
-      if (!replacement || replacement.kind !== 'joker') {
-        return false
-      }
-      const remainsInOriginalMeld = draftMelds.value.some((draftMeld) => {
-        const draftJoker = draftMeld.tiles.find((candidate) => candidate.id === tile.id)
-        return (
-          draftJoker?.kind === 'joker' &&
-          sameFace(tile.representedAs, draftJoker.representedAs) &&
-          meld.tiles.every((originalTile) => {
-            return draftMeld.tiles.some((candidate) => candidate.id === originalTile.id)
-          })
-        )
-      })
-      if (remainsInOriginalMeld) {
-        continue
-      }
-
-      const replacementTile = currentTiles.find((candidate) => {
-        return (
-          originalHandTileIds.value.has(candidate.id) &&
-          !reservedReplacementIds.has(candidate.id) &&
-          candidate.kind === 'number' &&
-          sameFace({ color: candidate.color, value: candidate.value }, tile.representedAs)
-        )
-      })
-      if (!replacementTile) {
-        return false
-      }
-      reservedReplacementIds.add(replacementTile.id)
-    }
-  }
-
-  return true
-})
 const canSubmitDraft = computed(() => {
   const currentGame = game.value
   const ownPlayer = ownGamePlayer.value
@@ -391,8 +443,7 @@ const canSubmitDraft = computed(() => {
     draftMelds.value.length === 0 ||
     invalidMeldCount.value > 0 ||
     !draftHasAllOriginalTableTiles.value ||
-    usedHandTileCount.value === 0 ||
-    !draftPreservesJokers.value
+    usedHandTileCount.value === 0
   ) {
     return false
   }
@@ -422,6 +473,22 @@ watch(
     ) {
       return
     }
+
+    const previousHandIds = new Set(privateHand.value.map((tile) => tile.id))
+    const addedTiles = event.payload.hand.filter((tile) => !previousHandIds.has(tile.id))
+    if (
+      privateHand.value.length > 0 &&
+      event.payload.hand.length === privateHand.value.length + 1 &&
+      addedTiles.length === 1
+    ) {
+      latestDrawnTileId.value = addedTiles[0]!.id
+    } else if (
+      latestDrawnTileId.value !== null &&
+      !event.payload.hand.some((tile) => tile.id === latestDrawnTileId.value)
+    ) {
+      latestDrawnTileId.value = null
+    }
+
     privateHand.value = sortHand(event.payload.hand)
   },
   { immediate: true },
@@ -527,8 +594,20 @@ function getMeldTiles(meld: DraftMeld): RummikubBoardTile[] {
   })
 }
 
-function sameFace(left: RummikubFace, right: RummikubFace): boolean {
-  return left.color === right.color && left.value === right.value
+function getTileIdsSignature(tileIds: readonly number[]): string {
+  return [...tileIds].sort((left, right) => left - right).join(',')
+}
+
+function isMeldChanged(meld: DraftMeld): boolean {
+  return changedMeldSignatures.value.has(
+    getTileIdsSignature(meld.tiles.map((tile) => tile.id)),
+  )
+}
+
+function isMeldPreviewChanged(meld: DraftMeld): boolean {
+  return previewChangedMeldSignatures.value.has(
+    getTileIdsSignature(meld.tiles.map((tile) => tile.id)),
+  )
 }
 
 function beginEdit(): void {
@@ -571,7 +650,21 @@ function cancelEdit(syncComboPreview = true): void {
   originalHandTileIds.value = new Set()
   originalMelds.value = []
   originalTableTileIds.value = new Set()
-  lastComboSignature = null
+  lastDraftSignature = null
+}
+
+function getDraftMove(): RummikubMove {
+  return {
+    melds: draftMelds.value.map((meld) => meld.tiles.map((tile) => tile.id)),
+    jokers: draftMelds.value.flatMap((meld) => {
+      return meld.tiles
+        .filter((tile): tile is BoardJoker => tile.kind === 'joker')
+        .map((tile) => ({
+          tileId: tile.id,
+          representedAs: { ...tile.representedAs },
+        }))
+    }),
+  }
 }
 
 function publishComboPreview(force = false): void {
@@ -585,15 +678,20 @@ function publishComboPreview(force = false): void {
     .filter((tile) => originalHandTileIds.value.has(tile.id))
     .map((tile) => tile.id)
     .sort((left, right) => left - right)
-  const signature = tileIds.join(',')
-  if (!force && signature === lastComboSignature) {
+  const move = getDraftMove()
+  const signature = JSON.stringify(move)
+  if (!force && signature === lastDraftSignature) {
     return
   }
 
-  lastComboSignature = signature
+  lastDraftSignature = signature
   emit('game-action', 'update_combo', {
     turnNumber: currentGame.turnNumber,
     tileIds,
+    move: {
+      melds: move.melds,
+      jokers: move.jokers,
+    },
   })
 }
 
@@ -728,6 +826,7 @@ function updateJokerFace(tileId: number, face: RummikubFace): void {
         : tile
     }),
   }))
+  publishComboPreview()
 }
 
 function changeJokerColor(tileId: number, event: Event): void {
@@ -761,18 +860,11 @@ function submitTurn(): void {
     return
   }
 
-  const move: Record<string, unknown> = {
-    melds: draftMelds.value.map((meld) => meld.tiles.map((tile) => tile.id)),
-    jokers: draftMelds.value.flatMap((meld) => {
-      return meld.tiles
-        .filter((tile): tile is BoardJoker => tile.kind === 'joker')
-        .map((tile) => ({
-          tileId: tile.id,
-          representedAs: tile.representedAs,
-        }))
-    }),
-  } satisfies RummikubMove
-  emit('game-action', 'play_turn', move)
+  const move = getDraftMove()
+  emit('game-action', 'play_turn', {
+    melds: move.melds,
+    jokers: move.jokers,
+  })
 }
 
 function drawOrPass(): void {
@@ -799,7 +891,7 @@ function drawOrPass(): void {
         <p v-else-if="isMyTurn">選擇手牌與桌面牌，重排成合法組合並出牌。</p>
         <p v-else>可隨時查看自己的手牌；輪到你時再開始整理。</p>
         <p v-if="remainingTurnSeconds === 0" class="rummikub-timeout-message" role="status">
-          {{ game?.drawPileCount ? '時間到，未提交的桌面編輯將還原並自動抽牌。' : '時間到且牌堆已空，系統正自動跳過。' }}
+          時間到，合法的桌面草稿會自動確認；否則還原編輯並自動抽牌或跳過。
         </p>
       </div>
       <div class="rummikub-status-metrics">
@@ -883,11 +975,17 @@ function drawOrPass(): void {
           v-for="(meld, index) in visibleMelds"
           :key="meld.id"
           class="rummikub-meld"
-          :class="{ 'is-invalid': isEditing && !isValidRummikubMeld(meld.tiles) }"
+          :class="{
+            'is-invalid': isEditing && !isValidRummikubMeld(meld.tiles),
+            'is-changed': isMeldChanged(meld),
+          }"
         >
           <header class="rummikub-meld-heading">
             <strong>組合 {{ index + 1 }}</strong>
             <span v-if="isEditing && !isValidRummikubMeld(meld.tiles)">尚未完成</span>
+            <span v-else-if="isMeldChanged(meld)" class="rummikub-meld-change-label">
+              {{ isMeldPreviewChanged(meld) ? '異動預覽' : '上次異動' }}
+            </span>
             <span v-else-if="isEditing">合法組合</span>
             <button
               v-if="isEditing"
@@ -931,11 +1029,12 @@ function drawOrPass(): void {
       class="rummikub-panel rummikub-hand-panel"
       :class="{
         'is-editing': isEditing,
-        'is-turn-expiring': hasTurnTimer && remainingTurnSeconds !== null && remainingTurnSeconds <= 10,
+        'is-my-turn': isMyTurn,
+        'is-turn-expiring': isMyTurn && hasTurnTimer && remainingTurnSeconds !== null && remainingTurnSeconds <= 10,
       }"
     >
       <div
-        v-if="hasTurnTimer"
+        v-if="hasTurnTimer && isMyTurn"
         class="rummikub-turn-progress"
         role="progressbar"
         aria-label="本回合剩餘時間"
@@ -1011,6 +1110,7 @@ function drawOrPass(): void {
             {
               'is-selected': isEditing && selectedTileIds.includes(tile.id),
               'is-joker': tile.kind === 'joker',
+              'is-latest-draw': tile.id === latestDrawnTileId,
             },
           ]"
           type="button"
@@ -1055,9 +1155,6 @@ function drawOrPass(): void {
       <div v-if="isEditing" class="rummikub-draft-status" role="status">
         <span v-if="invalidMeldCount > 0">
           還有 {{ invalidMeldCount }} 組不合法；每組至少 3 張且需符合 Group 或 Run。
-        </span>
-        <span v-else-if="!draftPreservesJokers">
-          換回桌面 Joker 時，請用原本代表的實體牌替換。
         </span>
         <span v-else-if="usedHandTileCount === 0">每回合至少要打出一張自己的手牌。</span>
         <span v-else-if="!ownGamePlayer?.hasOpened && registrationPoints < 30">
@@ -1140,7 +1237,7 @@ function drawOrPass(): void {
 
           <section class="rummikub-settings-block" aria-labelledby="rummikub-volume-title">
             <div class="rummikub-settings-block-heading">
-              <label id="rummikub-volume-title" for="rummikub-hit-volume">Hit 音效音量</label>
+              <label id="rummikub-volume-title" for="rummikub-hit-volume">Hit／回合提醒音量</label>
               <output for="rummikub-hit-volume">
                 {{ hitVolume === 0 ? '靜音' : `${hitVolume}%` }}
               </output>
@@ -1674,9 +1771,11 @@ function drawOrPass(): void {
 
 .rummikub-meld-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
   gap: 8px;
   max-height: 270px;
-  overflow-x: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .rummikub-meld {
@@ -1685,6 +1784,12 @@ function drawOrPass(): void {
   border: 1px solid #ece9df;
   border-radius: 12px;
   background: #fafaf6;
+}
+
+.rummikub-meld.is-changed {
+  border-color: #8a9fc6;
+  background: #f7f9fe;
+  box-shadow: 0 0 0 1px rgb(138 159 198 / 26%);
 }
 
 .rummikub-meld.is-invalid {
@@ -1702,6 +1807,11 @@ function drawOrPass(): void {
 .rummikub-meld-heading strong {
   color: #53594d;
   font-size: 10px;
+}
+
+.rummikub-meld-change-label {
+  color: #617cae;
+  font-weight: 700;
 }
 
 .rummikub-meld-target {
@@ -1945,6 +2055,22 @@ function drawOrPass(): void {
 .rummikub-game.hand-theme-mist .rummikub-tile.is-selected {
   border-color: #8799bb;
   box-shadow: 0 0 0 2px rgb(135 153 187 / 22%), 0 5px 11px rgb(50 49 42 / 12%);
+}
+
+.rummikub-game.hand-theme-sage .rummikub-tile.is-latest-draw {
+  z-index: 1;
+  box-shadow: 0 0 0 4px rgb(119 158 109 / 48%), 0 7px 16px rgb(50 49 42 / 26%);
+}
+
+.rummikub-game.hand-theme-mist .rummikub-tile.is-latest-draw {
+  z-index: 1;
+  box-shadow: 0 0 0 4px rgb(135 153 187 / 48%), 0 7px 16px rgb(50 49 42 / 26%);
+}
+
+.rummikub-game.hand-theme-sage .rummikub-hand-panel.is-my-turn,
+.rummikub-game.hand-theme-mist .rummikub-hand-panel.is-my-turn {
+  border-color: #7f9f73;
+  box-shadow: 0 0 0 3px rgb(127 159 115 / 18%), 0 8px 24px rgb(64 57 37 / 9%);
 }
 
 .rummikub-settings-dialog {
@@ -2311,6 +2437,10 @@ function drawOrPass(): void {
 
   .rummikub-panel {
     padding: 10px;
+  }
+
+  .rummikub-meld-list {
+    grid-template-columns: 1fr;
   }
 
   .rummikub-hand-panel .rummikub-panel-heading {

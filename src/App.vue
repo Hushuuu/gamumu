@@ -783,7 +783,13 @@ function connectionLabel(): string {
       </section>
     </main>
 
-    <main v-else class="room-main">
+    <main
+      v-else
+      class="room-main"
+      :class="{
+        'room-main-rummikub': snapshot?.status === 'playing' && selectedGame.id === 'rummikub',
+      }"
+    >
       <div class="room-toolbar">
         <button class="back-button" type="button" @click="leaveRoom">
           <span aria-hidden="true">←</span>
@@ -1718,6 +1724,10 @@ function connectionLabel(): string {
   flex: 1;
   margin-inline: auto;
   padding: 21px 0 48px;
+}
+
+.room-main-rummikub {
+  width: min(100% - 36px, 1180px);
 }
 
 .room-toolbar {
