@@ -6,6 +6,7 @@ import {
   getRummikubBoardTilePoints,
   isRummikubColor,
   isRummikubPrivateState,
+  isRummikubSettings,
   isValidRummikubMeld,
   RUMMIKUB_PRIVATE_EVENT,
 } from '../../../shared/games/rummikub'
@@ -52,12 +53,12 @@ const HAND_THEMES = [
   {
     id: 'sage',
     name: '晨霧鼠尾草',
-    description: '暖白陶瓷牌面與細緻金線花角',
+    description: '',
   },
   {
     id: 'mist',
     name: '月光霧藍',
-    description: '霧藍瓷白牌面與低調銀藍雙框',
+    description: '',
   },
 ] as const satisfies readonly {
   id: RummikubHandTheme
@@ -83,6 +84,7 @@ const hitSynth = new Tone.Synth({
 
 const props = defineProps<{
   game: GameView
+  gameSettings: Record<string, unknown>
   gameEvent: GameEvent | null
   players: PlayerView[]
   playerId: string
@@ -241,6 +243,25 @@ const remainingTurnSeconds = computed(() => {
   return deadlineAt == null
     ? null
     : Math.max(0, Math.ceil((deadlineAt - clockNow.value) / 1000))
+})
+const turnTimeSeconds = computed(() => {
+  return isRummikubSettings(props.gameSettings)
+    ? props.gameSettings.turnTimeSeconds
+    : null
+})
+const hasTurnTimer = computed(() => {
+  return turnTimeSeconds.value !== null && game.value?.turnDeadlineAt != null
+})
+const turnProgressPercent = computed(() => {
+  const durationSeconds = turnTimeSeconds.value
+  const deadlineAt = game.value?.turnDeadlineAt
+  if (durationSeconds === null || deadlineAt == null) {
+    return 0
+  }
+
+  const durationMs = durationSeconds * 1000
+  const remainingMs = Math.max(0, Math.min(durationMs, deadlineAt - clockNow.value))
+  return (remainingMs / durationMs) * 100
 })
 const turnCountdown = computed(() => {
   if (remainingTurnSeconds.value === null) {
@@ -908,8 +929,25 @@ function drawOrPass(): void {
 
     <section
       class="rummikub-panel rummikub-hand-panel"
-      :class="{ 'is-editing': isEditing }"
+      :class="{
+        'is-editing': isEditing,
+        'is-turn-expiring': hasTurnTimer && remainingTurnSeconds !== null && remainingTurnSeconds <= 10,
+      }"
     >
+      <div
+        v-if="hasTurnTimer"
+        class="rummikub-turn-progress"
+        role="progressbar"
+        aria-label="本回合剩餘時間"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-valuenow="Math.round(turnProgressPercent)"
+      >
+        <span
+          class="rummikub-turn-progress-fill"
+          :style="{ width: `${turnProgressPercent}%` }"
+        ></span>
+      </div>
       <header class="rummikub-panel-heading">
         <div>
           <p class="rummikub-kicker">YOUR RACK</p>
@@ -1759,6 +1797,7 @@ function drawOrPass(): void {
 }
 
 .rummikub-hand-panel {
+  position: relative;
   display: grid;
   gap: 12px;
 }
@@ -1772,6 +1811,31 @@ function drawOrPass(): void {
   align-items: flex-start;
   flex-wrap: wrap;
   margin-bottom: 0;
+}
+
+.rummikub-turn-progress {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 20px;
+  left: 20px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf0e9;
+  pointer-events: none;
+}
+
+.rummikub-turn-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #a8c795, #779d6b);
+  transition: width 1s linear, background 180ms ease;
+}
+
+.rummikub-hand-panel.is-turn-expiring .rummikub-turn-progress-fill {
+  background: linear-gradient(90deg, #e9b16e, #d47b57);
 }
 
 .rummikub-editor-actions {

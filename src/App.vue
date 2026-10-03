@@ -1031,6 +1031,7 @@ function connectionLabel(): string {
               v-if="selectedGame.id === 'rummikub'"
               :is="gameComponents.playing"
               :game="snapshot.game"
+              :game-settings="snapshot.gameSettings"
               :game-event="gameEvent"
               :players="snapshot.players"
               :player-id="playerId"
