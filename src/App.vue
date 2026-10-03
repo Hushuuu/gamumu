@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { AVATARS, type AvatarId } from '../shared/avatars'
 import {
   DEFAULT_GAME_ID,
@@ -57,6 +57,10 @@ const betaSessionExpiresAt = ref(0)
 const betaStatus = ref<'checking' | 'locked' | 'authorized' | 'error'>('checking')
 const betaError = ref('')
 const isBetaLoading = ref(false)
+const isInviteJoinPromptOpen = ref(false)
+const shouldPromptForInviteJoin = ref(false)
+const inviteJoinDialog = ref<HTMLDialogElement | null>(null)
+const inviteJoinNameInput = ref<HTMLInputElement | null>(null)
 const isLoading = ref(false)
 const pageError = ref('')
 const pageNotice = ref('')
@@ -211,6 +215,27 @@ watch(betaAccessExpired, (expired) => {
   }
 })
 
+watch(isInviteJoinPromptOpen, (isOpen) => {
+  if (!isOpen) {
+    return
+  }
+
+  void nextTick(() => {
+    if (!isInviteJoinPromptOpen.value) {
+      return
+    }
+
+    const dialog = inviteJoinDialog.value
+    if (!dialog) {
+      return
+    }
+    if (!dialog.open) {
+      dialog.showModal()
+    }
+    inviteJoinNameInput.value?.focus()
+  })
+})
+
 onMounted(() => {
   void initializeBetaSession()
 })
@@ -225,9 +250,29 @@ onUnmounted(() => {
 })
 
 async function initializeBetaSession(): Promise<void> {
-  const code = normalizeRoomCode(new URLSearchParams(window.location.search).get('room') ?? '')
-  if (/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/.test(code)) {
-    roomCodeInput.value = code
+  const url = new URL(window.location.href)
+  const roomCode = normalizeRoomCode(url.searchParams.get('room') ?? '')
+  const hasValidRoomCode = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/.test(roomCode)
+  const betaCodeFromUrl = (
+    url.searchParams.get('beta')?.trim() ||
+    url.searchParams.get('betaCode')?.trim() ||
+    ''
+  )
+  const hasBetaCodeQuery = url.searchParams.has('beta') || url.searchParams.has('betaCode')
+
+  if (hasValidRoomCode) {
+    roomCodeInput.value = roomCode
+  }
+  if (hasBetaCodeQuery) {
+    url.searchParams.delete('beta')
+    url.searchParams.delete('betaCode')
+    window.history.replaceState(null, '', url)
+  }
+  if (betaCodeFromUrl) {
+    shouldPromptForInviteJoin.value = hasValidRoomCode
+    betaCode.value = betaCodeFromUrl
+    await unlockBeta()
+    return
   }
 
   const storedBetaSession = loadBetaSession()
@@ -267,6 +312,7 @@ async function unlockBeta(): Promise<void> {
   }
 
   betaError.value = ''
+  betaStatus.value = 'checking'
   isBetaLoading.value = true
   try {
     const session = await redeemBetaCode(betaCode.value.trim())
@@ -278,6 +324,7 @@ async function unlockBeta(): Promise<void> {
     }
     resumeRoomFromUrl()
   } catch (error) {
+    betaStatus.value = 'locked'
     betaError.value = errorMessageFrom(error)
   } finally {
     isBetaLoading.value = false
@@ -304,6 +351,7 @@ function lockBetaSession(message: string): void {
     betaExpiryTimer = undefined
   }
 
+  cancelInviteJoinPrompt()
   const roomCode = activeRoomCode.value
   betaSessionToken.value = ''
   betaSessionExpiresAt.value = 0
@@ -337,7 +385,19 @@ function resumeRoomFromUrl(): void {
   }
   if (stored.token) {
     enterRoom(code, stored.token)
+    return
   }
+
+  if (shouldPromptForInviteJoin.value) {
+    shouldPromptForInviteJoin.value = false
+    pageError.value = ''
+    isInviteJoinPromptOpen.value = true
+  }
+}
+
+function cancelInviteJoinPrompt(): void {
+  shouldPromptForInviteJoin.value = false
+  isInviteJoinPromptOpen.value = false
 }
 
 async function createRoom(): Promise<void> {
@@ -412,6 +472,8 @@ async function joinRoom(): Promise<void> {
 }
 
 function enterRoom(code: string, token: string): void {
+  shouldPromptForInviteJoin.value = false
+  isInviteJoinPromptOpen.value = false
   activeRoomCode.value = code
   roomCodeInput.value = code
   pageError.value = ''
@@ -637,7 +699,7 @@ function connectionLabel(): string {
               id="beta-code"
               v-model="betaCode"
               class="text-input beta-code-input"
-              type="password"
+              type="text"
               autocomplete="off"
               autocapitalize="characters"
               spellcheck="false"
@@ -1036,6 +1098,55 @@ function connectionLabel(): string {
       </template>
     </main>
 
+    <Teleport to="body">
+      <dialog
+        v-if="isInviteJoinPromptOpen"
+        ref="inviteJoinDialog"
+        class="invite-join-dialog"
+        aria-labelledby="invite-join-title"
+        @cancel.prevent="cancelInviteJoinPrompt"
+        @click.self="cancelInviteJoinPrompt"
+      >
+        <form class="invite-join-content" @submit.prevent="joinRoom">
+          <p class="eyebrow">加入朋友的房間</p>
+          <h2 id="invite-join-title">先留個稱呼</h2>
+          <p class="invite-join-description">
+            輸入暱稱後，就會加入房間 <strong>{{ normalizedRoomCode }}</strong>。
+          </p>
+          <label class="field-label" for="invite-player-name">大家會怎麼稱呼你？</label>
+          <input
+            id="invite-player-name"
+            ref="inviteJoinNameInput"
+            v-model="playerName"
+            class="text-input"
+            type="text"
+            autocomplete="nickname"
+            maxlength="20"
+            placeholder="輸入暱稱，最多 20 個字"
+            :disabled="isLoading"
+          />
+          <p v-if="pageError" class="inline-message error-message" role="alert">{{ pageError }}</p>
+          <div class="invite-join-actions">
+            <button
+              class="button button-secondary"
+              type="button"
+              :disabled="isLoading"
+              @click="cancelInviteJoinPrompt"
+            >
+              取消
+            </button>
+            <button
+              class="button button-primary"
+              type="submit"
+              :disabled="isLoading || !validName || !hasBetaAccess"
+            >
+              {{ isLoading ? '加入中…' : '確定加入' }}
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </Teleport>
+
     <footer class="site-footer">
       <span>GAMUMU <span aria-hidden="true">✦</span> 把日常變成派對</span>
       <span>一起玩，才好玩。</span>
@@ -1303,6 +1414,58 @@ function connectionLabel(): string {
   border-radius: 26px;
   background: var(--surface);
   box-shadow: 0 16px 42px rgba(60, 50, 127, 0.08);
+}
+
+.invite-join-dialog {
+  width: min(420px, calc(100vw - 32px));
+  max-width: none;
+  padding: 0;
+  border: 1px solid rgba(94, 83, 153, 0.14);
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 80px rgba(21, 18, 38, 0.24);
+}
+
+.invite-join-dialog::backdrop {
+  background: rgb(25 22 39 / 64%);
+  backdrop-filter: blur(3px);
+}
+
+.invite-join-content {
+  display: grid;
+  gap: 10px;
+  padding: 28px;
+}
+
+.invite-join-content .eyebrow,
+.invite-join-content h2,
+.invite-join-description {
+  margin: 0;
+}
+
+.invite-join-content h2 {
+  font-size: 24px;
+  letter-spacing: -0.04em;
+}
+
+.invite-join-description {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.invite-join-description strong {
+  color: var(--purple);
+  letter-spacing: 0.08em;
+}
+
+.invite-join-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
 }
 
 .entry-card {

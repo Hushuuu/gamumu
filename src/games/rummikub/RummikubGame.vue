@@ -86,7 +86,7 @@ const pendingHitNotes: (typeof HIT_SOUND_NOTES)[number][] = []
 function scheduleHitNote(note: (typeof HIT_SOUND_NOTES)[number]): void {
   const playAt = Math.max(Tone.now(), nextHitSoundAt)
   hitSynth.triggerAttackRelease(note, '16n', playAt)
-  nextHitSoundAt = playAt + 0.14
+  nextHitSoundAt = playAt + 0.333
 }
 
 function playPendingHitNotes(): void {
