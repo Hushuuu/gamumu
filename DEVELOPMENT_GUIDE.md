@@ -181,7 +181,7 @@ worker/src/
     blank/                   空白測試遊戲邏輯及獨立保存狀態型別
 
 scripts/
-  dev-bots.mjs               本機測試用機器人（加入房間、自動 Ready、自動玩狼人殺）
+  dev-bots.mjs               本機測試用機器人（加入房間、自動 Ready、自動玩阿瓦隆、狼人殺與拉密）
 
 wrangler.jsonc                Worker、Durable Object binding 與 migration 設定
 vite.config.ts                Vite 設定、前端 base path 與本機 API/WebSocket proxy
@@ -220,7 +220,7 @@ npm run build         # Vue TypeScript 檢查並建置前端
 npm run worker:check  # 產生 Wrangler 型別並檢查 Worker TypeScript
 ```
 
-目前 `package.json` 沒有 test 或 lint script。多人測試技巧：開發模式（`npm run dev`）的房間憑證存在 `sessionStorage`，同一個瀏覽器的每個分頁都是獨立玩家；設定環境變數 `BETA_CODE` 後，再用 `npm run dev:bots -- <房間代碼> [數量]`（`scripts/dev-bots.mjs`）讓機器人加入房間、自動 Ready 並自動遊玩狼人殺，就能只開一個分頁測試完整流程（Ctrl+C 讓機器人離房）。完成房間／遊戲變更後，除了執行上述檢查，也應以多個瀏覽器手動驗證建立、加入、選頭像、Ready、遊戲選擇、開始、作答或結束、重新載入重連及離開流程。你畫我猜另需驗證繪圖同步、多人猜中計分、跳過、每人多輪及繪圖者斷線。狼人殺另需驗證 6–12 人（狼王守衛版 10–12 人）的角色配置、夜間行動限制（含守衛限制、同守同救）、獵人開槍、平票、投票逾時採用已選目標／未選視為棄票、公告時間設定、狼人數大於好人時在投票前獲勝、各階段倒數進度條、勝負與分數，以及私人身分不外洩。
+目前 `package.json` 沒有 test 或 lint script。多人測試技巧：開發模式（`npm run dev`）的房間憑證存在 `sessionStorage`，同一個瀏覽器的每個分頁都是獨立玩家；設定環境變數 `BETA_CODE` 後，再用 `npm run dev:bots -- <房間代碼> [數量]`（`scripts/dev-bots.mjs`）讓機器人加入房間、自動 Ready 並自動遊玩阿瓦隆（隊伍投票一律同意，邪惡陣營任務牌隨機選成功或失敗）、狼人殺與拉密，就能只開一個分頁測試完整流程（Ctrl+C 讓機器人離房）。完成房間／遊戲變更後，除了執行上述檢查，也應以多個瀏覽器手動驗證建立、加入、選頭像、Ready、遊戲選擇、開始、作答或結束、重新載入重連及離開流程。你畫我猜另需驗證繪圖同步、多人猜中計分、跳過、每人多輪及繪圖者斷線。狼人殺另需驗證 6–12 人（狼王守衛版 10–12 人）的角色配置、夜間行動限制（含守衛限制、同守同救）、獵人開槍、平票、投票逾時採用已選目標／未選視為棄票、公告時間設定、狼人數大於好人時在投票前獲勝、各階段倒數進度條、勝負與分數，以及私人身分不外洩。
 
 ## 設定與部署入口
 

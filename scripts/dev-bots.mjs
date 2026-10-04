@@ -1,4 +1,4 @@
-// 本機測試用：讓機器人加入既有房間、自動 Ready 並自動遊玩狼人殺與拉密。
+// 本機測試用：讓機器人加入既有房間、自動 Ready 並自動遊玩阿瓦隆、狼人殺與拉密。
 // 用法：設定 BETA_CODE 後執行 npm run dev:bots -- <房間代碼> <機器人數量=5> <APIURL> <BETA_CODE>
 // 環境變數 API_URL 可指定 Worker 位置（預設 http://127.0.0.1:8787）。Ctrl+C 會讓機器人離開房間。
 
@@ -17,6 +17,7 @@ if (!code || !Number.isInteger(count) || count < 1 || !BETA_CODE) {
 
 const pick = (items) => items[Math.floor(Math.random() * items.length)]
 const later = (fn, min = 300, max = 1500) => setTimeout(fn, min + Math.random() * (max - min))
+const AVALON_PRIVATE_EVENT = 'avalon-private-state'
 const RUMMIKUB_COLORS = ['red', 'blue', 'black', 'yellow']
 const RUMMIKUB_SEARCH_LIMIT = 50000
 const RUMMIKUB_FACES = RUMMIKUB_COLORS.flatMap((color) =>
@@ -26,6 +27,17 @@ const RUMMIKUB_SHAPES_BY_FACE = new Map()
 
 function rummikubFaceKey(face) {
   return `${face.color}/${face.value}`
+}
+
+function pickUnique(items, count) {
+  const shuffled = [...items]
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const otherIndex = Math.floor(Math.random() * (index + 1))
+    const current = shuffled[index]
+    shuffled[index] = shuffled[otherIndex]
+    shuffled[otherIndex] = current
+  }
+  return shuffled.slice(0, count)
 }
 
 function addRummikubShape(faces) {
@@ -490,7 +502,9 @@ class Bot {
     this.id = credentials.playerId
     this.state = null
     this.priv = null
+    this.avalonPriv = null
     this.lastKey = ''
+    this.lastAvalonKey = ''
     this.lastRummikubTurnKey = ''
     this.ws = new WebSocket(
       `${API.replace(/^http/, 'ws')}/api/rooms/${credentials.code}/ws`,
@@ -517,9 +531,17 @@ class Bot {
       this.think()
     } else if (
       message.type === 'game_event' &&
-      (message.event === 'private-state' || message.event === 'rummikub-private-state')
+      (
+        message.event === 'private-state' ||
+        message.event === 'rummikub-private-state' ||
+        message.event === AVALON_PRIVATE_EVENT
+      )
     ) {
-      this.priv = message.payload
+      if (message.event === AVALON_PRIVATE_EVENT) {
+        this.avalonPriv = message.payload
+      } else {
+        this.priv = message.payload
+      }
       this.think(message.event)
     } else if (message.type === 'kicked' || message.type === 'room_expired') {
       console.log(`[${this.name}] ${message.type}`)
@@ -531,6 +553,10 @@ class Bot {
     const state = this.state
     if (state?.status !== 'playing' || state.game?.gameId !== 'rummikub') {
       this.lastRummikubTurnKey = ''
+    }
+    if (state?.status !== 'playing' || state.game?.gameId !== 'avalon') {
+      this.lastAvalonKey = ''
+      this.avalonPriv = null
     }
     const me = state?.players.find((player) => player.id === this.id)
     if (!me) return
@@ -545,11 +571,76 @@ class Bot {
 
     if (game.gameId === 'word-guess' && game.phase === 'guessing' && !me.answered) {
       later(() => this.send({ type: 'submit_answer', answer: 'bot' }), 500, 4000)
+    } else if (game.gameId === 'avalon') {
+      this.thinkAvalon(game)
     } else if (game.gameId === 'werewolf') {
       this.thinkWerewolf(game)
     } else if (game.gameId === 'rummikub' && privateEvent === 'rummikub-private-state') {
       this.thinkRummikub(game)
     }
+  }
+
+  thinkAvalon(game) {
+    const phaseKey = (currentGame) => [
+      currentGame.phase,
+      currentGame.missionNumber,
+      currentGame.leaderId,
+      currentGame.rejectedTeams,
+      currentGame.teamIds.join(','),
+      currentGame.lakeHolderId ?? '',
+      currentGame.lakeVisitedIds.length,
+    ].join('/')
+    const actionKey = phaseKey(game)
+    let action = ''
+    let payload = {}
+
+    if (game.phase === 'role-reveal') {
+      action = 'confirm-role'
+    } else if (game.phase === 'team-selection' && game.leaderId === this.id) {
+      action = 'propose-team'
+      payload = { teamIds: pickUnique(game.seatIds, game.teamSize) }
+    } else if (game.phase === 'team-vote') {
+      action = 'vote-team'
+      payload = { approve: true }
+    } else if (game.phase === 'mission' && game.teamIds.includes(this.id)) {
+      const priv = this.avalonPriv
+      if (!priv || priv.stateVersion !== game.stateVersion) return
+      action = 'submit-mission'
+      payload = {
+        card: priv.camp === 'evil' && Math.random() < 0.5 ? 'fail' : 'success',
+      }
+    } else if (game.phase === 'lake-check' && game.lakeHolderId === this.id) {
+      const targets = game.seatIds.filter((id) => !game.lakeVisitedIds.includes(id))
+      if (!targets.length) return
+      action = 'check-lake'
+      payload = { targetId: pick(targets) }
+    } else if (game.phase === 'assassination') {
+      const priv = this.avalonPriv
+      if (!priv || priv.stateVersion !== game.stateVersion || priv.roleId !== 'assassin') return
+      const targets = game.seatIds.filter((id) => id !== this.id)
+      if (!targets.length) return
+      action = 'assassinate'
+      payload = { targetId: pick(targets) }
+    }
+
+    if (!action || actionKey === this.lastAvalonKey) return
+    this.lastAvalonKey = actionKey
+
+    later(() => {
+      const currentState = this.state
+      const currentGame = currentState?.game
+      if (
+        currentState?.status !== 'playing' ||
+        currentGame?.gameId !== 'avalon' ||
+        phaseKey(currentGame) !== actionKey
+      ) {
+        return
+      }
+      if (action === 'submit-mission' && !currentGame.teamIds.includes(this.id)) return
+      if (action === 'check-lake' && currentGame.lakeHolderId !== this.id) return
+      if (action === 'assassinate' && this.avalonPriv?.roleId !== 'assassin') return
+      this.action('avalon', action, payload)
+    })
   }
 
   thinkRummikub(game) {
