@@ -52,15 +52,6 @@ function getAvalonKnownEvilIds(playerId, priv) {
   return evilIds
 }
 
-function getAvalonFailThreshold(game) {
-  return game.seatIds.length >= 7 && game.missionNumber === 4 ? 2 : 1
-}
-
-function getAvalonEvilCountOnTeam(game, playerId, priv) {
-  const evilIds = getAvalonKnownEvilIds(playerId, priv)
-  return game.teamIds.filter((id) => evilIds.has(id)).length
-}
-
 function pickAvalonTeam(game, playerId, priv) {
   const teamIds = []
   const knownEvilIds = getAvalonKnownEvilIds(playerId, priv)
@@ -92,27 +83,16 @@ function pickAvalonTeam(game, playerId, priv) {
 }
 
 function shouldApproveAvalonTeam(game, playerId, priv) {
-  const evilCount = getAvalonEvilCountOnTeam(game, playerId, priv)
-  const failThreshold = getAvalonFailThreshold(game)
-  const successfulMissions = game.missions.filter((mission) => mission.outcome === 'success').length
-
-  if (priv.roleId === 'merlin') {
-    if (evilCount >= failThreshold && successfulMissions >= 2) {
-      return false
-    }
-
-    const hiddenEvilIncluded = game.settings.includeMordred || game.settings.includeOberon
-    if (evilCount < failThreshold && !hiddenEvilIncluded) {
-      return true
-    }
-    return Math.random() < 0.5
-  }
-
-  if (priv.roleId === 'assassin' && evilCount >= failThreshold) {
+  if (game.leaderId === playerId) {
     return true
   }
 
-  return Math.random() < 0.5
+  const knownEvilIds = getAvalonKnownEvilIds(playerId, priv)
+  if (priv.roleId === 'merlin' && !game.teamIds.some((id) => knownEvilIds.has(id))) {
+    return true
+  }
+
+  return Math.random() < 0.6
 }
 
 function addRummikubShape(faces) {
