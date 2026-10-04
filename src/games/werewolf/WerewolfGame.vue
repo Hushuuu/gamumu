@@ -12,6 +12,7 @@ import {
 import type { GameEvent, PlayerView } from '../../../shared/protocol'
 import PlayerPicker from './components/PlayerPicker.vue'
 import RoleCard from './components/RoleCard.vue'
+import WerewolfHistoryDialog from './components/WerewolfHistoryDialog.vue'
 import WerewolfMomentOverlay from './components/WerewolfMomentOverlay.vue'
 import WerewolfPhaseIllustration from './components/WerewolfPhaseIllustration.vue'
 import WerewolfRoleIcon from './components/WerewolfRoleIcon.vue'
@@ -53,7 +54,7 @@ const WEREWOLF_MOMENT_OVERLAY_ENABLED = false
 const now = ref(Date.now())
 const privateState = ref<WerewolfPrivateState | null>(null)
 const poisonPick = ref<string | null>(null)
-const votePick = ref<string | null>(null)
+const votePick = ref<string | null | undefined>(undefined)
 const shootPick = ref<string | null>(null)
 const selectedGuessRole = ref<WerewolfRoleId | null>(null)
 const momentQueue = ref<WerewolfMoment[]>([])
@@ -132,7 +133,9 @@ const selected = computed(() => {
     case 'hunter':
       return shootPick.value
     case 'vote':
-      return votePick.value ?? state?.myVote ?? null
+      return votePick.value !== undefined
+        ? votePick.value
+        : (state?.voteSelection ?? state?.myVote ?? null)
     default:
       return null
   }
@@ -344,7 +347,7 @@ watch(
   ],
   () => {
     poisonPick.value = null
-    votePick.value = null
+    votePick.value = undefined
     shootPick.value = null
   },
 )
@@ -365,6 +368,11 @@ function act(action: string, payload: Record<string, unknown>): void {
   if (canAct.value) {
     emit('game-action', action, payload)
   }
+}
+
+function submitVote(targetId: string | null): void {
+  votePick.value = targetId
+  act('cast_vote', { targetId })
 }
 
 function pick(playerId: string): void {
@@ -396,6 +404,7 @@ function pick(playerId: string): void {
       break
     case 'vote':
       votePick.value = playerId
+      act('select_vote', { targetId: playerId })
       break
   }
 }
@@ -476,6 +485,14 @@ function endDiscussion(): void {
           <span>秒</span>
         </div>
       </div>
+
+      <WerewolfHistoryDialog
+        :events="view.publicHistory"
+        :players="props.players"
+        button-label="查看公開紀錄"
+        eyebrow="遊戲資訊"
+        dialog-title="狼人殺公開紀錄"
+      />
 
       <RoleCard :role="priv?.role ?? null" :teammate-names="teammateNames" />
 
@@ -681,13 +698,13 @@ function endDiscussion(): void {
         <WerewolfPhaseIllustration phase="vote" />
         <template v-if="priv?.alive">
           <h3>投票放逐</h3>
-          <p>選擇要放逐的玩家後送出；全員投完會提早結算，票數最高者出局，平票則無人出局。</p>
+          <p>選擇目標後確認；所有在線存活玩家投完會提早結算。時間到時，未確認的已選目標仍會計票，沒選擇則視為棄票。</p>
           <div class="ww-actions">
             <button
               class="button button-primary ww-inline-button"
               type="button"
               :disabled="!canAct || !selected"
-              @click="act('cast_vote', { targetId: selected })"
+              @click="submitVote(selected)"
             >
               {{ priv.hasVoted && selected === priv.myVote ? '已投票（可改選）' : '確認投票' }}
             </button>
@@ -695,7 +712,7 @@ function endDiscussion(): void {
               class="button button-secondary ww-inline-button"
               type="button"
               :disabled="!canAct"
-              @click="act('cast_vote', { targetId: null })"
+              @click="submitVote(null)"
             >
               {{ priv.hasVoted && priv.myVote === null ? '已棄票' : '棄票' }}
             </button>
@@ -712,13 +729,13 @@ function endDiscussion(): void {
         <WerewolfPhaseIllustration phase="pk-vote" />
         <template v-if="priv?.alive">
           <h3>平票 PK 複投</h3>
-          <p>請只在同票候選人中選擇：{{ pkCandidateNames }}。若再次平票，將無人放逐並繼續遊戲。</p>
+          <p>請只在同票候選人中選擇：{{ pkCandidateNames }}。所有在線存活玩家投完會提早結算；時間到時，未確認的已選目標仍會計票，沒選擇則視為棄票。</p>
           <div class="ww-actions">
             <button
               class="button button-primary ww-inline-button"
               type="button"
               :disabled="!canAct || !selected"
-              @click="act('cast_vote', { targetId: selected })"
+              @click="submitVote(selected)"
             >
               {{ priv.hasVoted && selected === priv.myVote ? '已複投（可改選）' : '確認複投' }}
             </button>
@@ -726,7 +743,7 @@ function endDiscussion(): void {
               class="button button-secondary ww-inline-button"
               type="button"
               :disabled="!canAct"
-              @click="act('cast_vote', { targetId: null })"
+              @click="submitVote(null)"
             >
               {{ priv.hasVoted && priv.myVote === null ? '已棄票' : '棄票' }}
             </button>

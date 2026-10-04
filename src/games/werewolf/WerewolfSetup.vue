@@ -26,6 +26,7 @@ const speechMode = ref(DEFAULT_WEREWOLF_SETTINGS.speechMode)
 const speechSeconds = ref(DEFAULT_WEREWOLF_SETTINGS.speechSeconds)
 const voteSeconds = ref(DEFAULT_WEREWOLF_SETTINGS.voteSeconds)
 const nightStepSeconds = ref(DEFAULT_WEREWOLF_SETTINGS.nightStepSeconds)
+const announcementSeconds = ref(DEFAULT_WEREWOLF_SETTINGS.announcementSeconds)
 
 const script = computed(() => {
   return WEREWOLF_SCRIPTS.find((candidate) => candidate.id === scriptId.value) ?? WEREWOLF_SCRIPTS[0]!
@@ -43,7 +44,10 @@ const isValid = computed(() => {
     voteSeconds.value <= 180 &&
     Number.isInteger(nightStepSeconds.value) &&
     nightStepSeconds.value >= 10 &&
-    nightStepSeconds.value <= 60
+    nightStepSeconds.value <= 60 &&
+    Number.isInteger(announcementSeconds.value) &&
+    announcementSeconds.value >= 5 &&
+    announcementSeconds.value <= 60
   )
 })
 const disabled = computed(() => !props.isHost || !props.canConfigure)
@@ -55,6 +59,7 @@ watch(() => props.settings, (settings) => {
   speechSeconds.value = settingNumber(settings.speechSeconds, DEFAULT_WEREWOLF_SETTINGS.speechSeconds)
   voteSeconds.value = settingNumber(settings.voteSeconds, DEFAULT_WEREWOLF_SETTINGS.voteSeconds)
   nightStepSeconds.value = settingNumber(settings.nightStepSeconds, DEFAULT_WEREWOLF_SETTINGS.nightStepSeconds)
+  announcementSeconds.value = settingNumber(settings.announcementSeconds, DEFAULT_WEREWOLF_SETTINGS.announcementSeconds)
 }, { deep: true, immediate: true })
 
 function settingNumber(value: unknown, fallback: number): number {
@@ -66,12 +71,10 @@ function selectScript(event: Event): void {
   if (!(target instanceof HTMLSelectElement) || !isWerewolfScriptId(target.value)) {
     return
   }
-
   scriptId.value = target.value
-  saveSettings()
 }
 
-function saveSettings(): void {
+function applySettings(): void {
   if (disabled.value || !isValid.value) {
     return
   }
@@ -83,6 +86,7 @@ function saveSettings(): void {
     speechSeconds: speechSeconds.value,
     voteSeconds: voteSeconds.value,
     nightStepSeconds: nightStepSeconds.value,
+    announcementSeconds: announcementSeconds.value,
   })
 }
 </script>
@@ -107,7 +111,11 @@ function saveSettings(): void {
       </span>
     </p>
 
-    <form class="draw-settings-form" @submit.prevent="saveSettings">
+    <form
+      class="draw-settings-form"
+      @change="applySettings"
+      @submit.prevent="applySettings"
+    >
       <label v-if="WEREWOLF_SCRIPTS.length > 1">
         <span>劇本</span>
         <select :value="scriptId" :disabled="disabled || !isValid" @change="selectScript">
@@ -140,16 +148,14 @@ function saveSettings(): void {
         <input v-model.number="nightStepSeconds" type="number" min="10" max="60" step="1" :disabled="disabled" />
         <small>10–60 秒</small>
       </label>
-      <button
-        class="button button-secondary draw-settings-save"
-        type="submit"
-        :disabled="disabled || !isValid"
-      >
-        {{ isHost ? '儲存設定' : '由房主設定' }}
-      </button>
+      <label>
+        <span>結果公告時間（秒）</span>
+        <input v-model.number="announcementSeconds" type="number" min="5" max="60" step="1" :disabled="disabled" />
+        <small>5–60 秒，預設 10 秒；套用於天亮、放逐與獵人開槍結果</small>
+      </label>
     </form>
     <p class="draw-settings-note">
-      {{ isHost ? '儲存變更會清除所有人的準備狀態。' : '設定變更後需要重新準備。' }}
+      {{ isHost ? '有效設定變更會自動套用，並清除所有人的準備狀態。' : '設定變更後需要重新準備。' }}
       討論請面對面或自行用語音進行。
     </p>
   </section>

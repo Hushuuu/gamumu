@@ -7,6 +7,7 @@ import {
   type WerewolfPrivateState,
   type WerewolfRoleCounts,
   type WerewolfRoleId,
+  type WerewolfPublicEvent,
   type WerewolfReplayEvent,
   type WerewolfReview,
   type WerewolfSettings,
@@ -19,10 +20,7 @@ import { getScript } from './scripts'
 import type { DeathCause, NightState, StoredWerewolf } from './types'
 
 const ROLE_REVEAL_MS = 12_000
-const DAWN_MS = 6_000
 const HUNTER_SHOT_MS = 20_000
-const HUNTER_RESULT_MS = 4_000
-const VOTE_RESULT_MS = 6_000
 const WIN_SCORE = 100
 const MAX_CATCH_UP_STEPS = 24
 
@@ -51,6 +49,28 @@ function replayLog(game: StoredWerewolf): WerewolfReplayEvent[] {
 
 function recordReplayEvent(game: StoredWerewolf, event: WerewolfReplayEvent): void {
   replayLog(game).push(event)
+}
+
+function publicHistoryFor(game: StoredWerewolf): WerewolfPublicEvent[] {
+  const history: WerewolfPublicEvent[] = []
+  for (const event of replayLog(game)) {
+    switch (event.type) {
+      case 'night-death':
+        history.push({ type: event.type, day: event.day, playerId: event.playerId })
+        break
+      case 'night-peace':
+      case 'day-vote':
+      case 'vote-result':
+      case 'hunter-shot':
+      case 'player-left':
+      case 'game-end':
+        history.push({ ...event })
+        break
+      default:
+        break
+    }
+  }
+  return history
 }
 
 function playerWithRole(game: StoredWerewolf, roleId: WerewolfRoleId): string | null {
@@ -153,13 +173,32 @@ function emptyNight(): NightState {
 }
 
 function currentSettings(room: GameRoomContext): WerewolfSettings {
-  return isWerewolfSettings(room.gameSettings)
-    ? { ...room.gameSettings }
-    : { ...DEFAULT_WEREWOLF_SETTINGS }
+  const settings = { ...DEFAULT_WEREWOLF_SETTINGS, ...(room.gameSettings ?? {}) }
+  return isWerewolfSettings(settings) ? settings : { ...DEFAULT_WEREWOLF_SETTINGS }
+}
+
+function ensureStoredGameDefaults(game: StoredWerewolf): void {
+  if (!game.voteSelections) {
+    game.voteSelections = { ...game.votes }
+  }
+
+  const announcementSeconds = game.settings.announcementSeconds
+  if (
+    !Number.isInteger(announcementSeconds) ||
+    announcementSeconds < 5 ||
+    announcementSeconds > 60
+  ) {
+    game.settings.announcementSeconds = DEFAULT_WEREWOLF_SETTINGS.announcementSeconds
+  }
 }
 
 function activeGame(room: GameRoomContext): StoredWerewolf | null {
-  return room.status === 'playing' && room.game?.gameId === 'werewolf' ? room.game : null
+  if (room.status !== 'playing' || room.game?.gameId !== 'werewolf') {
+    return null
+  }
+
+  ensureStoredGameDefaults(room.game)
+  return room.game
 }
 
 function killPlayer(game: StoredWerewolf, playerId: string, cause: DeathCause): void {
@@ -180,6 +219,7 @@ function beginNight(game: StoredWerewolf, now: number): void {
   game.nightStep = 0
   game.night = emptyNight()
   game.votes = {}
+  game.voteSelections = {}
   game.pkCandidateIds = []
   game.exiledId = null
   game.lastDeathIds = []
@@ -276,6 +316,24 @@ function currentSpeakerId(game: StoredWerewolf): string | null {
     : null
 }
 
+function validateVoteTarget(
+  game: StoredWerewolf,
+  playerId: string,
+  targetId: unknown,
+  isPkVote: boolean,
+): { targetId: string | null } | { message: string } {
+  if (!isTargetId(targetId)) {
+    return { message: '投票目標格式不正確。' }
+  }
+  if (targetId !== null && (!isAlive(game, targetId) || targetId === playerId)) {
+    return { message: '請選擇一位存活的其他玩家，或選擇棄票。' }
+  }
+  if (isPkVote && targetId !== null && !(game.pkCandidateIds ?? []).includes(targetId)) {
+    return { message: 'PK 投票只能選擇同票候選人。' }
+  }
+  return { targetId }
+}
+
 function resolveHunterShot(game: StoredWerewolf, targetId: string | null, now: number): void {
   const shooterId = game.pendingShooterId
   if (shooterId === null) {
@@ -294,7 +352,7 @@ function resolveHunterShot(game: StoredWerewolf, targetId: string | null, now: n
   if (targetId !== null) {
     killPlayer(game, targetId, 'shot')
   }
-  game.phaseEndsAt = now + HUNTER_RESULT_MS
+  game.phaseEndsAt = now + game.settings.announcementSeconds * 1_000
 }
 
 function endNightStep(game: StoredWerewolf, now: number): void {
@@ -330,12 +388,13 @@ function endNightStep(game: StoredWerewolf, now: number): void {
     recordReplayEvent(game, { type: 'night-peace', day: game.day })
   }
   game.phase = 'dawn'
-  game.phaseEndsAt = now + DAWN_MS
+  game.phaseEndsAt = now + game.settings.announcementSeconds * 1_000
 }
 
 function enterVote(game: StoredWerewolf, now: number): void {
   game.phase = 'vote'
   game.votes = {}
+  game.voteSelections = {}
   game.pkCandidateIds = []
   game.speechOrder = []
   game.speakerIndex = 0
@@ -346,6 +405,7 @@ function enterPkDiscussion(game: StoredWerewolf, tiedIds: string[], now: number)
   const tiedSet = new Set(tiedIds)
   game.pkCandidateIds = game.playerIds.filter((playerId) => tiedSet.has(playerId) && isAlive(game, playerId))
   game.votes = {}
+  game.voteSelections = {}
   game.phase = 'pk-discussion'
   game.speechOrder = [...game.pkCandidateIds]
   game.speakerIndex = 0
@@ -359,12 +419,13 @@ function enterPkVote(game: StoredWerewolf, now: number): void {
   game.speechOrder = []
   game.speakerIndex = 0
   game.votes = {}
+  game.voteSelections = {}
 
   if (game.pkCandidateIds.length === 0) {
     game.phase = 'vote-result'
     game.exiledId = null
     game.lastDeathIds = []
-    game.phaseEndsAt = now + VOTE_RESULT_MS
+    game.phaseEndsAt = now + game.settings.announcementSeconds * 1_000
     return
   }
 
@@ -372,9 +433,17 @@ function enterPkVote(game: StoredWerewolf, now: number): void {
   game.phaseEndsAt = now + game.settings.voteSeconds * 1_000
 }
 
-function tallyVotes(game: StoredWerewolf, now: number): void {
+function tallyVotes(game: StoredWerewolf, now: number, useUnconfirmedSelections = false): void {
   const isPkVote = game.phase === 'pk-vote'
   const pkCandidates = new Set(game.pkCandidateIds ?? [])
+  if (useUnconfirmedSelections) {
+    for (const playerId of game.playerIds) {
+      if (isAlive(game, playerId)) {
+        game.votes[playerId] = game.voteSelections[playerId] ?? null
+      }
+    }
+  }
+
   for (const [playerId, targetId] of Object.entries(game.votes)) {
     recordReplayEvent(game, {
       type: 'day-vote',
@@ -429,7 +498,7 @@ function tallyVotes(game: StoredWerewolf, now: number): void {
   }
 
   game.phase = 'vote-result'
-  game.phaseEndsAt = now + VOTE_RESULT_MS
+  game.phaseEndsAt = now + game.settings.announcementSeconds * 1_000
 }
 
 function everyOnlineAliveVoted(room: GameRoomContext, game: StoredWerewolf): boolean {
@@ -464,7 +533,7 @@ function advancePhase(room: GameRoomContext, game: StoredWerewolf, now: number):
       return
     case 'vote':
     case 'pk-vote':
-      tallyVotes(game, now)
+      tallyVotes(game, now, true)
       return
     case 'pk-discussion':
       nextSpeaker(game, now)
@@ -568,6 +637,7 @@ function dispatchAction(
       enterVote(game, now)
       return { ok: true, changed: true }
     }
+    case 'select_vote':
     case 'cast_vote': {
       const isPkVote = game.phase === 'pk-vote'
       if (game.phase !== 'vote' && !isPkVote) {
@@ -577,18 +647,25 @@ function dispatchAction(
         return failure('PLAYER_DEAD', '你已經死亡，不能投票。')
       }
 
-      const targetId = payload.targetId
-      if (!isTargetId(targetId)) {
-        return failure('INVALID_TARGET', '投票目標格式不正確。')
+      const validation = validateVoteTarget(game, playerId, payload.targetId, isPkVote)
+      if ('message' in validation) {
+        return failure('INVALID_TARGET', validation.message)
       }
-      if (targetId !== null && (!isAlive(game, targetId) || targetId === playerId)) {
-        return failure('INVALID_TARGET', '請選擇一位存活的其他玩家，或選擇棄票。')
-      }
-      if (isPkVote && targetId !== null && !(game.pkCandidateIds ?? []).includes(targetId)) {
-        return failure('INVALID_TARGET', 'PK 投票只能選擇同票候選人。')
+
+      const targetId = validation.targetId
+      if (action === 'select_vote') {
+        if (targetId === null) {
+          return failure('INVALID_TARGET', '投票選擇需為一位存活的其他玩家。')
+        }
+        if (game.voteSelections[playerId] === targetId) {
+          return { ok: true, changed: false }
+        }
+        game.voteSelections[playerId] = targetId
+        return { ok: true, changed: true }
       }
 
       game.votes[playerId] = targetId
+      game.voteSelections[playerId] = targetId
       if (everyOnlineAliveVoted(room, game)) {
         tallyVotes(game, now)
       }
@@ -619,6 +696,9 @@ function buildPrivateState(game: StoredWerewolf, playerId: string): WerewolfPriv
     role.nightAction !== undefined &&
     (getScript(game.scriptId).nightSteps[game.nightStep]?.includes(roleId) ?? false)
   const voting = game.phase === 'vote' || game.phase === 'pk-vote'
+  const voteSelection = playerId in game.voteSelections
+    ? game.voteSelections[playerId]!
+    : (game.votes[playerId] ?? null)
 
   return {
     stateVersion: game.stateVersion,
@@ -634,6 +714,7 @@ function buildPrivateState(game: StoredWerewolf, playerId: string): WerewolfPriv
     guard: null,
     canShoot: game.phase === 'hunter-shot' && game.pendingShooterId === playerId,
     myVote: voting ? (game.votes[playerId] ?? null) : null,
+    voteSelection: voting ? voteSelection : null,
     hasVoted: voting && playerId in game.votes,
     ...role.privateState?.(game, playerId, acting),
   }
@@ -647,7 +728,7 @@ export const werewolfGame: GameModule = {
     if (!isWerewolfSettings(settings)) {
       return failure(
         'INVALID_GAME_SETTINGS',
-        '討論時間需為 30–600 秒、每人發言需為 10–180 秒、投票時間需為 15–180 秒、夜間每步驟需為 10–60 秒。',
+        '討論時間需為 30–600 秒、每人發言需為 10–180 秒、投票時間需為 15–180 秒、夜間每步驟需為 10–60 秒、結果公告需為 5–60 秒。',
       )
     }
 
@@ -658,7 +739,8 @@ export const werewolfGame: GameModule = {
       current.speechMode === settings.speechMode &&
       current.speechSeconds === settings.speechSeconds &&
       current.voteSeconds === settings.voteSeconds &&
-      current.nightStepSeconds === settings.nightStepSeconds
+      current.nightStepSeconds === settings.nightStepSeconds &&
+      current.announcementSeconds === settings.announcementSeconds
     ) {
       return { ok: true, changed: false }
     }
@@ -673,6 +755,7 @@ export const werewolfGame: GameModule = {
       return null
     }
 
+    ensureStoredGameDefaults(game)
     const state = buildPrivateState(game, playerId)
     return state ? { name: WEREWOLF_PRIVATE_EVENT, payload: { ...state } } : null
   },
@@ -717,6 +800,7 @@ export const werewolfGame: GameModule = {
       witchPotions: { antidote: true, poison: true },
       seerResults: [],
       votes: {},
+      voteSelections: {},
       pkCandidateIds: [],
       lastDeathIds: [],
       exiledId: null,
@@ -768,6 +852,7 @@ export const werewolfGame: GameModule = {
       }
       delete game.night.wolfPicks[playerId]
       delete game.votes[playerId]
+      delete game.voteSelections[playerId]
       changed = true
     }
 
@@ -812,6 +897,7 @@ export const werewolfGame: GameModule = {
       return null
     }
 
+    ensureStoredGameDefaults(game)
     return {
       gameId: 'werewolf',
       phase: game.phase,
@@ -842,6 +928,7 @@ export const werewolfGame: GameModule = {
           : null,
       winner: game.winner,
       roles: game.phase === 'finished' ? { ...game.roles } : null,
+      publicHistory: publicHistoryFor(game),
       review: reviewFor(room, game),
     }
   },

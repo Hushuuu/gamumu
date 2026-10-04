@@ -167,6 +167,7 @@ export interface WerewolfSettings {
   speechSeconds: number
   voteSeconds: number
   nightStepSeconds: number
+  announcementSeconds: number
 }
 
 export const DEFAULT_WEREWOLF_SETTINGS: WerewolfSettings = {
@@ -176,6 +177,7 @@ export const DEFAULT_WEREWOLF_SETTINGS: WerewolfSettings = {
   speechSeconds: 60,
   voteSeconds: 45,
   nightStepSeconds: 20,
+  announcementSeconds: 10,
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -194,7 +196,8 @@ export function isWerewolfSettings(value: unknown): value is WerewolfSettings {
     typeof value.speechMode === 'boolean' &&
     isIntegerInRange(value.speechSeconds, 10, 180) &&
     isIntegerInRange(value.voteSeconds, 15, 180) &&
-    isIntegerInRange(value.nightStepSeconds, 10, 60)
+    isIntegerInRange(value.nightStepSeconds, 10, 60) &&
+    isIntegerInRange(value.announcementSeconds, 5, 60)
   )
 }
 
@@ -217,6 +220,16 @@ export type WerewolfReplayEvent =
   | { type: 'witch-save'; day: number; playerId: string; targetId: string }
   | { type: 'witch-poison'; day: number; playerId: string; targetId: string }
   | { type: 'night-death'; day: number; playerId: string; cause: 'wolf' | 'poison' }
+  | { type: 'night-peace'; day: number }
+  | { type: 'day-vote'; day: number; playerId: string; targetId: string | null; round?: 'pk' }
+  | { type: 'vote-result'; day: number; targetId: string; result: 'exiled'; round?: 'pk' }
+  | { type: 'vote-result'; day: number; targetId: null; result: 'tie' | 'no-votes'; round?: 'pk' }
+  | { type: 'hunter-shot'; day: number; playerId: string; roleId: WerewolfRoleId; targetId: string | null }
+  | { type: 'player-left'; day: number; playerId: string }
+  | { type: 'game-end'; day: number; winner: WerewolfCamp }
+
+export type WerewolfPublicEvent =
+  | { type: 'night-death'; day: number; playerId: string }
   | { type: 'night-peace'; day: number }
   | { type: 'day-vote'; day: number; playerId: string; targetId: string | null; round?: 'pk' }
   | { type: 'vote-result'; day: number; targetId: string; result: 'exiled'; round?: 'pk' }
@@ -253,6 +266,7 @@ export interface WerewolfView {
   speech: WerewolfSpeech | null
   winner: WerewolfCamp | null
   roles: Record<string, WerewolfRoleId> | null
+  publicHistory: WerewolfPublicEvent[]
   review: WerewolfReview | null
 }
 
@@ -334,6 +348,44 @@ function isWerewolfReplayEvent(value: unknown): value is WerewolfReplayEvent {
   }
 }
 
+function isWerewolfPublicEvent(value: unknown): value is WerewolfPublicEvent {
+  if (!isRecord(value) || !isIntegerInRange(value.day, 0, 1_000)) {
+    return false
+  }
+
+  switch (value.type) {
+    case 'night-death':
+      return typeof value.playerId === 'string' && !('cause' in value)
+    case 'night-peace':
+      return true
+    case 'day-vote':
+      return (
+        typeof value.playerId === 'string' &&
+        isNullableString(value.targetId) &&
+        (value.round === undefined || value.round === 'pk')
+      )
+    case 'vote-result':
+      return (
+        (value.round === undefined || value.round === 'pk') &&
+        (value.result === 'exiled'
+          ? typeof value.targetId === 'string'
+          : (value.result === 'tie' || value.result === 'no-votes') && value.targetId === null)
+      )
+    case 'hunter-shot':
+      return (
+        typeof value.playerId === 'string' &&
+        isWerewolfRoleId(value.roleId) &&
+        isNullableString(value.targetId)
+      )
+    case 'player-left':
+      return typeof value.playerId === 'string'
+    case 'game-end':
+      return value.winner === 'good' || value.winner === 'wolf'
+    default:
+      return false
+  }
+}
+
 function isWerewolfReview(value: unknown): value is WerewolfReview {
   return (
     isRecord(value) &&
@@ -384,6 +436,8 @@ export function isWerewolfView(value: unknown): value is WerewolfView {
     : null
   const reviewValid =
     value.phase === 'finished' ? isWerewolfReview(value.review) : value.review === null
+  const publicHistoryValid =
+    Array.isArray(value.publicHistory) && value.publicHistory.every(isWerewolfPublicEvent)
 
   return (
     phases.includes(value.phase as WerewolfPhase) &&
@@ -408,6 +462,7 @@ export function isWerewolfView(value: unknown): value is WerewolfView {
     speechValid &&
     (value.winner === null || value.winner === 'good' || value.winner === 'wolf') &&
     rolesValid &&
+    publicHistoryValid &&
     reviewValid
   )
 }
@@ -443,6 +498,7 @@ export interface WerewolfPrivateState {
   guard: WerewolfGuardState | null
   canShoot: boolean
   myVote: string | null
+  voteSelection: string | null
   hasVoted: boolean
 }
 
@@ -464,6 +520,7 @@ export function isWerewolfPrivateState(value: unknown): value is WerewolfPrivate
     (value.guard === null || isRecord(value.guard)) &&
     typeof value.canShoot === 'boolean' &&
     isNullableString(value.myVote) &&
+    isNullableString(value.voteSelection) &&
     typeof value.hasVoted === 'boolean'
   )
 }

@@ -40,7 +40,7 @@ function settingNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) ? value : fallback
 }
 
-function saveSettings(): void {
+function applySettings(): void {
   if (!props.isHost || !props.canConfigure || !isValid.value) {
     return
   }
@@ -64,7 +64,11 @@ function saveSettings(): void {
       <span class="draw-settings-icon" aria-hidden="true">✎</span>
     </div>
 
-    <form class="draw-settings-form" @submit.prevent="saveSettings">
+    <form
+      class="draw-settings-form"
+      @change="applySettings"
+      @submit.prevent="applySettings"
+    >
       <label>
         <span>繪畫時間（秒）</span>
         <input v-model.number="drawTimeSeconds" type="number" min="15" max="180" step="1" :disabled="!isHost || !canConfigure" />
@@ -80,16 +84,9 @@ function saveSettings(): void {
         <input v-model.number="guessTimeSeconds" type="number" min="10" max="120" step="1" :disabled="!isHost || !canConfigure" />
         <small>10–120 秒</small>
       </label>
-      <button
-        class="button button-secondary draw-settings-save"
-        type="submit"
-        :disabled="!isHost || !canConfigure || !isValid"
-      >
-        {{ isHost ? '儲存設定' : '由房主設定' }}
-      </button>
     </form>
     <p class="draw-settings-note">
-      {{ isHost ? '儲存變更會清除所有人的準備狀態。' : '設定變更後需要重新準備。' }}
+      {{ isHost ? '有效設定變更會自動套用，並清除所有人的準備狀態。' : '設定變更後需要重新準備。' }}
     </p>
   </section>
 </template>

@@ -38,6 +38,7 @@ export interface StoredWerewolf {
   witchPotions: { antidote: boolean; poison: boolean }
   seerResults: WerewolfSeerResult[]
   votes: Record<string, string | null>
+  voteSelections: Record<string, string | null>
   pkCandidateIds: string[]
   lastDeathIds: string[]
   exiledId: string | null
