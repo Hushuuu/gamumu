@@ -3,13 +3,16 @@ import { computed, ref, watch } from 'vue'
 import {
   AVALON_PRIVATE_EVENT,
   AVALON_ROLES,
+  getAvalonRoleCounts,
   isAvalonPrivateState,
   type AvalonKnowledge,
   type AvalonMissionCard,
   type AvalonPhase,
   type AvalonPrivateState,
+  type AvalonRoleId,
 } from '../../../shared/games/avalon'
 import type { GameEvent, GameView, PlayerView } from '../../../shared/protocol'
+import AvalonPlayerIdentity from './AvalonPlayerIdentity.vue'
 
 const props = defineProps<{
   game: GameView
@@ -34,11 +37,23 @@ const PHASE_TITLES: Record<AvalonPhase, string> = {
   assassination: '刺殺梅林',
   finished: '遊戲結束',
 }
+const ROLE_GUESS_DRAG_TYPE = 'application/x-gamumu-avalon-role-guess'
 
 const privateState = ref<AvalonPrivateState | null>(null)
 const selectedTeamIds = ref<string[]>([])
 const selectedLakeTargetId = ref('')
 const selectedAssassinationTargetId = ref('')
+const selectedGuessRole = ref<AvalonRoleId | null>(null)
+const roleGuesses = ref<Partial<Record<string, AvalonRoleId>>>({})
+
+function playerInfoOf(playerId: string) {
+  const player = props.players.find((candidate) => candidate.id === playerId)
+  return {
+    id: playerId,
+    name: player?.name ?? '已離開的玩家',
+    avatarId: player?.avatarId ?? null,
+  }
+}
 
 const view = computed(() => (props.game.gameId === 'avalon' ? props.game : null))
 const currentPrivateState = computed(() => {
@@ -51,9 +66,22 @@ const playerRows = computed(() => {
     return []
   }
   return current.seatIds.map((id) => ({
-    id,
-    name: props.players.find((player) => player.id === id)?.name ?? '已離開的玩家',
+    ...playerInfoOf(id),
+    guessRoleId: roleGuesses.value[id] ?? null,
   }))
+})
+const roleCountEntries = computed(() => {
+  const current = view.value
+  if (!current) {
+    return []
+  }
+
+  const roleCounts = getAvalonRoleCounts(current.seatIds.length, current.settings)
+  return roleCounts
+    ? Object.values(AVALON_ROLES)
+      .map((role) => ({ ...role, count: roleCounts[role.id] }))
+      .filter((role) => role.count > 0)
+    : []
 })
 const missionSuccesses = computed(() =>
   view.value?.missions.filter((mission) => mission.outcome === 'success').length ?? 0,
@@ -75,10 +103,46 @@ const teamNames = computed(() => {
   if (!current) {
     return []
   }
-  return current.teamIds.map((id) => ({
-    id,
-    name: props.players.find((player) => player.id === id)?.name ?? '已離開的玩家',
-  }))
+  return current.teamIds.map(playerInfoOf)
+})
+const publicMarkers = computed(() => {
+  const current = view.value
+  if (!current) {
+    return []
+  }
+
+  return [
+    { label: '首任隊長', player: playerInfoOf(current.initialLeaderId) },
+    { label: '目前隊長', player: playerInfoOf(current.leaderId) },
+    ...(current.lakeHolderId
+      ? [{ label: '湖中女神', player: playerInfoOf(current.lakeHolderId) }]
+      : []),
+  ]
+})
+const voteHistoryRows = computed(() => {
+  const current = view.value
+  return current
+    ? current.voteHistory.map((vote, index) => ({
+      key: `${vote.missionNumber}-${index}`,
+      vote,
+      leader: playerInfoOf(vote.leaderId),
+      team: vote.teamIds.map(playerInfoOf),
+    }))
+    : []
+})
+const missionResultRows = computed(() => {
+  const current = view.value
+  return current
+    ? current.missions.map((mission) => ({
+      mission,
+      leader: playerInfoOf(mission.leaderId),
+      team: mission.teamIds.map(playerInfoOf),
+    }))
+    : []
+})
+const lakeHolderInfo = computed(() => {
+  const lakeHolderId = view.value?.lakeHolderId
+  return lakeHolderId ? playerInfoOf(lakeHolderId) : null
 })
 const currentPhaseTitle = computed(() => {
   return view.value ? PHASE_TITLES[view.value.phase] : ''
@@ -94,7 +158,7 @@ const phaseDescription = computed(() => {
     case 'team-selection':
       return isCurrentLeader.value
         ? `你是隊長，請選出 ${current.teamSize} 位玩家組成第 ${current.missionNumber} 個任務隊伍。`
-        : `等待 ${nameOf(current.leaderId)} 組出 ${current.teamSize} 人隊伍。`
+        : `等待目前隊長組隊；每個任務需要 ${current.teamSize} 位玩家。`
     case 'team-vote':
       return '所有玩家私下投票；全員完成後才會同時公布結果。'
     case 'mission':
@@ -104,7 +168,7 @@ const phaseDescription = computed(() => {
     case 'lake-check':
       return isLakeHolder.value
         ? '選擇一位從未持有過標記的玩家，私下查看其忠誠陣營後傳遞標記。'
-        : `等待湖中女神持有人 ${nameOf(current.lakeHolderId ?? '')} 完成查驗。`
+        : '等待湖中女神持有人完成查驗。'
     case 'assassination':
       return currentPrivateState.value?.roleId === 'assassin'
         ? '邪惡陣營討論後，由你指定一位玩家刺殺。'
@@ -123,7 +187,7 @@ const knownPlayerRows = computed(() => {
   const state = currentPrivateState.value
   return (state?.knownPlayers ?? []).map((knownPlayer) => ({
     ...knownPlayer,
-    name: props.players.find((player) => player.id === knownPlayer.playerId)?.name ?? '已離開的玩家',
+    ...playerInfoOf(knownPlayer.playerId),
   }))
 })
 const roleInfo = computed(() => {
@@ -156,8 +220,57 @@ watch(
   { immediate: true },
 )
 
-function nameOf(playerId: string): string {
-  return props.players.find((player) => player.id === playerId)?.name ?? '已離開的玩家'
+function selectGuessRole(roleId: AvalonRoleId): void {
+  selectedGuessRole.value = selectedGuessRole.value === roleId ? null : roleId
+}
+
+function startRoleGuessDrag(event: DragEvent, roleId: AvalonRoleId): void {
+  const transfer = event.dataTransfer
+  if (!transfer) {
+    return
+  }
+
+  selectedGuessRole.value = roleId
+  transfer.effectAllowed = 'copy'
+  transfer.setData(ROLE_GUESS_DRAG_TYPE, roleId)
+  transfer.setData('text/plain', roleId)
+}
+
+function assignRoleGuess(playerId: string, roleId: string): boolean {
+  const guessableRole = roleCountEntries.value.find((role) => role.id === roleId)
+  if (!guessableRole || !view.value?.seatIds.includes(playerId)) {
+    return false
+  }
+
+  roleGuesses.value[playerId] = guessableRole.id
+  selectedGuessRole.value = null
+  return true
+}
+
+function assignSelectedRoleGuess(playerId: string): void {
+  if (selectedGuessRole.value) {
+    assignRoleGuess(playerId, selectedGuessRole.value)
+  }
+}
+
+function allowRoleDrop(event: DragEvent): void {
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+  }
+}
+
+function dropRoleGuess(event: DragEvent, playerId: string): void {
+  const transfer = event.dataTransfer
+  const roleId =
+    transfer?.getData(ROLE_GUESS_DRAG_TYPE) ||
+    transfer?.getData('text/plain') ||
+    ''
+  assignRoleGuess(playerId, roleId)
+}
+
+function clearRoleGuess(playerId: string): void {
+  delete roleGuesses.value[playerId]
 }
 
 function toggleTeamPlayer(playerId: string): void {
@@ -231,9 +344,10 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
         <h2>{{ gameName }}</h2>
         <p class="avalon-phase-summary">{{ currentPhaseTitle }} · {{ phaseDescription }}</p>
         <div class="avalon-public-markers">
-          <span>首任隊長：{{ nameOf(view.initialLeaderId) }}</span>
-          <span>目前隊長：{{ nameOf(view.leaderId) }}</span>
-          <span v-if="view.lakeHolderId">湖中女神：{{ nameOf(view.lakeHolderId) }}</span>
+          <span v-for="marker in publicMarkers" :key="marker.label" class="avalon-public-marker">
+            <small>{{ marker.label }}</small>
+            <AvalonPlayerIdentity :player="marker.player" compact />
+          </span>
         </div>
       </div>
       <div class="avalon-score" aria-label="任務勝負">
@@ -273,7 +387,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
         <strong>你的身分資訊</strong>
         <ul>
           <li v-for="knownPlayer in knownPlayerRows" :key="knownPlayer.playerId">
-            <span>{{ knownPlayer.name }}</span>
+            <AvalonPlayerIdentity :player="knownPlayer" compact />
             <small>{{ knowledgeLabel(knownPlayer.knowledge) }}</small>
           </li>
         </ul>
@@ -282,7 +396,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
         <strong>你查驗過的忠誠資訊</strong>
         <ul>
           <li v-for="result in currentPrivateState.lakeResults" :key="`${result.missionNumber}-${result.targetId}`">
-            <span>{{ nameOf(result.targetId) }}</span>
+            <AvalonPlayerIdentity :player="playerInfoOf(result.targetId)" compact />
             <small>{{ result.camp === 'good' ? '好人' : '邪惡' }} · 第 {{ result.missionNumber }} 個任務後</small>
           </li>
         </ul>
@@ -298,7 +412,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
         <p>角色與提示只會顯示給你。請在查看完畢後確認，所有玩家完成確認才會開始第一個任務。</p>
         <ul class="avalon-player-list">
           <li v-for="player in playerRows" :key="player.id">
-            <span>{{ player.name }}{{ player.id === playerId ? '（你）' : '' }}</span>
+            <AvalonPlayerIdentity :player="player" compact />
             <strong :class="{ 'is-ready': view.readyIds.includes(player.id) }">
               {{ view.readyIds.includes(player.id) ? '已確認' : '查看中' }}
             </strong>
@@ -317,7 +431,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       <template v-else-if="view.phase === 'team-selection'">
         <h3>第 {{ view.missionNumber }} 個任務 · 選出 {{ view.teamSize }} 人</h3>
         <p v-if="isCurrentLeader">點選玩家組成任務隊伍；選好後送出提案，所有人再投票。</p>
-        <p v-else>目前隊長：{{ nameOf(view.leaderId) }}。每個任務需要 {{ view.teamSize }} 位玩家。</p>
+        <p v-else>每個任務需要 {{ view.teamSize }} 位玩家；目前隊長請見上方標記。</p>
         <div class="avalon-player-grid">
           <button
             v-for="player in playerRows"
@@ -329,7 +443,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
             :disabled="!canInteract || !isCurrentLeader"
             @click="toggleTeamPlayer(player.id)"
           >
-            <span>{{ player.name }}{{ player.id === playerId ? '（你）' : '' }}</span>
+            <AvalonPlayerIdentity :player="player" compact />
             <strong>{{ selectedTeamIds.includes(player.id) ? '已選' : '選擇' }}</strong>
           </button>
         </div>
@@ -347,7 +461,9 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       <template v-else-if="view.phase === 'team-vote'">
         <h3>第 {{ view.missionNumber }} 個任務隊伍</h3>
         <ul class="avalon-team-list">
-          <li v-for="player in teamNames" :key="player.id">{{ player.name }}</li>
+          <li v-for="player in teamNames" :key="player.id">
+            <AvalonPlayerIdentity :player="player" compact />
+          </li>
         </ul>
         <p>目前 {{ view.votesSubmitted }} / {{ view.seatIds.length }} 人已投票；所有人完成前不會揭露個別選擇。</p>
         <div class="avalon-action-row avalon-vote-actions">
@@ -379,7 +495,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
         <h3>第 {{ view.missionNumber }} 個任務正在執行</h3>
         <ul class="avalon-team-list">
           <li v-for="player in teamNames" :key="player.id">
-            {{ player.name }}{{ player.id === playerId ? '（你）' : '' }}
+            <AvalonPlayerIdentity :player="player" compact />
           </li>
         </ul>
         <p>{{ view.missionCardsSubmitted }} / {{ view.teamIds.length }} 位隊員已出牌，結果會在全員出牌後公布。</p>
@@ -410,7 +526,11 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       </template>
 
       <template v-else-if="view.phase === 'lake-check'">
-        <h3>湖中女神標記由 {{ nameOf(view.lakeHolderId ?? '') }} 持有</h3>
+        <h3>
+          湖中女神標記由
+          <AvalonPlayerIdentity v-if="lakeHolderInfo" :player="lakeHolderInfo" compact />
+          持有
+        </h3>
         <template v-if="isLakeHolder">
           <p>選擇一位未曾持有標記的玩家。查驗只會告訴你對方是好人或邪惡陣營，結果不會公開。</p>
           <div class="avalon-player-grid">
@@ -424,7 +544,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
               :disabled="!canInteract"
               @click="selectedLakeTargetId = player.id"
             >
-              <span>{{ player.name }}</span>
+              <AvalonPlayerIdentity :player="player" compact />
               <strong>{{ selectedLakeTargetId === player.id ? '已選' : '選擇' }}</strong>
             </button>
           </div>
@@ -455,7 +575,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
               :disabled="!canInteract"
               @click="selectedAssassinationTargetId = player.id"
             >
-              <span>{{ player.name }}{{ player.id === playerId ? '（你）' : '' }}</span>
+              <AvalonPlayerIdentity :player="player" compact />
               <strong>{{ selectedAssassinationTargetId === player.id ? '已選' : '選擇' }}</strong>
             </button>
           </div>
@@ -475,22 +595,29 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
     <section v-if="view.voteHistory.length" class="avalon-history-card">
       <h3>隊伍投票紀錄</h3>
       <ol class="avalon-vote-history">
-        <li v-for="(vote, index) in view.voteHistory" :key="`${vote.missionNumber}-${index}`">
-          <strong>
-            第 {{ vote.missionNumber }} 個任務 · {{ nameOf(vote.leaderId) }} 提案
-            {{ vote.accepted ? '通過' : '遭否決' }}
+        <li v-for="entry in voteHistoryRows" :key="entry.key">
+          <strong class="avalon-vote-history-heading">
+            <span>第 {{ entry.vote.missionNumber }} 個任務 ·</span>
+            <AvalonPlayerIdentity :player="entry.leader" compact />
+            <span>提案 {{ entry.vote.accepted ? '通過' : '遭否決' }}</span>
           </strong>
-          <small>
-            隊伍：{{ vote.teamIds.map(nameOf).join('、') }} ·
-            {{ vote.approveCount }} 同意 / {{ vote.rejectCount }} 反對
+          <small class="avalon-vote-history-team">
+            <span>隊伍：</span>
+            <AvalonPlayerIdentity
+              v-for="player in entry.team"
+              :key="player.id"
+              :player="player"
+              compact
+            />
+            <span>· {{ entry.vote.approveCount }} 同意 / {{ entry.vote.rejectCount }} 反對</span>
           </small>
           <details>
             <summary>查看個別投票</summary>
             <ul class="avalon-vote-list">
               <li v-for="player in playerRows" :key="player.id">
-                <span>{{ player.name }}</span>
-                <strong :class="vote.votes[player.id] ? 'is-approve' : 'is-reject'">
-                  {{ vote.votes[player.id] ? '同意' : '反對' }}
+                <AvalonPlayerIdentity :player="player" compact />
+                <strong :class="entry.vote.votes[player.id] ? 'is-approve' : 'is-reject'">
+                  {{ entry.vote.votes[player.id] ? '同意' : '反對' }}
                 </strong>
               </li>
             </ul>
@@ -502,14 +629,96 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
     <section v-if="view.missions.length" class="avalon-history-card">
       <h3>任務結果</h3>
       <ul class="avalon-mission-results">
-        <li v-for="mission in view.missions" :key="mission.missionNumber">
+        <li v-for="entry in missionResultRows" :key="entry.mission.missionNumber">
           <div>
-            <strong>第 {{ mission.missionNumber }} 個任務 · {{ mission.outcome === 'success' ? '成功' : '失敗' }}</strong>
-            <small>隊長 {{ nameOf(mission.leaderId) }} · {{ mission.teamIds.map(nameOf).join('、') }}</small>
+            <strong>
+              第 {{ entry.mission.missionNumber }} 個任務 ·
+              {{ entry.mission.outcome === 'success' ? '成功' : '失敗' }}
+            </strong>
+            <small class="avalon-mission-result-players">
+              <span>隊長</span>
+              <AvalonPlayerIdentity :player="entry.leader" compact />
+              <span>· 隊伍</span>
+              <AvalonPlayerIdentity
+                v-for="player in entry.team"
+                :key="player.id"
+                :player="player"
+                compact
+              />
+            </small>
           </div>
-          <span>{{ mission.successCount }} 成功 / {{ mission.failCount }} 失敗</span>
+          <span>{{ entry.mission.successCount }} 成功 / {{ entry.mission.failCount }} 失敗</span>
         </li>
       </ul>
+    </section>
+
+    <section class="avalon-history-card avalon-role-guess-card" aria-label="本局角色配置與推測">
+      <div class="avalon-role-guess-heading">
+        <div>
+          <h3>本局角色配置（{{ view.seatIds.length }} 人）</h3>
+          <p>點選角色卡後選擇玩家，或將角色卡拖曳至玩家；推測只會保存在你的畫面。</p>
+        </div>
+      </div>
+      <div class="avalon-role-guess-roles">
+        <button
+          v-for="role in roleCountEntries"
+          :key="role.id"
+          class="avalon-role-guess-option"
+          :class="[`is-${role.camp}`, { 'is-selected': selectedGuessRole === role.id }]"
+          type="button"
+          :aria-pressed="selectedGuessRole === role.id"
+          :aria-label="`選擇${role.name}角色卡，本局有 ${role.count} 位`"
+          draggable="true"
+          @click="selectGuessRole(role.id)"
+          @dragstart="startRoleGuessDrag($event, role.id)"
+        >
+          <span class="avalon-role-guess-camp">{{ role.camp === 'good' ? '正義' : '邪惡' }}</span>
+          <span>{{ role.name }}</span>
+          <strong>× {{ role.count }}</strong>
+        </button>
+      </div>
+      <p class="avalon-guess-status" role="status">
+        {{
+          selectedGuessRole
+            ? `已選擇${AVALON_ROLES[selectedGuessRole].name}，點選或拖曳至玩家以新增推測。`
+            : '選擇角色卡後點選玩家，或直接拖曳角色卡；點擊 × 可清除推測。'
+        }}
+      </p>
+      <div class="avalon-role-guess-players" aria-label="玩家角色推測">
+        <div v-for="player in playerRows" :key="player.id" class="avalon-role-guess-player">
+          <button
+            class="avalon-role-guess-target"
+            :class="{ 'is-targeting': selectedGuessRole !== null }"
+            type="button"
+            :aria-label="selectedGuessRole
+              ? `將${player.name}推測為${AVALON_ROLES[selectedGuessRole].name}`
+              : player.guessRoleId
+                ? `${player.name}，目前推測為${AVALON_ROLES[player.guessRoleId].name}`
+                : `${player.name}目前尚無角色推測`"
+            @click="assignSelectedRoleGuess(player.id)"
+            @dragover.prevent="allowRoleDrop"
+            @drop.prevent.stop="dropRoleGuess($event, player.id)"
+          >
+            <AvalonPlayerIdentity :player="player" compact />
+            <strong v-if="player.guessRoleId" class="avalon-player-guess">
+              {{ AVALON_ROLES[player.guessRoleId].name }}
+            </strong>
+            <span v-else class="avalon-player-guess-empty">
+              {{ selectedGuessRole ? '標記此玩家' : '未推測' }}
+            </span>
+          </button>
+          <button
+            v-if="player.guessRoleId"
+            class="avalon-guess-clear"
+            type="button"
+            :aria-label="`清除${player.name}的角色推測`"
+            title="清除角色推測"
+            @click.stop="clearRoleGuess(player.id)"
+          >
+            ×
+          </button>
+        </div>
+      </div>
     </section>
   </div>
 </template>
@@ -549,11 +758,18 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   margin-top: 8px;
 }
 
-.avalon-public-markers span {
-  padding: 4px 7px;
+.avalon-public-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px 3px 8px;
   border-radius: 999px;
   background: #f0edfa;
   color: #69647f;
+  font-size: 9px;
+}
+
+.avalon-public-marker small {
   font-size: 9px;
 }
 
@@ -737,6 +953,156 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   color: #32815b;
 }
 
+.avalon-role-guess-heading {
+  margin-bottom: 9px;
+}
+
+.avalon-role-guess-heading h3 {
+  margin: 0;
+  color: #403b59;
+  font-size: 14px;
+}
+
+.avalon-role-guess-heading p {
+  margin: 5px 0 0;
+  color: #77738a;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.avalon-role-guess-roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 6px;
+}
+
+.avalon-role-guess-option {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  padding: 7px;
+  border: 1px solid #e7e4ef;
+  border-radius: 10px;
+  background: #fff;
+  color: #55516b;
+  font: inherit;
+  font-size: 10px;
+  text-align: left;
+  cursor: grab;
+}
+
+.avalon-role-guess-option.is-good {
+  background: #f5fbf7;
+}
+
+.avalon-role-guess-option.is-evil {
+  background: #fff7f6;
+}
+
+.avalon-role-guess-option.is-selected {
+  border-color: #8b7ae3;
+  box-shadow: 0 0 0 2px rgb(139 122 227 / 14%);
+}
+
+.avalon-role-guess-option > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.avalon-role-guess-option strong {
+  flex: 0 0 auto;
+  color: #77738a;
+  font-size: 9px;
+}
+
+.avalon-role-guess-camp {
+  padding: 3px 5px;
+  border-radius: 999px;
+  background: #e2f6ec;
+  color: #2f8058;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.avalon-role-guess-option.is-evil .avalon-role-guess-camp {
+  background: #fde8e6;
+  color: #a24f48;
+}
+
+.avalon-guess-status {
+  margin: 8px 0 0;
+  color: #77738a;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.avalon-role-guess-players {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.avalon-role-guess-player {
+  display: flex;
+  min-width: 0;
+  gap: 3px;
+}
+
+.avalon-role-guess-target {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 5px 7px;
+  border: 1px solid #e7e4ef;
+  border-radius: 9px;
+  background: #fff;
+  color: #55516b;
+  font: inherit;
+  font-size: 9px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.avalon-role-guess-target.is-targeting {
+  border-color: #a89be9;
+  background: #faf9ff;
+}
+
+.avalon-role-guess-target strong,
+.avalon-player-guess-empty {
+  max-width: 42%;
+  flex: 0 0 auto;
+  color: #89859a;
+  font-size: 8px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.avalon-role-guess-target strong.avalon-player-guess {
+  padding: 3px 5px;
+  border-radius: 999px;
+  background: #eeebff;
+  color: #6558ae;
+}
+
+.avalon-guess-clear {
+  width: 28px;
+  flex: 0 0 auto;
+  border: 1px solid #e7e4ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #89859a;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
 .avalon-stage h3,
 .avalon-history-card h3 {
   margin: 0 0 6px;
@@ -752,6 +1118,12 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   line-height: 1.55;
 }
 
+.avalon-role-guess-card > .avalon-guess-status {
+  margin: 8px 0 0;
+  color: #77738a;
+  font-size: 9px;
+}
+
 .avalon-player-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -761,6 +1133,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 
 .avalon-player-button {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 7px;
@@ -803,6 +1176,9 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 }
 
 .avalon-team-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 6px 9px;
   border-radius: 999px;
   background: #f0edff;
@@ -849,7 +1225,23 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 }
 
 .avalon-vote-list {
+  width: 100%;
+  min-width: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.avalon-vote-list li {
+  min-width: 0;
+}
+
+.avalon-vote-list .avalon-player-identity {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.avalon-vote-list strong {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .avalon-vote-list strong.is-approve {
@@ -870,6 +1262,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 
 .avalon-vote-history > li {
   display: grid;
+  min-width: 0;
   gap: 4px;
   padding: 9px;
   border-radius: 10px;
@@ -887,13 +1280,33 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   line-height: 1.5;
 }
 
+.avalon-vote-history-heading,
+.avalon-vote-history-team,
+.avalon-mission-result-players {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.avalon-vote-history-team {
+  color: #858197;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
 .avalon-vote-history details {
+  width: 100%;
+  min-width: 0;
   margin-top: 3px;
 }
 
 .avalon-vote-history summary {
+  max-width: 100%;
   color: #6c629f;
   font-size: 9px;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
@@ -921,6 +1334,10 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   gap: 3px;
 }
 
+.avalon-mission-result-players {
+  line-height: 1.5;
+}
+
 .avalon-mission-results strong {
   color: #514c67;
   font-size: 10px;
@@ -930,6 +1347,12 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 .avalon-mission-results li > span {
   color: #858197;
   font-size: 9px;
+}
+
+@media (max-width: 760px) {
+  .avalon-role-guess-players {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 520px) {
@@ -944,7 +1367,11 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   }
 
   .avalon-vote-list {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .avalon-role-guess-players {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .avalon-mission-results li {

@@ -2,10 +2,33 @@
 import { computed } from 'vue'
 import { AVALON_ROLES } from '../../../shared/games/avalon'
 import type { GameView, PlayerView } from '../../../shared/protocol'
+import AvalonPlayerIdentity from './AvalonPlayerIdentity.vue'
 
 const props = defineProps<{ players: PlayerView[]; game?: GameView | null }>()
 
+type AvalonResultPlayer = {
+  id: string
+  name: string
+  avatarId: PlayerView['avatarId'] | null
+}
+
+type Explanation = {
+  text: string
+  before: string
+  player: AvalonResultPlayer | null
+  after: string
+}
+
 const view = computed(() => (props.game?.gameId === 'avalon' ? props.game : null))
+function playerInfoOf(playerId: string): AvalonResultPlayer {
+  const player = props.players.find((candidate) => candidate.id === playerId)
+  return {
+    id: playerId,
+    name: player ? player.name : playerId ? '已離開的玩家' : '玩家',
+    avatarId: player?.avatarId ?? null,
+  }
+}
+
 const winnerText = computed(() => {
   if (view.value?.endReason === 'player-left') {
     return '牌局提前結束'
@@ -18,30 +41,45 @@ const winnerText = computed(() => {
   }
   return '阿瓦隆結束'
 })
-const explanation = computed(() => {
+const explanation = computed<Explanation>(() => {
   const current = view.value
   if (!current) {
-    return ''
+    return { text: '', before: '', player: null, after: '' }
   }
   if (current.endReason === 'player-left') {
-    return `${nameOf(current.departedPlayerId ?? '')} 離開房間，本局未計分。`
+    return {
+      text: '',
+      before: '',
+      player: playerInfoOf(current.departedPlayerId ?? ''),
+      after: '離開房間，本局未計分。',
+    }
   }
   if (current.assassinationHit === true) {
-    return `刺客成功刺殺梅林（${nameOf(current.assassinationTargetId ?? '')}），邪惡陣營反敗為勝。`
+    return {
+      text: '',
+      before: '刺客成功刺殺梅林（',
+      player: playerInfoOf(current.assassinationTargetId ?? ''),
+      after: '），邪惡陣營反敗為勝。',
+    }
   }
   if (current.assassinationHit === false) {
-    return `刺客刺殺了 ${nameOf(current.assassinationTargetId ?? '')}，但他不是梅林。`
+    return {
+      text: '',
+      before: '刺客刺殺了 ',
+      player: playerInfoOf(current.assassinationTargetId ?? ''),
+      after: '，但他不是梅林。',
+    }
   }
   if (current.missions.filter((mission) => mission.outcome === 'success').length >= 3) {
-    return '正義陣營完成三個任務，刺客未能成功刺殺梅林。'
+    return { text: '正義陣營完成三個任務，刺客未能成功刺殺梅林。', before: '', player: null, after: '' }
   }
   if (current.missions.filter((mission) => mission.outcome === 'failure').length >= 3) {
-    return '邪惡陣營讓三個任務失敗。'
+    return { text: '邪惡陣營讓三個任務失敗。', before: '', player: null, after: '' }
   }
   if (current.lastVote && !current.lastVote.accepted && current.phase === 'finished') {
-    return '同一個任務的隊伍提案連續五次遭到否決。'
+    return { text: '同一個任務的隊伍提案連續五次遭到否決。', before: '', player: null, after: '' }
   }
-  return '本局依阿瓦隆勝負規則結束。'
+  return { text: '本局依阿瓦隆勝負規則結束。', before: '', player: null, after: '' }
 })
 const roleRows = computed(() => {
   const current = view.value
@@ -56,21 +94,34 @@ const roleRows = computed(() => {
     }
     const role = AVALON_ROLES[roleId]
     return {
-      id,
-      name: nameOf(id),
+      ...playerInfoOf(id),
       role,
       won: current.winner !== null && role.camp === current.winner,
     }
   }).filter((row) => row !== null)
 })
-const missionResults = computed(() => view.value?.missions ?? [])
-
-function nameOf(playerId: string): string {
-  if (!playerId) {
-    return '玩家'
-  }
-  return props.players.find((player) => player.id === playerId)?.name ?? '已離開的玩家'
-}
+const playerRows = computed(() => view.value?.seatIds.map(playerInfoOf) ?? [])
+const missionRows = computed(() => {
+  const current = view.value
+  return current
+    ? current.missions.map((mission) => ({
+      mission,
+      leader: playerInfoOf(mission.leaderId),
+      team: mission.teamIds.map(playerInfoOf),
+    }))
+    : []
+})
+const voteHistoryRows = computed(() => {
+  const current = view.value
+  return current
+    ? current.voteHistory.map((vote, index) => ({
+      key: `${vote.missionNumber}-${index}`,
+      vote,
+      leader: playerInfoOf(vote.leaderId),
+      team: vote.teamIds.map(playerInfoOf),
+    }))
+    : []
+})
 </script>
 
 <template>
@@ -80,24 +131,44 @@ function nameOf(playerId: string): string {
     </div>
     <p class="eyebrow">遊戲結束</p>
     <h2>{{ winnerText }}</h2>
-    <p class="avalon-result-explanation">{{ explanation }}</p>
+    <p class="avalon-result-explanation">
+      <template v-if="explanation.player">
+        {{ explanation.before }}
+        <AvalonPlayerIdentity :player="explanation.player" compact />
+        {{ explanation.after }}
+      </template>
+      <template v-else>{{ explanation.text }}</template>
+    </p>
     <p v-if="view?.winner" class="avalon-result-score">
       勝利陣營每位玩家獲得 100 分
     </p>
 
-    <section v-if="missionResults.length" class="avalon-results-section">
+    <section v-if="missionRows.length" class="avalon-results-section">
       <h3>任務紀錄</h3>
       <ol>
         <li
-          v-for="mission in missionResults"
-          :key="mission.missionNumber"
-          :class="mission.outcome === 'success' ? 'is-success' : 'is-failure'"
+          v-for="entry in missionRows"
+          :key="entry.mission.missionNumber"
+          :class="entry.mission.outcome === 'success' ? 'is-success' : 'is-failure'"
         >
           <div>
-            <strong>第 {{ mission.missionNumber }} 個任務 · {{ mission.outcome === 'success' ? '成功' : '失敗' }}</strong>
-            <small>隊長 {{ nameOf(mission.leaderId) }} · {{ mission.teamIds.map(nameOf).join('、') }}</small>
+            <strong>
+              第 {{ entry.mission.missionNumber }} 個任務 ·
+              {{ entry.mission.outcome === 'success' ? '成功' : '失敗' }}
+            </strong>
+            <small class="avalon-result-players">
+              <span>隊長</span>
+              <AvalonPlayerIdentity :player="entry.leader" compact />
+              <span>· 隊伍</span>
+              <AvalonPlayerIdentity
+                v-for="player in entry.team"
+                :key="player.id"
+                :player="player"
+                compact
+              />
+            </small>
           </div>
-          <span>{{ mission.successCount }} 成功 / {{ mission.failCount }} 失敗</span>
+          <span>{{ entry.mission.successCount }} 成功 / {{ entry.mission.failCount }} 失敗</span>
         </li>
       </ol>
     </section>
@@ -113,18 +184,29 @@ function nameOf(playerId: string): string {
     <section v-if="view?.voteHistory.length" class="avalon-results-section">
       <h3>隊伍投票紀錄</h3>
       <ol class="avalon-result-votes">
-        <li v-for="(vote, index) in view.voteHistory" :key="`${vote.missionNumber}-${index}`">
-          <strong>
-            第 {{ vote.missionNumber }} 個任務 · {{ nameOf(vote.leaderId) }}
-            {{ vote.accepted ? '的隊伍通過' : '的隊伍遭否決' }}
+        <li v-for="entry in voteHistoryRows" :key="entry.key">
+          <strong class="avalon-result-vote-heading">
+            <span>第 {{ entry.vote.missionNumber }} 個任務 ·</span>
+            <AvalonPlayerIdentity :player="entry.leader" compact />
+            <span>{{ entry.vote.accepted ? '的隊伍通過' : '的隊伍遭否決' }}</span>
           </strong>
-          <small>隊伍：{{ vote.teamIds.map(nameOf).join('、') }}</small>
+          <small class="avalon-result-players">
+            <span>隊伍：</span>
+            <AvalonPlayerIdentity
+              v-for="player in entry.team"
+              :key="player.id"
+              :player="player"
+              compact
+            />
+          </small>
           <details>
-            <summary>查看個別投票（{{ vote.approveCount }} 同意 / {{ vote.rejectCount }} 反對）</summary>
+            <summary>
+              查看個別投票（{{ entry.vote.approveCount }} 同意 / {{ entry.vote.rejectCount }} 反對）
+            </summary>
             <ul>
-              <li v-for="playerId in view.seatIds" :key="playerId">
-                <span>{{ nameOf(playerId) }}</span>
-                <span>{{ vote.votes[playerId] ? '同意' : '反對' }}</span>
+              <li v-for="player in playerRows" :key="player.id">
+                <AvalonPlayerIdentity :player="player" compact />
+                <span>{{ entry.vote.votes[player.id] ? '同意' : '反對' }}</span>
               </li>
             </ul>
           </details>
@@ -136,7 +218,9 @@ function nameOf(playerId: string): string {
       <h3>角色公開</h3>
       <ul class="avalon-results-list">
         <li v-for="row in roleRows" :key="row.id" :class="{ 'is-winner': row.won }">
-          <span>{{ row.name }}</span>
+          <div class="avalon-result-player">
+            <AvalonPlayerIdentity :player="row" compact />
+          </div>
           <strong>{{ row.role.name }}</strong>
           <small>
             {{ row.role.camp === 'good' ? '正義陣營' : '邪惡陣營' }}
@@ -235,7 +319,7 @@ function nameOf(playerId: string): string {
 }
 
 .avalon-results-section ol li > div,
-.avalon-results-list li > span {
+.avalon-results-list li > .avalon-result-player {
   display: grid;
   gap: 3px;
 }
@@ -254,12 +338,20 @@ function nameOf(playerId: string): string {
   line-height: 1.45;
 }
 
-.avalon-results-list li > span {
-  display: block;
-}
-
 .avalon-results-list small {
   grid-column: 1 / -1;
+}
+
+.avalon-result-vote-heading,
+.avalon-result-players {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.avalon-result-players {
+  line-height: 1.5;
 }
 
 .avalon-result-votes {
@@ -304,6 +396,7 @@ function nameOf(playerId: string): string {
 
 .avalon-result-votes ul li {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 6px;
   color: #77738a;
