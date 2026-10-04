@@ -18,6 +18,17 @@ if (!code || !Number.isInteger(count) || count < 1 || !BETA_CODE) {
 const pick = (items) => items[Math.floor(Math.random() * items.length)]
 const later = (fn, min = 300, max = 1500) => setTimeout(fn, min + Math.random() * (max - min))
 const AVALON_PRIVATE_EVENT = 'avalon-private-state'
+const AVALON_MISSION_FAILURE_RATES = {
+  '0-0': 0.4,
+  '1-0': 0.55,
+  '2-0': 0.85,
+  '0-1': 0.3,
+  '0-2': 0.2,
+  '1-1': 0.5,
+  '1-2': 0.15,
+  '2-1': 0.75,
+  '2-2': 1,
+}
 const RUMMIKUB_COLORS = ['red', 'blue', 'black', 'yellow']
 const RUMMIKUB_SEARCH_LIMIT = 50000
 const RUMMIKUB_FACES = RUMMIKUB_COLORS.flatMap((color) =>
@@ -50,6 +61,16 @@ function getAvalonKnownEvilIds(playerId, priv) {
     evilIds.add(playerId)
   }
   return evilIds
+}
+
+function getAvalonMissionFailureRate(game) {
+  const successCount = game.missions.filter((mission) => mission.outcome === 'success').length
+  const failureCount = game.missions.filter((mission) => mission.outcome === 'failure').length
+  const rate = AVALON_MISSION_FAILURE_RATES[`${successCount}-${failureCount}`]
+  if (rate === undefined) {
+    throw new Error(`阿瓦隆任務失敗率未設定：${successCount} 成功 / ${failureCount} 失敗`)
+  }
+  return rate
 }
 
 function pickAvalonTeam(game, playerId, priv) {
@@ -665,11 +686,21 @@ class Bot {
       const priv = this.avalonPriv
       if (!priv || priv.stateVersion !== game.stateVersion) return
       action = 'submit-mission'
-      const successfulMissions = game.missions.filter((mission) => mission.outcome === 'success').length
-      payload = {
-        card: priv.camp === 'evil' && (
-          successfulMissions >= 2 || Math.random() < 0.5
-        ) ? 'fail' : 'success',
+
+      if (priv.camp === 'evil') {
+        const knownEvilIds = getAvalonKnownEvilIds(this.id, priv)
+        const evilCountOnTeam = game.teamIds.filter((id) => knownEvilIds.has(id)).length
+        if (evilCountOnTeam === 0) {
+          throw new Error('阿瓦隆任務隊伍中找不到邪惡陣營玩家。')
+        }
+
+        const overallFailureRate = getAvalonMissionFailureRate(game)
+        const individualFailureRate = overallFailureRate ** (1 / evilCountOnTeam)
+        payload = {
+          card: Math.random() < individualFailureRate ? 'fail' : 'success',
+        }
+      } else {
+        payload = { card: 'success' }
       }
     } else if (game.phase === 'lake-check' && game.lakeHolderId === this.id) {
       const targets = game.seatIds.filter((id) => !game.lakeVisitedIds.includes(id))
