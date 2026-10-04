@@ -4,10 +4,11 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const [apiUrlArg, ...extraArgs] = process.argv.slice(2)
+const [apiUrlArg, betaCodeArg, ...extraArgs] = process.argv.slice(2)
+const betaCode = (betaCodeArg ?? process.env.BETA_CODE)?.trim()
 
-if (!apiUrlArg || extraArgs.length > 0) {
-  console.error('用法：npm run build:dev-bots:exe -- <API_URL>')
+if (!apiUrlArg || !betaCode || extraArgs.length > 0) {
+  console.error('用法：npm run build:dev-bots:exe -- <API_URL> [BETA_CODE]（或設定 BETA_CODE 環境變數）')
   process.exit(1)
 }
 
@@ -33,8 +34,9 @@ try {
 const sourcePath = join(projectRoot, 'scripts', 'dev-bots.mjs')
 const source = await readFile(sourcePath, 'utf8')
 const apiUrlPlaceholder = "const PACKAGED_API_URL = ''"
-if (!source.includes(apiUrlPlaceholder)) {
-  throw new Error('找不到 dev-bots.mjs 中的 API_URL 打包位置。')
+const betaCodePlaceholder = "const PACKAGED_BETA_CODE = ''"
+if (!source.includes(apiUrlPlaceholder) || !source.includes(betaCodePlaceholder)) {
+  throw new Error('找不到 dev-bots.mjs 中的 API_URL 或 BETA_CODE 打包位置。')
 }
 
 const outputDirectory = join(projectRoot, 'dist')
@@ -43,10 +45,10 @@ const temporaryDirectory = await mkdtemp(join(outputDirectory, '.dev-bots-build-
 
 try {
   const entryPath = join(temporaryDirectory, 'dev-bots.mjs')
-  await writeFile(
-    entryPath,
-    source.replace(apiUrlPlaceholder, `const PACKAGED_API_URL = ${JSON.stringify(apiUrl)}`),
-  )
+  const packagedSource = source
+    .replace(apiUrlPlaceholder, `const PACKAGED_API_URL = ${JSON.stringify(apiUrl)}`)
+    .replace(betaCodePlaceholder, `const PACKAGED_BETA_CODE = ${JSON.stringify(betaCode)}`)
+  await writeFile(entryPath, packagedSource)
 
   const pkgDirectory = join(projectRoot, 'node_modules', '@yao-pkg', 'pkg')
   const pkgManifest = JSON.parse(await readFile(join(pkgDirectory, 'package.json'), 'utf8'))

@@ -224,7 +224,7 @@ npm run worker:check  # 產生 Wrangler 型別並檢查 Worker TypeScript
 
 目前 `package.json` 沒有 test 或 lint script。多人測試時，開發模式（`npm run dev`）的房間憑證存在 `sessionStorage`，同一個瀏覽器的每個分頁都是獨立玩家。可用 `npm run dev:bots -- <房間代碼> [數量] [API_URL] [BETA_CODE]`（`scripts/dev-bots.mjs`；也可設定 `API_URL`、`BETA_CODE` 環境變數）讓機器人加入房間、自動 Ready 並自動遊玩阿瓦隆、狼人殺與拉密。阿瓦隆邪惡 Bot 會依先前任務的整體失敗率及隊伍中可辨識的邪惡玩家數決定出失敗牌機率。
 
-要打包 Windows x64 EXE，執行 `npm run build:dev-bots:exe -- <API_URL>`，例如 `npm run build:dev-bots:exe -- https://gamumu-api.example.workers.dev`；API_URL 會寫入 `dist\dev-bots.exe`。執行 EXE 時需互動輸入房間代碼、機器人數量（空白使用 5）與封測碼，不會詢問或讀取 API_URL。
+要打包 Windows x64 EXE，執行 `npm run build:dev-bots:exe -- <API_URL> <BETA_CODE>`，例如 `npm run build:dev-bots:exe -- https://gamumu-api.example.workers.dev YOUR_BETA_CODE`；也可先設定 `BETA_CODE` 環境變數並省略第二個參數。API_URL 與 BETA_CODE 會寫入 `dist\dev-bots.exe`。執行 EXE 時只需互動輸入房間代碼與機器人數量（空白使用 5）。BETA_CODE 會隨 EXE 發送給使用者，也可能從程式中擷取；只提供給可信任對象，外洩後請更換封測碼。
 
 完成房間／遊戲變更後，除了執行上述檢查，也應以多個瀏覽器手動驗證建立、加入、選頭像、Ready、遊戲選擇、開始、作答或結束、重新載入重連及離開流程。阿瓦隆結算另需確認任務紀錄中的壞人姓名標紅、失敗牌玩家以 `*` 標記，且這些資訊只在遊戲結束後公開。你畫我猜另需驗證繪圖同步、多人猜中計分、跳過、每人多輪及繪圖者斷線。狼人殺另需驗證 6–12 人（狼王守衛版 10–12 人）的角色配置、夜間行動限制（含守衛限制、同守同救）、獵人開槍、平票、投票逾時採用已選目標／未選視為棄票、公告時間設定、狼人數大於好人時在投票前獲勝、各階段倒數進度條、勝負與分數，以及私人身分不外洩。
 

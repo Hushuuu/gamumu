@@ -1,11 +1,13 @@
 // 本機測試用：讓機器人加入既有房間、自動 Ready 並自動遊玩阿瓦隆、狼人殺與拉密。
 // npm run dev:bots -- <房間代碼> <機器人數量=5> <API_URL> <BETA_CODE>
-// 打包 Windows EXE：npm run build:dev-bots:exe -- <API_URL>；EXE 啟動後會互動輸入房間代碼、數量與封測碼。
+// 打包 Windows EXE：npm run build:dev-bots:exe -- <API_URL> [BETA_CODE]；也可設定 BETA_CODE 環境變數。
+// EXE 啟動後只會互動輸入房間代碼與數量。
 // Ctrl+C 會讓機器人離開房間。
 
 import { createInterface } from 'node:readline/promises'
 
 const PACKAGED_API_URL = ''
+const PACKAGED_BETA_CODE = ''
 const isPackagedExecutable = typeof process.pkg !== 'undefined'
 
 async function promptForBotOptions() {
@@ -13,8 +15,7 @@ async function promptForBotOptions() {
   try {
     const roomCode = (await prompt.question('房間代碼：')).trim()
     const countArg = (await prompt.question('機器人數量（空白使用 5）：')).trim() || '5'
-    const betaCode = (await prompt.question('封測碼：')).trim()
-    return { roomCode, countArg, betaCode }
+    return { roomCode, countArg }
   } finally {
     prompt.close()
   }
@@ -30,14 +31,14 @@ const API = (
     : process.env.API_URL || process.argv[4] || 'http://127.0.0.1:8787'
 ).replace(/\/$/, '')
 const BETA_CODE = isPackagedExecutable
-  ? interactiveOptions.betaCode
+  ? PACKAGED_BETA_CODE
   : process.env.BETA_CODE || process.argv[5]?.trim()
 
 //console.log(`API URL: ${API}`)
 console.log(`房間代碼: ${code}, 機器人數量: ${count}`)
 
-if (isPackagedExecutable && !PACKAGED_API_URL) {
-  console.error('EXE 未寫入 API_URL，請重新打包並指定 API_URL。')
+if (isPackagedExecutable && (!PACKAGED_API_URL || !PACKAGED_BETA_CODE)) {
+  console.error('EXE 未寫入 API_URL 或 BETA_CODE，請重新打包並指定兩者。')
   process.exit(1)
 }
 if (!code) {
