@@ -203,4 +203,38 @@ function avatarUrl(avatarId: AvatarId): string {
   background: #eeebff;
   color: var(--purple-dark);
 }
+
+@media (max-width: 520px) {
+  .ww-seats {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 6px;
+  }
+
+  .ww-seat {
+    min-height: 68px;
+    gap: 3px;
+    padding: 5px 3px;
+    border-width: 1px;
+    border-radius: 10px;
+  }
+
+  .ww-seat img, .ww-seat-placeholder {
+    width: 28px;
+    height: 28px;
+  }
+
+  .ww-seat-name {
+    font-size: 10px;
+  }
+
+  .ww-seat .ww-tag {
+    max-width: 100%;
+    padding: 1px 4px;
+  }
+
+  .ww-role-guess {
+    max-width: 100%;
+    padding: 1px 4px;
+  }
+}
 </style>
