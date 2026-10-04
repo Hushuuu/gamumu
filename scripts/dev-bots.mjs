@@ -40,6 +40,81 @@ function pickUnique(items, count) {
   return shuffled.slice(0, count)
 }
 
+function getAvalonKnownEvilIds(playerId, priv) {
+  const evilIds = new Set(
+    (priv.knownPlayers ?? [])
+      .filter((player) => player.knowledge === 'evil')
+      .map((player) => player.playerId),
+  )
+  if (priv.camp === 'evil') {
+    evilIds.add(playerId)
+  }
+  return evilIds
+}
+
+function getAvalonFailThreshold(game) {
+  return game.seatIds.length >= 7 && game.missionNumber === 4 ? 2 : 1
+}
+
+function getAvalonEvilCountOnTeam(game, playerId, priv) {
+  const evilIds = getAvalonKnownEvilIds(playerId, priv)
+  return game.teamIds.filter((id) => evilIds.has(id)).length
+}
+
+function pickAvalonTeam(game, playerId, priv) {
+  const teamIds = []
+  const knownEvilIds = getAvalonKnownEvilIds(playerId, priv)
+  const eligiblePlayerIds = new Set(
+    game.seatIds.filter((id) => priv.camp === 'evil' || !knownEvilIds.has(id)),
+  )
+  const previousSuccessfulMission = [...game.missions]
+    .reverse()
+    .find((mission) => mission.outcome === 'success')
+
+  function addRandomPlayer(candidates) {
+    const available = candidates.filter((id) => eligiblePlayerIds.has(id) && !teamIds.includes(id))
+    if (available.length) {
+      teamIds.push(pick(available))
+    }
+  }
+
+  if (previousSuccessfulMission) {
+    addRandomPlayer(previousSuccessfulMission.teamIds)
+  }
+
+  if (priv.camp === 'evil') {
+    addRandomPlayer(game.seatIds.filter((id) => knownEvilIds.has(id)))
+  }
+
+  const remaining = game.seatIds.filter((id) => eligiblePlayerIds.has(id) && !teamIds.includes(id))
+  teamIds.push(...pickUnique(remaining, game.teamSize - teamIds.length))
+  return teamIds
+}
+
+function shouldApproveAvalonTeam(game, playerId, priv) {
+  const evilCount = getAvalonEvilCountOnTeam(game, playerId, priv)
+  const failThreshold = getAvalonFailThreshold(game)
+  const successfulMissions = game.missions.filter((mission) => mission.outcome === 'success').length
+
+  if (priv.roleId === 'merlin') {
+    if (evilCount >= failThreshold && successfulMissions >= 2) {
+      return false
+    }
+
+    const hiddenEvilIncluded = game.settings.includeMordred || game.settings.includeOberon
+    if (evilCount < failThreshold && !hiddenEvilIncluded) {
+      return true
+    }
+    return Math.random() < 0.5
+  }
+
+  if (priv.roleId === 'assassin' && evilCount >= failThreshold) {
+    return true
+  }
+
+  return Math.random() < 0.5
+}
+
 function addRummikubShape(faces) {
   for (const face of faces) {
     const key = rummikubFaceKey(face)
@@ -597,17 +672,24 @@ class Bot {
     if (game.phase === 'role-reveal') {
       action = 'confirm-role'
     } else if (game.phase === 'team-selection' && game.leaderId === this.id) {
+      const priv = this.avalonPriv
+      if (!priv || priv.stateVersion !== game.stateVersion) return
       action = 'propose-team'
-      payload = { teamIds: pickUnique(game.seatIds, game.teamSize) }
+      payload = { teamIds: pickAvalonTeam(game, this.id, priv) }
     } else if (game.phase === 'team-vote') {
+      const priv = this.avalonPriv
+      if (!priv || priv.stateVersion !== game.stateVersion) return
       action = 'vote-team'
-      payload = { approve: true }
+      payload = { approve: shouldApproveAvalonTeam(game, this.id, priv) }
     } else if (game.phase === 'mission' && game.teamIds.includes(this.id)) {
       const priv = this.avalonPriv
       if (!priv || priv.stateVersion !== game.stateVersion) return
       action = 'submit-mission'
+      const successfulMissions = game.missions.filter((mission) => mission.outcome === 'success').length
       payload = {
-        card: priv.camp === 'evil' && Math.random() < 0.5 ? 'fail' : 'success',
+        card: priv.camp === 'evil' && (
+          successfulMissions >= 2 || Math.random() < 0.5
+        ) ? 'fail' : 'success',
       }
     } else if (game.phase === 'lake-check' && game.lakeHolderId === this.id) {
       const targets = game.seatIds.filter((id) => !game.lakeVisitedIds.includes(id))
