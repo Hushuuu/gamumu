@@ -196,6 +196,9 @@ function resolveMission(room: GameRoomContext, game: StoredAvalon): void {
     successCount,
     failCount,
     failThreshold,
+    failPlayerIds: Object.entries(game.missionSelections)
+      .filter(([, card]) => card === 'fail')
+      .map(([playerId]) => playerId),
   }
   game.missions.push(mission)
   game.missionSelections = {}
@@ -571,7 +574,13 @@ export const avalonGame: GameModule = {
         teamIds: [...vote.teamIds],
         votes: { ...vote.votes },
       })),
-      missions: game.missions.map((mission) => ({ ...mission, teamIds: [...mission.teamIds] })),
+      missions: game.missions.map(({ failPlayerIds, ...mission }) => ({
+        ...mission,
+        teamIds: [...mission.teamIds],
+        ...(game.phase === 'finished' && failPlayerIds !== undefined
+          ? { failPlayerIds: [...failPlayerIds] }
+          : {}),
+      })),
       lakeHolderId: game.lakeHolderId,
       lakeVisitedIds: [...game.lakeVisitedIds],
       winner: game.winner,

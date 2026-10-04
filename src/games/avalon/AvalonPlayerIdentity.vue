@@ -5,6 +5,8 @@ const props = withDefaults(defineProps<{
   player: {
     name: string
     avatarId: AvatarId | null
+    isEvil?: boolean
+    missionFailed?: boolean
   }
   compact?: boolean
 }>(), {
@@ -22,7 +24,9 @@ function avatarUrl(avatarId: AvatarId): string {
     <span v-else class="avalon-player-avatar-placeholder" aria-hidden="true">
       {{ props.player.name.slice(0, 1) || '?' }}
     </span>
-    <span class="avalon-player-name">{{ props.player.name }}</span>
+    <span class="avalon-player-name" :class="{ 'is-evil': props.player.isEvil }">
+      {{ props.player.missionFailed ? '*' : '' }}{{ props.player.name }}
+    </span>
   </span>
 </template>
 
@@ -62,6 +66,11 @@ function avatarUrl(avatarId: AvatarId): string {
 .avalon-player-name {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.avalon-player-name.is-evil {
+  color: #c0392b;
+  font-weight: 700;
 }
 
 .avalon-player-identity.is-compact {

@@ -211,6 +211,7 @@ export interface AvalonMissionResult {
   successCount: number
   failCount: number
   failThreshold: number
+  failPlayerIds?: string[]
 }
 
 export interface AvalonKnownPlayer {
@@ -320,19 +321,39 @@ function isAvalonMissionResult(
   seatIds: Set<string>,
   playerCount: number,
   expectedMissionNumber: number,
+  revealFailedPlayers: boolean,
 ): value is AvalonMissionResult {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  const teamIds = value.teamIds
+  if (!isPlayerIdArray(teamIds, seatIds)) {
+    return false
+  }
+
   if (
-    !isRecord(value) ||
     value.missionNumber !== expectedMissionNumber ||
     typeof value.leaderId !== 'string' ||
     !seatIds.has(value.leaderId) ||
-    !isPlayerIdArray(value.teamIds, seatIds) ||
-    value.teamIds.length !== getAvalonMissionTeamSize(playerCount, expectedMissionNumber) ||
-    !isIntegerInRange(value.successCount, 0, value.teamIds.length) ||
-    !isIntegerInRange(value.failCount, 0, value.teamIds.length) ||
-    value.successCount + value.failCount !== value.teamIds.length ||
+    teamIds.length !== getAvalonMissionTeamSize(playerCount, expectedMissionNumber) ||
+    !isIntegerInRange(value.successCount, 0, teamIds.length) ||
+    !isIntegerInRange(value.failCount, 0, teamIds.length) ||
+    value.successCount + value.failCount !== teamIds.length ||
     value.failThreshold !== getAvalonMissionFailThreshold(playerCount, expectedMissionNumber) ||
     !['success', 'failure'].includes(String(value.outcome))
+  ) {
+    return false
+  }
+
+  if (
+    value.failPlayerIds !== undefined &&
+    (
+      !revealFailedPlayers ||
+      !isPlayerIdArray(value.failPlayerIds, seatIds) ||
+      value.failPlayerIds.length !== value.failCount ||
+      value.failPlayerIds.some((playerId) => !teamIds.includes(playerId))
+    )
   ) {
     return false
   }
@@ -446,7 +467,13 @@ export function isAvalonView(value: unknown): value is AvalonView {
         : value.missionCardsSubmitted !== 0
     ) ||
     !value.missions.every((mission, index) => {
-      return isAvalonMissionResult(mission, seatIds, playerCount, index + 1)
+      return isAvalonMissionResult(
+        mission,
+        seatIds,
+        playerCount,
+        index + 1,
+        value.phase === 'finished',
+      )
     }) ||
     !value.voteHistory.every((vote) => isAvalonVoteResult(vote, seatIds, playerCount)) ||
     (

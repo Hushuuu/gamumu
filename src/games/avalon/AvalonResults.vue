@@ -10,6 +10,8 @@ type AvalonResultPlayer = {
   id: string
   name: string
   avatarId: PlayerView['avatarId'] | null
+  isEvil?: boolean
+  missionFailed?: boolean
 }
 
 type Explanation = {
@@ -26,6 +28,14 @@ function playerInfoOf(playerId: string): AvalonResultPlayer {
     id: playerId,
     name: player ? player.name : playerId ? '已離開的玩家' : '玩家',
     avatarId: player?.avatarId ?? null,
+  }
+}
+function missionPlayerInfoOf(playerId: string, failPlayerIds: string[] = []): AvalonResultPlayer {
+  const roleId = view.value?.roles?.[playerId]
+  return {
+    ...playerInfoOf(playerId),
+    isEvil: roleId ? AVALON_ROLES[roleId].camp === 'evil' : false,
+    missionFailed: failPlayerIds.includes(playerId),
   }
 }
 
@@ -106,8 +116,8 @@ const missionRows = computed(() => {
   return current
     ? current.missions.map((mission) => ({
       mission,
-      leader: playerInfoOf(mission.leaderId),
-      team: mission.teamIds.map(playerInfoOf),
+      leader: missionPlayerInfoOf(mission.leaderId),
+      team: mission.teamIds.map((playerId) => missionPlayerInfoOf(playerId, mission.failPlayerIds)),
     }))
     : []
 })
@@ -145,7 +155,7 @@ const voteHistoryRows = computed(() => {
 
     <section v-if="missionRows.length" class="avalon-results-section">
       <h3>任務紀錄</h3>
-      <ol>
+      <ol class="avalon-result-missions">
         <li
           v-for="entry in missionRows"
           :key="entry.mission.missionNumber"
@@ -289,7 +299,7 @@ const voteHistoryRows = computed(() => {
   line-height: 1.5;
 }
 
-.avalon-results-section ol,
+.avalon-results-section > ol,
 .avalon-results-list {
   display: grid;
   gap: 6px;
@@ -298,10 +308,10 @@ const voteHistoryRows = computed(() => {
   list-style: none;
 }
 
-.avalon-results-section ol li,
-.avalon-results-list li {
+.avalon-result-missions > li,
+.avalon-result-votes > li,
+.avalon-results-list > li {
   display: grid;
-  grid-template-columns: 1fr auto;
   gap: 3px 10px;
   padding: 9px 11px;
   border-radius: 10px;
@@ -309,17 +319,22 @@ const voteHistoryRows = computed(() => {
   font-size: 10px;
 }
 
-.avalon-results-section ol li.is-success,
-.avalon-results-list li.is-winner {
+.avalon-result-missions > li,
+.avalon-results-list > li {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.avalon-result-missions > li.is-success,
+.avalon-results-list > li.is-winner {
   background: #ebf8f1;
 }
 
-.avalon-results-section ol li.is-failure {
+.avalon-result-missions > li.is-failure {
   background: #fff0ee;
 }
 
-.avalon-results-section ol li > div,
-.avalon-results-list li > .avalon-result-player {
+.avalon-result-missions > li > div,
+.avalon-results-list > li > .avalon-result-player {
   display: grid;
   gap: 3px;
 }
@@ -331,7 +346,7 @@ const voteHistoryRows = computed(() => {
 }
 
 .avalon-results-section ol small,
-.avalon-results-section ol li > span,
+.avalon-result-missions > li > span,
 .avalon-results-list small {
   color: #858197;
   font-size: 9px;
@@ -364,6 +379,7 @@ const voteHistoryRows = computed(() => {
 
 .avalon-result-votes > li {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   padding: 9px;
   border-radius: 9px;
