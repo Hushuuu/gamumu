@@ -5,6 +5,7 @@ import {
   getGameOption,
   getPlayerRange,
   getWerewolfRoleCounts,
+  isGameEnabled,
   isGameId,
   isWerewolfRoleId,
   isWerewolfSettings,
@@ -411,6 +412,11 @@ export class GameRoom extends DurableObject<Env> {
       return
     }
 
+    if (!isGameEnabled(value)) {
+      this.send(ws, { type: 'action_error', code: 'GAME_DISABLED', message: '這款遊戲目前暫停開放。' })
+      return
+    }
+
     if (!this.room || this.room.status !== 'waiting') {
       this.send(ws, { type: 'action_error', code: 'ROOM_NOT_WAITING', message: '遊戲開始後不能更換遊戲。' })
       return
@@ -460,6 +466,11 @@ export class GameRoom extends DurableObject<Env> {
 
     if (!isGameId(gameIdValue) || gameIdValue !== this.room.selectedGameId || !isRecord(settingsValue)) {
       this.send(ws, { type: 'action_error', code: 'INVALID_GAME_SETTINGS', message: '遊戲設定格式不正確。' })
+      return
+    }
+
+    if (!isGameEnabled(gameIdValue)) {
+      this.send(ws, { type: 'action_error', code: 'GAME_DISABLED', message: '這款遊戲目前暫停開放。' })
       return
     }
 
@@ -586,6 +597,15 @@ export class GameRoom extends DurableObject<Env> {
         type: 'action_error',
         code: 'GAME_NOT_SELECTED',
         message: '請先選擇本局遊戲。',
+      })
+      return
+    }
+
+    if (!isGameEnabled(this.room.selectedGameId)) {
+      this.send(ws, {
+        type: 'action_error',
+        code: 'GAME_DISABLED',
+        message: '目前選擇的遊戲已暫停開放，請改選其他遊戲。',
       })
       return
     }

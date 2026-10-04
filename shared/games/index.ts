@@ -110,7 +110,14 @@ export type {
   RummikubTile,
   RummikubView,
 } from './rummikub'
-export { DEFAULT_GAME_ID, GAME_OPTIONS, getGameOption, isGameId, ROOM_CAPACITY } from './catalog'
+export {
+  DEFAULT_GAME_ID,
+  GAME_OPTIONS,
+  getGameOption,
+  isGameEnabled,
+  isGameId,
+  ROOM_CAPACITY,
+} from './catalog'
 export type { GameId, GameOption } from './catalog'
 export { isWordGuessView } from './word-guess'
 export type { BlankGameView } from './blank'
