@@ -91,7 +91,7 @@ function completeWinnerMoment(id: number): void {
     :events="review.events"
     :players="props.players"
     :player-names="review.playerNames"
-    button-label="查看本局覆盤"
+    button-label="本局覆盤"
     eyebrow="覆盤"
     dialog-title="本局行動紀錄"
   />

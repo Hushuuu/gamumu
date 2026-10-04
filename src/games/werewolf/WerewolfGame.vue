@@ -2,7 +2,9 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { GameView } from '../../../shared/games'
 import {
+  WEREWOLF_HUNTER_SHOT_MS,
   WEREWOLF_PRIVATE_EVENT,
+  WEREWOLF_ROLE_REVEAL_MS,
   WEREWOLF_ROLES,
   isWerewolfPrivateState,
   type WerewolfPhase,
@@ -76,6 +78,45 @@ const remainingSeconds = computed(() => {
   const deadline = view.value?.phaseEndsAt
   return deadline ? Math.max(0, Math.ceil((deadline - now.value) / 1_000)) : 0
 })
+const phaseDurationMs = computed(() => {
+  const current = view.value
+  if (!current) {
+    return 0
+  }
+
+  switch (current.phase) {
+    case 'role-reveal':
+      return WEREWOLF_ROLE_REVEAL_MS
+    case 'night':
+      return current.settings.nightStepSeconds * 1_000
+    case 'dawn':
+    case 'vote-result':
+      return current.settings.announcementSeconds * 1_000
+    case 'hunter-shot':
+      return WEREWOLF_HUNTER_SHOT_MS
+    case 'day-discussion':
+      return (
+        current.settings[
+          current.settings.speechMode ? 'speechSeconds' : 'discussionSeconds'
+        ] * 1_000
+      )
+    case 'pk-discussion':
+      return current.settings.speechSeconds * 500
+    case 'vote':
+    case 'pk-vote':
+      return current.settings.voteSeconds * 1_000
+    case 'finished':
+      return 0
+  }
+})
+const phaseProgress = computed(() => {
+  const deadline = view.value?.phaseEndsAt
+  const duration = phaseDurationMs.value
+  return deadline && duration > 0
+    ? Math.max(0, Math.min(1, (deadline - now.value) / duration))
+    : 0
+})
+const phaseProgressPercent = computed(() => Math.round(phaseProgress.value * 100))
 
 const mode = computed<PickMode>(() => {
   const state = priv.value
@@ -489,9 +530,9 @@ function endDiscussion(): void {
       <WerewolfHistoryDialog
         :events="view.publicHistory"
         :players="props.players"
-        button-label="查看公開紀錄"
+        button-label="歷史紀錄"
         eyebrow="遊戲資訊"
-        dialog-title="狼人殺公開紀錄"
+        dialog-title="本局歷史紀錄"
       />
 
       <RoleCard :role="priv?.role ?? null" :teammate-names="teammateNames" />
@@ -499,6 +540,18 @@ function endDiscussion(): void {
       <p v-if="priv && !priv.alive" class="ww-notice ww-notice-dead" role="status">
         你已出局。可以繼續旁觀，但請不要透露任何身分資訊。
       </p>
+
+      <div
+        v-if="phaseDurationMs > 0"
+        class="ww-phase-progress"
+        role="progressbar"
+        aria-label="階段剩餘時間"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-valuenow="phaseProgressPercent"
+      >
+        <span :style="{ transform: `scaleX(${phaseProgress})` }" />
+      </div>
 
       <section v-if="phase === 'role-reveal'" class="ww-panel ww-phase-panel" aria-live="polite">
         <WerewolfPhaseIllustration phase="role-reveal" />
@@ -844,6 +897,31 @@ function endDiscussion(): void {
   display: block;
   clear: both;
   content: '';
+}
+
+.ww-phase-progress {
+  height: 4px;
+  margin-bottom: -12px;
+  overflow: hidden;
+  border-radius: 14px 14px 0 0;
+  background: #e7e4f1;
+}
+
+.ww-phase-progress > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  background: var(--purple);
+  transition: transform 250ms linear;
+}
+
+.ww-state.is-night .ww-phase-progress {
+  background: #403b68;
+}
+
+.ww-state.is-night .ww-phase-progress > span {
+  background: #a69aff;
 }
 
 .ww-panel {

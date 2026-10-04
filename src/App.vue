@@ -982,7 +982,7 @@ function connectionLabel(): string {
                   </option>
                 </select>
               </label>
-              <p>只指定房主自己的身分，其他玩家仍依本局劇本隨機分配；正式部署的 Worker 不接受此選角。</p>
+              <p>只指定房主自己的身分，其他玩家仍依本局劇本隨機分配</p>
               <p v-if="devRoleOptions.length === 0" class="dev-role-selection-warning">
                 目前人數不適用所選劇本，請先調整劇本或玩家人數。
               </p>
@@ -1004,7 +1004,7 @@ function connectionLabel(): string {
                 :disabled="connectionStatus !== 'connected' || !currentPlayer"
                 @click="toggleReady"
               >
-                {{ currentPlayer?.ready ? '取消準備' : '我已準備好' }}
+                {{ currentPlayer?.ready ? '取消準備' : '準備Ready' }}
               </button>
               <span class="ready-count" role="status">{{ readyCount }} / {{ snapshot.players.length }} 人已準備</span>
               <button

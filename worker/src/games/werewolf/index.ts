@@ -1,6 +1,8 @@
 import {
   DEFAULT_WEREWOLF_SETTINGS,
+  WEREWOLF_HUNTER_SHOT_MS,
   WEREWOLF_PRIVATE_EVENT,
+  WEREWOLF_ROLE_REVEAL_MS,
   WEREWOLF_ROLES,
   isWerewolfSettings,
   type WerewolfCamp,
@@ -19,8 +21,6 @@ import { getRole } from './roles'
 import { getScript } from './scripts'
 import type { DeathCause, NightState, StoredWerewolf } from './types'
 
-const ROLE_REVEAL_MS = 12_000
-const HUNTER_SHOT_MS = 20_000
 const WIN_SCORE = 100
 const MAX_CATCH_UP_STEPS = 24
 
@@ -243,6 +243,31 @@ function finishGame(room: GameRoomContext, game: StoredWerewolf, winner: Werewol
   }
 }
 
+function wolvesOutnumberGood(game: StoredWerewolf): boolean {
+  let wolfCount = 0
+  let goodCount = 0
+  for (const playerId of aliveIds(game)) {
+    if (WEREWOLF_ROLES[game.roles[playerId]!].camp === 'wolf') {
+      wolfCount += 1
+    } else {
+      goodCount += 1
+    }
+  }
+  return wolfCount > goodCount
+}
+
+function finishBeforeVoting(room: GameRoomContext, game: StoredWerewolf): boolean {
+  const winner =
+    getScript(game.scriptId).checkWin(game) ??
+    (wolvesOutnumberGood(game) ? 'wolf' : null)
+  if (!winner) {
+    return false
+  }
+
+  finishGame(room, game, winner)
+  return true
+}
+
 function proceedAfterDeaths(
   room: GameRoomContext,
   game: StoredWerewolf,
@@ -253,7 +278,7 @@ function proceedAfterDeaths(
   if (game.pendingShooterId !== null) {
     game.phase = 'hunter-shot'
     game.afterHunter = next
-    game.phaseEndsAt = now + HUNTER_SHOT_MS
+    game.phaseEndsAt = now + WEREWOLF_HUNTER_SHOT_MS
     return
   }
 
@@ -285,7 +310,7 @@ function enterDiscussion(game: StoredWerewolf, now: number): void {
   }
 }
 
-function nextSpeaker(game: StoredWerewolf, now: number): void {
+function nextSpeaker(room: GameRoomContext, game: StoredWerewolf, now: number): void {
   let index = game.speakerIndex + 1
   while (index < game.speechOrder.length && !isAlive(game, game.speechOrder[index]!)) {
     index += 1
@@ -293,9 +318,9 @@ function nextSpeaker(game: StoredWerewolf, now: number): void {
 
   if (index >= game.speechOrder.length) {
     if (game.phase === 'pk-discussion') {
-      enterPkVote(game, now)
+      enterPkVote(room, game, now)
     } else {
-      enterVote(game, now)
+      enterVote(room, game, now)
     }
     return
   }
@@ -391,7 +416,11 @@ function endNightStep(game: StoredWerewolf, now: number): void {
   game.phaseEndsAt = now + game.settings.announcementSeconds * 1_000
 }
 
-function enterVote(game: StoredWerewolf, now: number): void {
+function enterVote(room: GameRoomContext, game: StoredWerewolf, now: number): void {
+  if (finishBeforeVoting(room, game)) {
+    return
+  }
+
   game.phase = 'vote'
   game.votes = {}
   game.voteSelections = {}
@@ -412,7 +441,11 @@ function enterPkDiscussion(game: StoredWerewolf, tiedIds: string[], now: number)
   game.phaseEndsAt = now + game.settings.speechSeconds * 500
 }
 
-function enterPkVote(game: StoredWerewolf, now: number): void {
+function enterPkVote(room: GameRoomContext, game: StoredWerewolf, now: number): void {
+  if (finishBeforeVoting(room, game)) {
+    return
+  }
+
   game.pkCandidateIds = game.playerIds.filter(
     (playerId) => (game.pkCandidateIds ?? []).includes(playerId) && isAlive(game, playerId),
   )
@@ -526,9 +559,9 @@ function advancePhase(room: GameRoomContext, game: StoredWerewolf, now: number):
       return
     case 'day-discussion':
       if (game.settings.speechMode) {
-        nextSpeaker(game, now)
+        nextSpeaker(room, game, now)
       } else {
-        enterVote(game, now)
+        enterVote(room, game, now)
       }
       return
     case 'vote':
@@ -536,7 +569,7 @@ function advancePhase(room: GameRoomContext, game: StoredWerewolf, now: number):
       tallyVotes(game, now, true)
       return
     case 'pk-discussion':
-      nextSpeaker(game, now)
+      nextSpeaker(room, game, now)
       return
     case 'vote-result':
       proceedAfterDeaths(room, game, now, 'night')
@@ -623,7 +656,7 @@ function dispatchAction(
         return failure('NOT_SPEAKER', '只有發言者或房主可以結束這段發言。')
       }
 
-      nextSpeaker(game, now)
+      nextSpeaker(room, game, now)
       return { ok: true, changed: true }
     }
     case 'end_discussion': {
@@ -634,7 +667,7 @@ function dispatchAction(
         return failure('NOT_DISCUSSING', '現在不是討論階段。')
       }
 
-      enterVote(game, now)
+      enterVote(room, game, now)
       return { ok: true, changed: true }
     }
     case 'select_vote':
@@ -794,7 +827,7 @@ export const werewolfGame: GameModule = {
       phase: 'role-reveal',
       day: 0,
       nightStep: 0,
-      phaseEndsAt: now + ROLE_REVEAL_MS,
+      phaseEndsAt: now + WEREWOLF_ROLE_REVEAL_MS,
       stateVersion: 1,
       night: emptyNight(),
       witchPotions: { antidote: true, poison: true },
@@ -848,7 +881,7 @@ export const werewolfGame: GameModule = {
       recordReplayEvent(game, { type: 'player-left', day: game.day, playerId })
       killPlayer(game, playerId, 'left')
       if (wasSpeaking) {
-        nextSpeaker(game, now)
+        nextSpeaker(room, game, now)
       }
       delete game.night.wolfPicks[playerId]
       delete game.votes[playerId]

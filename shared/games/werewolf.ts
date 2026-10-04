@@ -170,6 +170,9 @@ export interface WerewolfSettings {
   announcementSeconds: number
 }
 
+export const WEREWOLF_ROLE_REVEAL_MS = 12_000
+export const WEREWOLF_HUNTER_SHOT_MS = 20_000
+
 export const DEFAULT_WEREWOLF_SETTINGS: WerewolfSettings = {
   scriptId: 'classic',
   discussionSeconds: 120,

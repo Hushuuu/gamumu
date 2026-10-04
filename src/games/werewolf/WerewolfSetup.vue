@@ -151,11 +151,11 @@ function applySettings(): void {
       <label>
         <span>結果公告時間（秒）</span>
         <input v-model.number="announcementSeconds" type="number" min="5" max="60" step="1" :disabled="disabled" />
-        <small>5–60 秒，預設 10 秒；套用於天亮、放逐與獵人開槍結果</small>
+        <small>5–60 秒</small>
       </label>
     </form>
     <p class="draw-settings-note">
-      {{ isHost ? '有效設定變更會自動套用，不會清除任何人的準備狀態。' : '房主調整設定不會清除你的準備狀態。' }}
+      {{ isHost ? '有效設定變更會自動套用。' : '室長調整設定中' }}
       討論請面對面或自行用語音進行。
     </p>
   </section>
