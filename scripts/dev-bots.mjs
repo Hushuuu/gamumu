@@ -1,17 +1,55 @@
 // 本機測試用：讓機器人加入既有房間、自動 Ready 並自動遊玩阿瓦隆、狼人殺與拉密。
-// 用法：設定 BETA_CODE 後執行 npm run dev:bots -- <房間代碼> <機器人數量=5> <APIURL> <BETA_CODE>
-// 環境變數 API_URL 可指定 Worker 位置（預設 http://127.0.0.1:8787）。Ctrl+C 會讓機器人離開房間。
+// npm run dev:bots -- <房間代碼> <機器人數量=5> <API_URL> <BETA_CODE>
+// 打包 Windows EXE：npm run build:dev-bots:exe -- <API_URL>；EXE 啟動後會互動輸入房間代碼、數量與封測碼。
+// Ctrl+C 會讓機器人離開房間。
 
-const API = (process.env.API_URL || process.argv[4] || 'http://127.0.0.1:8787').replace(/\/$/, '')
-const BETA_CODE = process.env.BETA_CODE || process.argv[5]?.trim()
-const [code, countArg] = process.argv.slice(2)
+import { createInterface } from 'node:readline/promises'
+
+const PACKAGED_API_URL = ''
+const isPackagedExecutable = typeof process.pkg !== 'undefined'
+
+async function promptForBotOptions() {
+  const prompt = createInterface({ input: process.stdin, output: process.stdout })
+  try {
+    const roomCode = (await prompt.question('房間代碼：')).trim()
+    const countArg = (await prompt.question('機器人數量（空白使用 5）：')).trim() || '5'
+    const betaCode = (await prompt.question('封測碼：')).trim()
+    return { roomCode, countArg, betaCode }
+  } finally {
+    prompt.close()
+  }
+}
+
+const interactiveOptions = isPackagedExecutable ? await promptForBotOptions() : null
+const code = isPackagedExecutable ? interactiveOptions.roomCode : process.argv[2]
+const countArg = isPackagedExecutable ? interactiveOptions.countArg : process.argv[3]
 const count = Number(countArg ?? 5)
+const API = (
+  isPackagedExecutable
+    ? PACKAGED_API_URL
+    : process.env.API_URL || process.argv[4] || 'http://127.0.0.1:8787'
+).replace(/\/$/, '')
+const BETA_CODE = isPackagedExecutable
+  ? interactiveOptions.betaCode
+  : process.env.BETA_CODE || process.argv[5]?.trim()
 
-console.log(`API URL: ${API}`)
+//console.log(`API URL: ${API}`)
 console.log(`房間代碼: ${code}, 機器人數量: ${count}`)
 
-if (!code || !Number.isInteger(count) || count < 1 || !BETA_CODE) {
-  console.error('未提供BETA_CODE，請在命令列中指定。')
+if (isPackagedExecutable && !PACKAGED_API_URL) {
+  console.error('EXE 未寫入 API_URL，請重新打包並指定 API_URL。')
+  process.exit(1)
+}
+if (!code) {
+  console.error('請輸入房間代碼。')
+  process.exit(1)
+}
+if (!Number.isInteger(count) || count < 1) {
+  console.error('機器人數量必須是大於 0 的整數。')
+  process.exit(1)
+}
+if (!BETA_CODE) {
+  console.error('未提供封測碼，請互動輸入、設定 BETA_CODE 或傳入最後一個位置參數。')
   process.exit(1)
 }
 

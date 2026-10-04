@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "worker:dev": "wrangler dev --port 8787 --var ENABLE_DEV_ROLE_SELECTION:true",
     "dev:bots": "node scripts/dev-bots.mjs",
+    "build:dev-bots:exe": "node scripts/build-dev-bots-exe.mjs",
     "worker:deploy": "wrangler deploy",
     "worker:types": "wrangler types",
     "worker:check": "wrangler types && tsc --project tsconfig.worker.json"
@@ -22,6 +23,7 @@
     "@types/node": "^24.13.3",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/tsconfig": "^0.9.1",
+    "@yao-pkg/pkg": "^6.23.0",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
     "vue-tsc": "^3.3.11",
