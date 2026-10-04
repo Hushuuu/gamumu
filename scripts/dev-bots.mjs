@@ -733,9 +733,9 @@ class Bot {
         }
 
         const overallFailureRate = getAvalonMissionFailureRate(game)
-        const individualFailureRate = overallFailureRate ** (1 / evilCountOnTeam)
+        const individualFailureRate = evilCountOnTeam === 1 ? overallFailureRate : 1 - (overallFailureRate ** (1 / 2** (evilCountOnTeam-1)))
         payload = {
-          card: Math.random() < individualFailureRate ? 'fail' : 'success',
+          card: Math.random() < individualFailureRate || overallFailureRate === 1 ? 'fail' : 'success',
         }
       } else {
         payload = { card: 'success' }
