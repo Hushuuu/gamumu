@@ -86,7 +86,7 @@ function applySettings(): void {
       </label>
     </form>
     <p class="draw-settings-note">
-      {{ isHost ? '有效設定變更會自動套用，並清除所有人的準備狀態。' : '設定變更後需要重新準備。' }}
+      {{ isHost ? '有效設定變更會自動套用，不會清除任何人的準備狀態。' : '房主調整設定不會清除你的準備狀態。' }}
     </p>
   </section>
 </template>

@@ -470,9 +470,6 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     if (result.changed) {
-      for (const roomPlayer of this.room.players) {
-        roomPlayer.ready = false
-      }
       await this.persist()
       this.broadcastState()
     }

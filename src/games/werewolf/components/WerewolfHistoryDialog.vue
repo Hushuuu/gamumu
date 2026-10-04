@@ -16,6 +16,12 @@ type GroupedVoteEvent = {
   round?: 'pk'
 }
 type DisplayEvent = Exclude<HistoryEvent, { type: 'day-vote' }> | GroupedVoteEvent
+type DayVoteEvent = Extract<HistoryEvent, { type: 'day-vote' }>
+type VoteRound = {
+  day: number
+  round?: 'pk'
+  groups: Map<string | null, string[]>
+}
 
 const props = defineProps<{
   events: HistoryEvent[]
@@ -29,43 +35,57 @@ const props = defineProps<{
 const dialogOpen = ref(false)
 const contentElement = ref<HTMLElement | null>(null)
 
-function groupVotes(events: HistoryEvent[]): DisplayEvent[] {
-  const grouped: DisplayEvent[] = []
-  let index = 0
+function voteRoundKey(event: DayVoteEvent): string {
+  return `${event.day}:${event.round === 'pk' ? 'pk' : 'vote'}`
+}
 
-  while (index < events.length) {
-    const event = events[index]!
+function groupVotes(events: HistoryEvent[]): DisplayEvent[] {
+  const rounds = new Map<string, VoteRound>()
+  for (const event of events) {
+    if (event.type === 'day-vote') {
+      const key = voteRoundKey(event)
+      let round = rounds.get(key)
+      if (!round) {
+        round = {
+          day: event.day,
+          ...(event.round === 'pk' ? { round: 'pk' as const } : {}),
+          groups: new Map(),
+        }
+        rounds.set(key, round)
+      }
+      const voters = round.groups.get(event.targetId) ?? []
+      voters.push(event.playerId)
+      round.groups.set(event.targetId, voters)
+    }
+  }
+
+  const grouped: DisplayEvent[] = []
+  const emittedRounds = new Set<string>()
+  for (const event of events) {
     if (event.type !== 'day-vote') {
       grouped.push(event)
-      index += 1
       continue
     }
 
-    const groups = new Map<string | null, string[]>()
-    while (index < events.length) {
-      const vote = events[index]!
-      if (
-        vote.type !== 'day-vote' ||
-        vote.day !== event.day ||
-        vote.round !== event.round
-      ) {
-        break
-      }
-      const voters = groups.get(vote.targetId) ?? []
-      voters.push(vote.playerId)
-      groups.set(vote.targetId, voters)
-      index += 1
+    const key = voteRoundKey(event)
+    if (emittedRounds.has(key)) {
+      continue
     }
+    emittedRounds.add(key)
 
-    const voteGroups = [...groups.entries()]
+    const round = rounds.get(key)
+    if (!round) {
+      continue
+    }
+    const voteGroups = [...round.groups.entries()]
       .sort(([, left], [, right]) => right.length - left.length)
     for (const [targetId, voterIds] of voteGroups) {
       grouped.push({
         type: 'day-vote-group',
-        day: event.day,
+        day: round.day,
         targetId,
         voterIds,
-        ...(event.round === 'pk' ? { round: 'pk' as const } : {}),
+        ...(round.round === 'pk' ? { round: 'pk' as const } : {}),
       })
     }
   }
