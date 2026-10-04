@@ -994,6 +994,7 @@ function connectionLabel(): string {
               :settings="snapshot.gameSettings"
               :is-host="isHost"
               :can-configure="connectionStatus === 'connected'"
+              :player-count="snapshot.players.length"
               @configure-game="configureGame"
             />
 

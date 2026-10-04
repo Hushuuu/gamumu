@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import {
+  AVALON_ROLES,
   getGameOption,
+  getAvalonMissionTeamSizes,
+  getAvalonPlayerRange,
+  getAvalonRoleCounts,
+  isAvalonRoleId,
   getWerewolfRoleCounts,
   WEREWOLF_ROLES,
   WEREWOLF_SCRIPTS,
@@ -127,6 +132,64 @@ const content = computed<RulesContent>(() => {
           },
         ],
       }
+    case 'avalon': {
+      const roleCounts = getAvalonRoleCounts(props.playerCount, props.gameSettings)
+      const missionTeams = getAvalonMissionTeamSizes(props.playerCount)
+      const playerRange = getAvalonPlayerRange(props.gameSettings)
+      const roleEntries = roleCounts
+        ? Object.entries(roleCounts).flatMap(([roleId, count]) => {
+            return isAvalonRoleId(roleId) && count > 0
+              ? [{ role: AVALON_ROLES[roleId], count }]
+              : []
+          })
+        : []
+      const composition = roleCounts
+        ? roleEntries.map(({ role, count }) => `${role.name} × ${count}`).join('、')
+        : `目前 ${props.playerCount} 人不適用這組角色配置${playerRange ? `，至少需要 ${playerRange.min} 人` : ''}。`
+      const roleDescriptions = roleEntries.map(({ role }) => `${role.name}：${role.description}`)
+      const missionSizes = missionTeams
+        ? missionTeams.map((teamSize, index) => `第 ${index + 1} 個任務 ${teamSize} 人`).join('、')
+        : '任務隊伍人數依 5–10 人配置表決定。'
+
+      return {
+        title: `${gameName.value}規則`,
+        description: '正義陣營完成任務並保護梅林；邪惡陣營阻止任務，或在最後刺殺梅林。',
+        sections: [
+          {
+            title: '勝負條件',
+            items: [
+              '邪惡陣營讓三個任務失敗，或同一任務的隊伍提案連續五次遭否決，即立即獲勝。',
+              '正義陣營完成三個任務後不會立即獲勝；刺客若猜中梅林，邪惡陣營獲勝，否則正義陣營獲勝。',
+            ],
+          },
+          {
+            title: '隊長、投票與任務',
+            items: [
+              `每個任務需要的人數：${missionSizes}。隊長提案後全員同時投票，必須嚴格過半同意才通過，平票視為否決。`,
+              '隊伍通過後，隊員私下出任務牌；好人只能出成功，壞人可選成功或失敗。只公布成功與失敗牌數，不會揭露誰出哪張牌。',
+              '7–10 人局的第四個任務需要至少兩張失敗牌才會失敗；其他任務出現一張失敗牌即失敗。',
+            ],
+          },
+          {
+            title: `本局角色配置（${props.playerCount} 人）`,
+            items: [
+              composition,
+              ...roleDescriptions,
+              '派西維爾替換一名忠臣；莫甘娜、莫德雷德與奧伯倫各替換一名普通爪牙，不會增加陣營人數。',
+            ],
+          },
+          ...(props.gameSettings.ladyOfTheLake === true
+            ? [{
+                title: '湖中女神',
+                items: [
+                  '第 2、3、4 個任務後，持有人查驗一名從未持有過標記的玩家，只會私下得知好人或邪惡陣營，之後標記交給被查驗者。',
+                  '查驗結果不能公開展示；奧伯倫會顯示為好人。每位玩家最多持有一次，因此全局最多查驗三次。',
+                ],
+              }]
+            : []),
+        ],
+      }
+    }
     case 'werewolf': {
       const script = werewolfScript.value
       const counts = werewolfRoleCounts.value

@@ -5,6 +5,7 @@ import type { StoredDrawGuess } from './draw-guess/types'
 import type { StoredWerewolf } from './werewolf/types'
 import type { StoredWordGuess } from './word-guess/types'
 import type { StoredRummikub } from './rummikub/types'
+import type { StoredAvalon } from './avalon/types'
 import type { WerewolfRoleId } from '../../../shared/games/werewolf'
 
 export type StoredGame =
@@ -13,6 +14,7 @@ export type StoredGame =
   | StoredDrawGuess
   | StoredRummikub
   | StoredWerewolf
+  | StoredAvalon
 
 export interface GameRoomContext {
   status: RoomStatus

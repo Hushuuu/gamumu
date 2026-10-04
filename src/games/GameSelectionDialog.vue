@@ -45,6 +45,12 @@ const GAME_PROMOS: Record<GameId, GamePromo> = {
     description: '閉眼聽見夜色降臨，睜眼迎來一場心理攻防。交換線索、觀察反應，用每一票改寫村莊命運。',
     stamp: 'WHO IS THE WOLF?',
   },
+  avalon: {
+    category: '隱藏身分推理',
+    headline: '隊伍裡有誰，正在暗中阻止任務？',
+    description: '正義陣營尋找邪惡勢力並保護梅林；每一次組隊與投票都可能改變亞瑟王國的命運。',
+    stamp: 'TRUST NO ONE',
+  },
 }
 
 const props = defineProps<{

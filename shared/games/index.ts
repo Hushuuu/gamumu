@@ -1,4 +1,5 @@
 //import { isBlankGameView } from './blank'
+import { getAvalonPlayerRange, isAvalonView } from './avalon'
 import { getGameOption, isGameId } from './catalog'
 import type { GameId } from './catalog'
 import { isDrawGuessView } from './draw-guess'
@@ -8,6 +9,39 @@ import { isRummikubView } from './rummikub'
 import type { GameView } from './types'
 
 export { isBlankGameView } from './blank'
+export {
+  AVALON_EVIL_COUNTS,
+  AVALON_MISSION_TEAM_SIZES,
+  AVALON_PRIVATE_EVENT,
+  AVALON_ROLES,
+  DEFAULT_AVALON_SETTINGS,
+  getAvalonMissionFailThreshold,
+  getAvalonMissionTeamSize,
+  getAvalonMissionTeamSizes,
+  getAvalonPlayerRange,
+  getAvalonRoleCounts,
+  isAvalonPrivateState,
+  isAvalonRoleId,
+  isAvalonSettings,
+  isAvalonView,
+} from './avalon'
+export type {
+  AvalonCamp,
+  AvalonEndReason,
+  AvalonKnowledge,
+  AvalonLakeResult,
+  AvalonMissionCard,
+  AvalonMissionOutcome,
+  AvalonMissionResult,
+  AvalonPhase,
+  AvalonPrivateState,
+  AvalonRoleCounts,
+  AvalonRoleId,
+  AvalonRoleInfo,
+  AvalonSettings,
+  AvalonView,
+  AvalonVoteResult,
+} from './avalon'
 export { isDrawGuessSettings, isDrawGuessView } from './draw-guess'
 export {
   DEFAULT_WEREWOLF_SETTINGS,
@@ -90,6 +124,7 @@ const GAME_VIEW_VALIDATORS: Record<GameId, (value: unknown) => boolean> = {
   'draw-guess': isDrawGuessView,
   rummikub: isRummikubView,
   werewolf: isWerewolfView,
+  avalon: isAvalonView,
 }
 
 export function getPlayerRange(
@@ -97,7 +132,12 @@ export function getPlayerRange(
   settings: Record<string, unknown> | undefined,
 ): { min: number; max: number } {
   const option = getGameOption(gameId)
-  const range = gameId === 'werewolf' ? getWerewolfPlayerRange(settings) : null
+  const range =
+    gameId === 'werewolf'
+      ? getWerewolfPlayerRange(settings)
+      : gameId === 'avalon'
+        ? getAvalonPlayerRange(settings)
+        : null
   return range ?? { min: option.minPlayers, max: option.maxPlayers }
 }
 

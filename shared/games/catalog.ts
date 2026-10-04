@@ -41,6 +41,14 @@ export const GAME_OPTIONS = [
     minPlayers: 6,
     maxPlayers: ROOM_CAPACITY,
   },
+  {
+    id: 'avalon',
+    name: '阿瓦隆',
+    description: '隱藏身分、組隊完成任務，並保護梅林不被刺客識破。',
+    icon: '⚔',
+    minPlayers: 5,
+    maxPlayers: 10,
+  },
 ] as const
 
 export type GameId = (typeof GAME_OPTIONS)[number]['id']

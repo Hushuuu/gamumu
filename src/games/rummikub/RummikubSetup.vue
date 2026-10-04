@@ -9,6 +9,7 @@ const props = defineProps<{
   settings: Record<string, unknown>
   isHost: boolean
   canConfigure: boolean
+  playerCount?: number
 }>()
 
 const emit = defineEmits<{
