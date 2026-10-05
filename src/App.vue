@@ -911,7 +911,7 @@ function connectionLabel(): string {
               {{
                 !snapshot.gameSelectionConfirmed
                   ? isHost
-                    ? '滑動遊戲卡挑選玩法，確認後才會同步給房間裡的所有人。'
+                    ? ''
                     : '室長選好遊戲後，就能一起查看玩法並準備開局。'
                   : playerCountIssue || '每位玩家都按下準備後，房主就可以開始。'
               }}
@@ -920,13 +920,6 @@ function connectionLabel(): string {
             <div class="game-choice-panel">
               <div v-if="isHost" class="game-choice-intro">
                 <p class="game-choice-heading">挑選今天的遊戲</p>
-                <p>
-                  {{
-                    snapshot.gameSelectionConfirmed
-                      ? `目前選擇：${selectedGame.name}。`
-                      : '你可以先瀏覽卡片；確認遊戲後，房間裡的所有人才會看到你的選擇。'
-                  }}
-                </p>
               </div>
               <div v-else class="game-choice-wait" role="status">
                 <span class="game-choice-wait-icon" aria-hidden="true">
@@ -943,8 +936,8 @@ function connectionLabel(): string {
                   <small>
                     {{
                       snapshot.gameSelectionConfirmed
-                        ? '你可以先瀏覽遊戲卡，房間設定只由室長修改。'
-                        : '也可以先開啟遊戲列表瀏覽玩法，這不會更改房間選擇。'
+                        ? '你可以先瀏覽遊戲，房間設定只由室長修改。'
+                        : '可以開啟遊戲列表瀏覽玩法'
                     }}
                   </small>
                 </span>
@@ -960,7 +953,7 @@ function connectionLabel(): string {
                 @select="selectGame"
               />
               <p v-if="isHost" class="game-choice-note">
-                更換已確認的遊戲會清除所有人的準備狀態；各款遊戲的人數需求會顯示在卡片上。
+                各款遊戲的人數需求會顯示在卡片上。
               </p>
             </div>
 
@@ -989,7 +982,7 @@ function connectionLabel(): string {
             </section>
 
             <component
-              v-if="gameComponents.setup && (isHost || snapshot.gameSelectionConfirmed)"
+              v-if="gameComponents.setup && (snapshot.gameSelectionConfirmed)"
               :is="gameComponents.setup"
               :settings="snapshot.gameSettings"
               :is-host="isHost"

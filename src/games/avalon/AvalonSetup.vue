@@ -130,8 +130,8 @@ function applySettings(): void {
       {{ playerCountWarning }}
     </p>
     <p class="draw-settings-note">
-      {{ isHost ? '角色設定會自動套用。' : '由房主調整本局角色。' }}
-      邪惡角色選配過多時，開始人數會相應提高；完整規則請查看「規則說明」。
+      {{ isHost ? '' : '由房主調整本局角色。' }}
+      壞人角色選配過多時，需求人數會提高；完整規則請查看「規則說明」。
     </p>
   </section>
 </template>

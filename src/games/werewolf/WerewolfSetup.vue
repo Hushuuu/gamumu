@@ -156,8 +156,8 @@ function applySettings(): void {
       </label>
     </form>
     <p class="draw-settings-note">
-      {{ isHost ? '有效設定變更會自動套用。' : '室長調整設定中' }}
-      討論請面對面或自行用語音進行。
+      {{ isHost ? '' : '室長調整設定中。' }}
+      請面對面討論或自行用語音軟體(Discord)進行。
     </p>
   </section>
 </template>

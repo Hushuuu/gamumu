@@ -87,7 +87,7 @@ function applySettings(): void {
       </label>
     </form>
     <p class="draw-settings-note">
-      {{ isHost ? '有效設定變更會自動套用。' : '房主調整設定中。' }}
+      {{ isHost ? '' : '房主調整設定中。' }}
     </p>
   </section>
 </template>

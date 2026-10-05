@@ -79,7 +79,7 @@ function applySettings(): void {
           step="1"
           :disabled="disabled || unlimitedTime"
         />
-        <small v-if="isValid">15–300 秒，預設 60 秒；有效變更會自動套用</small>
+        <small v-if="isValid">15–300 秒，預設 60 秒</small>
         <small v-else>請輸入 15–300 秒的整數，才會套用設定</small>
       </label>
       <label class="rummikub-unlimited-setting">
@@ -91,8 +91,8 @@ function applySettings(): void {
       </label>
     </form>
     <p class="draw-settings-note">
-      {{ isHost ? '有效設定變更會自動套用。' : '房主調整設定中。' }}
-      限時逾時時，合法且有出牌的桌面草稿會自動確認；否則還原編輯並抽牌，牌堆已空則自動跳過。
+      {{ isHost ? '' : '房主調整設定中。' }}
+      限時逾時時，合法且有出牌的桌面會自動確認；否則還原並抽牌。
     </p>
   </section>
 </template>
