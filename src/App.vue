@@ -919,11 +919,11 @@ function connectionLabel(): string {
 
             <div class="game-choice-panel">
               <div v-if="isHost" class="game-choice-intro">
-                <p class="game-choice-heading">挑選今晚的派對主題</p>
+                <p class="game-choice-heading">挑選今天的遊戲</p>
                 <p>
                   {{
                     snapshot.gameSelectionConfirmed
-                      ? `目前房間選擇：${selectedGame.name}。確認另一款遊戲後才會同步給大家。`
+                      ? `目前選擇：${selectedGame.name}。`
                       : '你可以先瀏覽卡片；確認遊戲後，房間裡的所有人才會看到你的選擇。'
                   }}
                 </p>

@@ -112,7 +112,7 @@ const publicMarkers = computed(() => {
   }
 
   return [
-    { label: '首任隊長', player: playerInfoOf(current.initialLeaderId) },
+    //{ label: '首任隊長', player: playerInfoOf(current.initialLeaderId) },
     { label: '目前隊長', player: playerInfoOf(current.leaderId) },
     ...(current.lakeHolderId
       ? [{ label: '湖中女神', player: playerInfoOf(current.lakeHolderId) }]
@@ -465,7 +465,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
             <AvalonPlayerIdentity :player="player" compact />
           </li>
         </ul>
-        <p>目前 {{ view.votesSubmitted }} / {{ view.seatIds.length }} 人已投票；所有人完成前不會揭露個別選擇。</p>
+        <p>目前 {{ view.votesSubmitted }} / {{ view.seatIds.length }} 人已投票</p>
         <div class="avalon-action-row avalon-vote-actions">
           <button
             class="button button-primary"
@@ -612,7 +612,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
             <span>· {{ entry.vote.approveCount }} 同意 / {{ entry.vote.rejectCount }} 反對</span>
           </small>
           <details>
-            <summary>查看個別投票</summary>
+            <summary>查看投票</summary>
             <ul class="avalon-vote-list">
               <li v-for="player in playerRows" :key="player.id">
                 <AvalonPlayerIdentity :player="player" compact />

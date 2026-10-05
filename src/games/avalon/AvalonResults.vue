@@ -211,7 +211,7 @@ const voteHistoryRows = computed(() => {
           </small>
           <details>
             <summary>
-              查看個別投票（{{ entry.vote.approveCount }} 同意 / {{ entry.vote.rejectCount }} 反對）
+              查看投票（{{ entry.vote.approveCount }} 同意 / {{ entry.vote.rejectCount }} 反對）
             </summary>
             <ul>
               <li v-for="player in playerRows" :key="player.id">

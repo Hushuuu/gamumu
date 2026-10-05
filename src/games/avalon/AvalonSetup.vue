@@ -85,7 +85,7 @@ function applySettings(): void {
         <input v-model="includePercival" type="checkbox" :disabled="disabled" />
         <span>
           <strong>派西維爾</strong>
-          <small>好人；看到梅林與莫甘娜（若有加入），但不知道誰是誰。</small>
+          <small>好人；能看到梅林與莫甘娜，但不知道誰是誰。</small>
         </span>
       </label>
       <label class="avalon-setting-option">
@@ -123,14 +123,14 @@ function applySettings(): void {
         {{ entry.role.name }} × {{ entry.count }}
       </span>
       <span v-if="!roleEntries.length" class="avalon-role-warning">
-        目前人數無法容納這組角色，請增加玩家或取消部分選配角色。
+        目前人數不足，請增加玩家或取消部分角色。
       </span>
     </div>
     <p v-if="playerCountWarning" class="avalon-role-warning" role="status">
       {{ playerCountWarning }}
     </p>
     <p class="draw-settings-note">
-      {{ isHost ? '角色設定會自動套用，不會清除玩家的準備狀態。' : '由房主調整本局角色。' }}
+      {{ isHost ? '角色設定會自動套用。' : '由房主調整本局角色。' }}
       邪惡角色選配過多時，開始人數會相應提高；完整規則請查看「規則說明」。
     </p>
   </section>
