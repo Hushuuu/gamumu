@@ -350,10 +350,10 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
           </span>
         </div>
       </div>
-      <div class="avalon-score" aria-label="任務勝負">
+      <!-- <div class="avalon-score" aria-label="任務勝負">
         <span><strong>{{ missionSuccesses }}</strong> 正義任務</span>
         <span><strong>{{ missionFailures }}</strong> 邪惡任務</span>
-      </div>
+      </div> -->
     </header>
 
     <section class="avalon-mission-track" aria-label="任務進度">
@@ -384,7 +384,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       <h3>{{ roleInfo.name }}</h3>
       <p>{{ roleInfo.description }}</p>
       <div v-if="knownPlayerRows.length" class="avalon-known-players">
-        <strong>你的身分資訊</strong>
+        <strong>已獲得資訊</strong>
         <ul>
           <li v-for="knownPlayer in knownPlayerRows" :key="knownPlayer.playerId">
             <AvalonPlayerIdentity :player="knownPlayer" compact />
@@ -403,7 +403,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       </div>
     </section>
     <section v-else class="avalon-role-card avalon-role-loading" aria-live="polite">
-      正在接收你的角色資訊……
+      正在接收資訊……
     </section>
 
     <section class="avalon-stage" aria-live="polite">
@@ -532,7 +532,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
           持有
         </h3>
         <template v-if="isLakeHolder">
-          <p>選擇一位未曾持有標記的玩家。查驗只會告訴你對方是好人或邪惡陣營，結果不會公開。</p>
+          <p>選擇一位未曾持有標記的玩家。查驗只會告訴你對方是好人或壞人，結果不會公開。</p>
           <div class="avalon-player-grid">
             <button
               v-for="player in availableLakeTargets"
@@ -656,7 +656,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       <div class="avalon-role-guess-heading">
         <div>
           <h3>本局角色配置（{{ view.seatIds.length }} 人）</h3>
-          <p>點選角色卡後選擇玩家，或將角色卡拖曳至玩家；推測只會保存在你的畫面。</p>
+          <p>點選角色卡後可選擇玩家推測；推測只會呈現在你的畫面。</p>
         </div>
       </div>
       <div class="avalon-role-guess-roles">
@@ -703,9 +703,6 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
             <strong v-if="player.guessRoleId" class="avalon-player-guess">
               {{ AVALON_ROLES[player.guessRoleId].name }}
             </strong>
-            <span v-else class="avalon-player-guess-empty">
-              {{ selectedGuessRole ? '標記此玩家' : '未推測' }}
-            </span>
           </button>
           <button
             v-if="player.guessRoleId"
