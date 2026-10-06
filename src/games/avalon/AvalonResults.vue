@@ -3,6 +3,13 @@ import { computed } from 'vue'
 import { AVALON_ROLES } from '../../../shared/games/avalon'
 import type { GameView, PlayerView } from '../../../shared/protocol'
 import AvalonPlayerIdentity from './AvalonPlayerIdentity.vue'
+import {
+  avalonAssetUrl,
+  avalonCampIconUrl,
+  avalonMissionIconUrl,
+  avalonPhaseIconUrl,
+  avalonRoleIconUrl,
+} from './visualAssets'
 
 const props = defineProps<{ players: PlayerView[]; game?: GameView | null }>()
 
@@ -22,6 +29,14 @@ type Explanation = {
 }
 
 const view = computed(() => (props.game?.gameId === 'avalon' ? props.game : null))
+const resultArtworkStyle = computed(() => {
+  const winner = view.value?.winner
+  return {
+    '--avalon-result-art': winner
+      ? `url("${avalonAssetUrl(`avalon-${winner}-victory.webp`)}")`
+      : 'none',
+  }
+})
 function playerInfoOf(playerId: string): AvalonResultPlayer {
   const player = props.players.find((candidate) => candidate.id === playerId)
   return {
@@ -107,6 +122,7 @@ const roleRows = computed(() => {
       ...playerInfoOf(id),
       role,
       won: current.winner !== null && role.camp === current.winner,
+      isEvil: role.camp === 'evil',
     }
   }).filter((row) => row !== null)
 })
@@ -136,22 +152,32 @@ const voteHistoryRows = computed(() => {
 
 <template>
   <div class="avalon-results">
-    <div class="avalon-finish-icon" aria-hidden="true">
-      {{ view?.winner === 'evil' ? '🗡' : view?.winner === 'good' ? '🏆' : '⏸' }}
-    </div>
-    <p class="eyebrow">遊戲結束</p>
-    <h2>{{ winnerText }}</h2>
-    <p class="avalon-result-explanation">
-      <template v-if="explanation.player">
-        {{ explanation.before }}
-        <AvalonPlayerIdentity :player="explanation.player" compact />
-        {{ explanation.after }}
-      </template>
-      <template v-else>{{ explanation.text }}</template>
-    </p>
-    <p v-if="view?.winner" class="avalon-result-score">
-      勝利陣營每位玩家獲得 100 分
-    </p>
+    <section
+      class="avalon-result-hero"
+      :class="view?.winner ? `is-${view.winner}` : 'is-neutral'"
+      :style="resultArtworkStyle"
+      aria-live="polite"
+    >
+      <div class="avalon-finish-icon" aria-hidden="true">
+        <img
+          :src="view?.winner ? avalonCampIconUrl(view.winner) : avalonPhaseIconUrl('finished')"
+          alt=""
+        />
+      </div>
+      <p class="eyebrow">遊戲結束</p>
+      <h2>{{ winnerText }}</h2>
+      <p class="avalon-result-explanation">
+        <template v-if="explanation.player">
+          {{ explanation.before }}
+          <AvalonPlayerIdentity :player="explanation.player" compact />
+          {{ explanation.after }}
+        </template>
+        <template v-else>{{ explanation.text }}</template>
+      </p>
+      <p v-if="view?.winner" class="avalon-result-score">
+        勝利陣營每位玩家獲得 100 分
+      </p>
+    </section>
 
     <section v-if="missionRows.length" class="avalon-results-section">
       <h3>任務紀錄</h3>
@@ -162,9 +188,12 @@ const voteHistoryRows = computed(() => {
           :class="entry.mission.outcome === 'success' ? 'is-success' : 'is-failure'"
         >
           <div>
-            <strong>
-              第 {{ entry.mission.missionNumber }} 個任務 ·
-              {{ entry.mission.outcome === 'success' ? '成功' : '失敗' }}
+            <strong class="avalon-result-mission-heading">
+              <img :src="avalonMissionIconUrl(entry.mission.outcome)" alt="" />
+              <span>
+                第 {{ entry.mission.missionNumber }} 個任務 ·
+                {{ entry.mission.outcome === 'success' ? '成功' : '失敗' }}
+              </span>
             </strong>
             <small class="avalon-result-players">
               <span>隊長</span>
@@ -175,6 +204,7 @@ const voteHistoryRows = computed(() => {
                 :key="player.id"
                 :player="player"
                 compact
+                is-on-team
               />
             </small>
           </div>
@@ -198,7 +228,14 @@ const voteHistoryRows = computed(() => {
           <strong class="avalon-result-vote-heading">
             <span>第 {{ entry.vote.missionNumber }} 個任務 ·</span>
             <AvalonPlayerIdentity :player="entry.leader" compact />
-            <span>{{ entry.vote.accepted ? '的隊伍通過' : '的隊伍遭否決' }}</span>
+            <span>提案</span>
+            <span
+              class="avalon-vote-stamp"
+              :class="entry.vote.accepted ? 'is-accepted' : 'is-rejected'"
+            >
+              <span aria-hidden="true">{{ entry.vote.accepted ? '✓' : '×' }}</span>
+              {{ entry.vote.accepted ? '通過' : '遭否決' }}
+            </span>
           </strong>
           <small class="avalon-result-players">
             <span>隊伍：</span>
@@ -229,12 +266,17 @@ const voteHistoryRows = computed(() => {
       <ul class="avalon-results-list">
         <li v-for="row in roleRows" :key="row.id" :class="{ 'is-winner': row.won }">
           <div class="avalon-result-player">
-            <AvalonPlayerIdentity :player="row" compact />
+            <img class="avalon-result-role-icon" :src="avalonRoleIconUrl(row.role.id)" alt="" />
+            <AvalonPlayerIdentity
+              :player="row"
+              compact
+            />
           </div>
           <strong>{{ row.role.name }}</strong>
-          <small>
-            {{ row.role.camp === 'good' ? '正義陣營' : '邪惡陣營' }}
-            <template v-if="row.won"> · 勝利 +100</template>
+          <small class="avalon-result-camp">
+            <img :src="avalonCampIconUrl(row.role.camp)" alt="" />
+            <span>{{ row.role.camp === 'good' ? '正義陣營' : '邪惡陣營' }}</span>
+            <span v-if="row.won" class="avalon-result-win">勝利 +100</span>
           </small>
         </li>
       </ul>
@@ -244,40 +286,102 @@ const voteHistoryRows = computed(() => {
 
 <style scoped>
 .avalon-results {
+  --avalon-parchment: #f4f0e4;
+  --avalon-paper: #fffdf7;
+  --avalon-ink: #302d3d;
+  --avalon-good: #3e7659;
+  --avalon-good-soft: #e3f0e7;
+  --avalon-evil: #853f4c;
+  --avalon-evil-soft: #f5e5e3;
+  --avalon-gold: #d5aa58;
+  --avalon-lake: #4a9aa0;
+  --avalon-lake-soft: #e1f1f0;
   display: grid;
   justify-items: center;
   width: 100%;
   text-align: center;
+  color: var(--avalon-ink);
+}
+
+.avalon-result-hero {
+  display: grid;
+  min-height: 214px;
+  width: 100%;
+  align-content: center;
+  justify-items: center;
+  padding: 18px 16px;
+  overflow: hidden;
+  border: 1px solid #ded4bc;
+  border-radius: 20px;
+  background-color: var(--avalon-parchment);
+  background-position: center;
+  background-size: cover;
+  text-align: center;
+  animation: avalon-result-reveal 360ms ease-out both;
+}
+
+.avalon-result-hero.is-good {
+  background-image:
+    linear-gradient(180deg, rgb(255 253 247 / 92%), rgb(255 253 247 / 74%) 62%, rgb(255 253 247 / 25%)),
+    var(--avalon-result-art),
+    radial-gradient(circle at 75% 20%, #d9eadb, #f4f0e4 68%);
+}
+
+.avalon-result-hero.is-evil {
+  background-image:
+    linear-gradient(180deg, rgb(255 253 247 / 92%), rgb(255 253 247 / 76%) 62%, rgb(245 229 227 / 25%)),
+    var(--avalon-result-art),
+    radial-gradient(circle at 75% 20%, #edd5d4, #f4f0e4 68%);
+}
+
+.avalon-result-hero.is-neutral {
+  background-image: radial-gradient(circle at 75% 20%, #e7e2d5, #f4f0e4 68%);
 }
 
 .avalon-finish-icon {
   display: grid;
-  width: 58px;
-  height: 58px;
+  width: 54px;
+  height: 54px;
   place-items: center;
-  border-radius: 18px;
-  background: #f1efff;
-  font-size: 27px;
+  border: 1px solid #e2d3af;
+  border-radius: 17px;
+  background: rgb(255 253 247 / 88%);
 }
 
-.avalon-results > h2 {
-  margin: 7px 0 5px;
-  color: var(--ink);
-  font-size: 22px;
+.avalon-finish-icon img {
+  display: block;
+  width: 46px;
+  height: 46px;
+}
+
+.avalon-result-hero .eyebrow {
+  margin-top: 7px;
+  color: var(--avalon-good);
+}
+
+.avalon-result-hero.is-evil .eyebrow {
+  color: var(--avalon-evil);
+}
+
+.avalon-result-hero h2 {
+  margin: 6px 0 5px;
+  color: var(--avalon-ink);
+  font-size: clamp(19px, 4vw, 25px);
 }
 
 .avalon-result-explanation,
 .avalon-result-score {
   max-width: 500px;
   margin: 0;
-  color: #77738a;
+  color: #514e5b;
   font-size: 11px;
   line-height: 1.55;
 }
 
 .avalon-result-score {
   margin-top: 5px;
-  color: #5a5197;
+  color: var(--avalon-good);
+  font-weight: 700;
 }
 
 .avalon-results-section {
@@ -288,13 +392,14 @@ const voteHistoryRows = computed(() => {
 
 .avalon-results-section h3 {
   margin: 0 0 8px;
-  color: #4f4a68;
+  color: var(--avalon-ink);
   font-size: 12px;
+  letter-spacing: 0.02em;
 }
 
 .avalon-results-section > p {
   margin: 0;
-  color: #77738a;
+  color: #514e5b;
   font-size: 10px;
   line-height: 1.5;
 }
@@ -315,7 +420,7 @@ const voteHistoryRows = computed(() => {
   gap: 3px 10px;
   padding: 9px 11px;
   border-radius: 10px;
-  background: #f7f6fa;
+  background: var(--avalon-paper);
   font-size: 10px;
 }
 
@@ -326,35 +431,78 @@ const voteHistoryRows = computed(() => {
 
 .avalon-result-missions > li.is-success,
 .avalon-results-list > li.is-winner {
-  background: #ebf8f1;
+  background: var(--avalon-good-soft);
 }
 
 .avalon-result-missions > li.is-failure {
-  background: #fff0ee;
+  background: var(--avalon-evil-soft);
 }
 
-.avalon-result-missions > li > div,
-.avalon-results-list > li > .avalon-result-player {
+.avalon-result-missions > li > div {
   display: grid;
   gap: 3px;
 }
 
+.avalon-results-list > li > .avalon-result-player {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.avalon-result-mission-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.avalon-result-mission-heading img {
+  display: block;
+  width: 25px;
+  height: 25px;
+}
+
 .avalon-results-section ol strong,
 .avalon-results-list strong {
-  color: #514c67;
+  color: var(--avalon-ink);
   font-size: 10px;
 }
 
 .avalon-results-section ol small,
 .avalon-result-missions > li > span,
 .avalon-results-list small {
-  color: #858197;
+  color: #696575;
   font-size: 9px;
   line-height: 1.45;
 }
 
 .avalon-results-list small {
   grid-column: 1 / -1;
+}
+
+.avalon-result-role-icon {
+  display: block;
+  width: 35px;
+  height: 35px;
+  flex: 0 0 auto;
+}
+
+.avalon-result-camp {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.avalon-result-camp img {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.avalon-result-win {
+  margin-left: auto;
+  color: var(--avalon-good);
+  font-weight: 800;
 }
 
 .avalon-result-vote-heading,
@@ -383,13 +531,34 @@ const voteHistoryRows = computed(() => {
   gap: 4px;
   padding: 9px;
   border-radius: 9px;
-  background: #f7f6fa;
+  background: var(--avalon-paper);
 }
 
 .avalon-result-votes strong,
 .avalon-result-votes small {
-  color: #5d5875;
+  color: #514e5b;
   font-size: 9px;
+}
+
+.avalon-vote-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.avalon-vote-stamp.is-accepted {
+  background: var(--avalon-good-soft);
+  color: var(--avalon-good);
+}
+
+.avalon-vote-stamp.is-rejected {
+  background: var(--avalon-evil-soft);
+  color: var(--avalon-evil);
 }
 
 .avalon-result-votes details {
@@ -397,7 +566,7 @@ const voteHistoryRows = computed(() => {
 }
 
 .avalon-result-votes summary {
-  color: #756ba7;
+  color: #725820;
   cursor: pointer;
 }
 
@@ -415,7 +584,41 @@ const voteHistoryRows = computed(() => {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  color: #77738a;
+  color: #514e5b;
   font-size: 8px;
+}
+
+@keyframes avalon-result-reveal {
+  from {
+    opacity: 0.9;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 520px) {
+  .avalon-result-hero {
+    min-height: 190px;
+    padding: 14px 10px;
+  }
+
+  .avalon-result-missions > li,
+  .avalon-results-list > li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .avalon-result-missions > li > span {
+    padding-left: 31px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avalon-result-hero {
+    animation: none;
+  }
 }
 </style>

@@ -13,6 +13,13 @@ import {
 } from '../../../shared/games/avalon'
 import type { GameEvent, GameView, PlayerView } from '../../../shared/protocol'
 import AvalonPlayerIdentity from './AvalonPlayerIdentity.vue'
+import {
+  avalonAssetUrl,
+  avalonCampIconUrl,
+  avalonMissionIconUrl,
+  avalonPhaseIconUrl,
+  avalonRoleIconUrl,
+} from './visualAssets'
 
 const props = defineProps<{
   game: GameView
@@ -83,12 +90,6 @@ const roleCountEntries = computed(() => {
       .filter((role) => role.count > 0)
     : []
 })
-const missionSuccesses = computed(() =>
-  view.value?.missions.filter((mission) => mission.outcome === 'success').length ?? 0,
-)
-const missionFailures = computed(() =>
-  view.value?.missions.filter((mission) => mission.outcome === 'failure').length ?? 0,
-)
 const isCurrentLeader = computed(() => view.value?.leaderId === props.playerId)
 const isLakeHolder = computed(() => view.value?.lakeHolderId === props.playerId)
 const isOnMissionTeam = computed(() => view.value?.teamIds.includes(props.playerId) ?? false)
@@ -146,6 +147,22 @@ const lakeHolderInfo = computed(() => {
 })
 const currentPhaseTitle = computed(() => {
   return view.value ? PHASE_TITLES[view.value.phase] : ''
+})
+const missionRoute = computed(() => {
+  const current = view.value
+  return Array.from({ length: 5 }, (_, index) => {
+    const missionNumber = index + 1
+    const mission = current?.missions.find((entry) => entry.missionNumber === missionNumber)
+    return {
+      missionNumber,
+      outcome: mission?.outcome ?? null,
+      isCurrent: Boolean(
+        current &&
+        current.missionNumber === missionNumber &&
+        current.phase !== 'finished',
+      ),
+    }
+  })
 })
 const phaseDescription = computed(() => {
   const current = view.value
@@ -339,50 +356,92 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 <template>
   <div v-if="view" class="avalon-game">
     <header class="avalon-game-heading">
-      <div>
-        <p class="eyebrow">隱藏身分 · 任務推理</p>
-        <h2>{{ gameName }}</h2>
-        <p class="avalon-phase-summary">{{ currentPhaseTitle }} · {{ phaseDescription }}</p>
-        <div class="avalon-public-markers">
-          <span v-for="marker in publicMarkers" :key="marker.label" class="avalon-public-marker">
-            <small>{{ marker.label }}</small>
-            <AvalonPlayerIdentity :player="marker.player" compact />
-          </span>
+      <div class="avalon-game-brand">
+        <img class="avalon-brand-crest" :src="avalonAssetUrl('avalon-crest.svg')" alt="" />
+        <div class="avalon-game-title">
+          <p class="eyebrow">隱藏身分 · 任務推理</p>
+          <h2>{{ gameName }}</h2>
         </div>
       </div>
-      <!-- <div class="avalon-score" aria-label="任務勝負">
-        <span><strong>{{ missionSuccesses }}</strong> 正義任務</span>
-        <span><strong>{{ missionFailures }}</strong> 邪惡任務</span>
-      </div> -->
+      <div class="avalon-current-phase">
+        <img :src="avalonPhaseIconUrl(view.phase)" alt="" />
+        <span>{{ currentPhaseTitle }}</span>
+      </div>
+      <p class="avalon-phase-summary">{{ phaseDescription }}</p>
+      <div class="avalon-public-markers">
+        <span v-for="marker in publicMarkers" :key="marker.label" class="avalon-public-marker">
+          <small>{{ marker.label }}</small>
+          <AvalonPlayerIdentity
+            :player="marker.player"
+            compact
+            :is-leader="marker.label === '目前隊長'"
+            :is-lake-holder="marker.label === '湖中女神'"
+          />
+        </span>
+      </div>
     </header>
 
-    <section class="avalon-mission-track" aria-label="任務進度">
-      <div
-        v-for="missionNumber in 5"
-        :key="missionNumber"
+    <ol class="avalon-mission-track" aria-label="前往王國的五站任務路線">
+      <li
+        v-for="mission in missionRoute"
+        :key="mission.missionNumber"
         class="avalon-mission-marker"
         :class="{
-          'is-current': view.missionNumber === missionNumber && view.phase !== 'finished',
-          'is-success': view.missions.find((mission) => mission.missionNumber === missionNumber)?.outcome === 'success',
-          'is-failure': view.missions.find((mission) => mission.missionNumber === missionNumber)?.outcome === 'failure',
+          'is-current': mission.isCurrent,
+          'is-success': mission.outcome === 'success',
+          'is-failure': mission.outcome === 'failure',
         }"
+        :aria-label="`第 ${mission.missionNumber} 個任務：${
+          mission.outcome === 'success'
+            ? '成功'
+            : mission.outcome === 'failure'
+              ? '失敗'
+              : mission.isCurrent
+                ? '進行中'
+                : '尚未開始'
+        }`"
       >
-        <strong>{{ missionNumber }}</strong>
-        <span>{{ view.missions.find((mission) => mission.missionNumber === missionNumber)?.outcome === 'success'
-          ? '成功'
-          : view.missions.find((mission) => mission.missionNumber === missionNumber)?.outcome === 'failure'
-            ? '失敗'
-            : '任務' }}</span>
-      </div>
-    </section>
+        <span class="avalon-mission-node">
+          <img
+            v-if="mission.outcome"
+            :src="avalonMissionIconUrl(mission.outcome)"
+            alt=""
+          />
+          <span v-else>{{ mission.missionNumber }}</span>
+        </span>
+        <strong>任務 {{ mission.missionNumber }}</strong>
+        <span class="avalon-mission-status">
+          {{
+            mission.outcome === 'success'
+              ? '成功'
+              : mission.outcome === 'failure'
+                ? '失敗'
+                : mission.isCurrent
+                  ? '進行中'
+                  : '待命'
+          }}
+        </span>
+      </li>
+    </ol>
 
-    <section v-if="roleInfo" class="avalon-role-card">
-      <div class="avalon-role-heading">
-        <span class="avalon-camp-badge" :class="`is-${currentPrivateState?.camp}`">{{ campLabel }}</span>
-        <span v-if="view.lakeHolderId === playerId" class="avalon-lake-badge">湖中女神標記</span>
+    <section v-if="roleInfo" class="avalon-role-card" :class="`is-${currentPrivateState?.camp}`">
+      <div class="avalon-role-card-topline">
+        <span class="avalon-camp-badge" :class="`is-${roleInfo.camp}`">
+          <img :src="avalonCampIconUrl(roleInfo.camp)" alt="" />
+          {{ campLabel }}
+        </span>
+        <span v-if="view.lakeHolderId === playerId" class="avalon-lake-badge">
+          <img :src="avalonPhaseIconUrl('lake-check')" alt="" />
+          湖中女神標記
+        </span>
       </div>
-      <h3>{{ roleInfo.name }}</h3>
-      <p>{{ roleInfo.description }}</p>
+      <div class="avalon-role-card-intro">
+        <img class="avalon-role-icon" :src="avalonRoleIconUrl(roleInfo.id)" alt="" />
+        <div>
+          <h3>{{ roleInfo.name }}</h3>
+          <p>{{ roleInfo.description }}</p>
+        </div>
+      </div>
       <div v-if="knownPlayerRows.length" class="avalon-known-players">
         <strong>已獲得資訊</strong>
         <ul>
@@ -406,13 +465,22 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       正在接收資訊……
     </section>
 
-    <section class="avalon-stage" aria-live="polite">
+    <section class="avalon-stage" :class="`is-${view.phase}`" aria-live="polite">
+      <div class="avalon-stage-banner" aria-hidden="true">
+        <img :src="avalonPhaseIconUrl(view.phase)" alt="" />
+        <span>{{ currentPhaseTitle }}</span>
+      </div>
       <template v-if="view.phase === 'role-reveal'">
         <h3>確認你的身分</h3>
         <p>角色與提示只會顯示給你。請在查看完畢後確認，所有玩家完成確認才會開始第一個任務。</p>
         <ul class="avalon-player-list">
           <li v-for="player in playerRows" :key="player.id">
-            <AvalonPlayerIdentity :player="player" compact />
+            <AvalonPlayerIdentity
+              :player="player"
+              compact
+              :is-leader="player.id === view.leaderId"
+              :is-lake-holder="player.id === view.lakeHolderId"
+            />
             <strong :class="{ 'is-ready': view.readyIds.includes(player.id) }">
               {{ view.readyIds.includes(player.id) ? '已確認' : '查看中' }}
             </strong>
@@ -443,8 +511,13 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
             :disabled="!canInteract || !isCurrentLeader"
             @click="toggleTeamPlayer(player.id)"
           >
-            <AvalonPlayerIdentity :player="player" compact />
-            <strong>{{ selectedTeamIds.includes(player.id) ? '已選' : '選擇' }}</strong>
+            <AvalonPlayerIdentity
+              :player="player"
+              compact
+              :is-leader="player.id === view.leaderId"
+              :is-lake-holder="player.id === view.lakeHolderId"
+              :is-on-team="selectedTeamIds.includes(player.id)"
+            />
           </button>
         </div>
         <div v-if="isCurrentLeader" class="avalon-action-row">
@@ -462,7 +535,13 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
         <h3>第 {{ view.missionNumber }} 個任務隊伍</h3>
         <ul class="avalon-team-list">
           <li v-for="player in teamNames" :key="player.id">
-            <AvalonPlayerIdentity :player="player" compact />
+            <AvalonPlayerIdentity
+              :player="player"
+              compact
+              :is-leader="player.id === view.leaderId"
+              :is-lake-holder="player.id === view.lakeHolderId"
+              is-on-team
+            />
           </li>
         </ul>
         <p>目前 {{ view.votesSubmitted }} / {{ view.seatIds.length }} 人已投票</p>
@@ -495,7 +574,13 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
         <h3>第 {{ view.missionNumber }} 個任務正在執行</h3>
         <ul class="avalon-team-list">
           <li v-for="player in teamNames" :key="player.id">
-            <AvalonPlayerIdentity :player="player" compact />
+            <AvalonPlayerIdentity
+              :player="player"
+              compact
+              :is-leader="player.id === view.leaderId"
+              :is-lake-holder="player.id === view.lakeHolderId"
+              is-on-team
+            />
           </li>
         </ul>
         <p>{{ view.missionCardsSubmitted }} / {{ view.teamIds.length }} 位隊員已出牌，結果會在全員出牌後公布。</p>
@@ -544,7 +629,12 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
               :disabled="!canInteract"
               @click="selectedLakeTargetId = player.id"
             >
-              <AvalonPlayerIdentity :player="player" compact />
+              <AvalonPlayerIdentity
+                :player="player"
+                compact
+                :is-leader="player.id === view.leaderId"
+                :is-lake-holder="player.id === view.lakeHolderId"
+              />
               <strong>{{ selectedLakeTargetId === player.id ? '已選' : '選擇' }}</strong>
             </button>
           </div>
@@ -575,8 +665,12 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
               :disabled="!canInteract"
               @click="selectedAssassinationTargetId = player.id"
             >
-              <AvalonPlayerIdentity :player="player" compact />
-              <strong>{{ selectedAssassinationTargetId === player.id ? '已選' : '選擇' }}</strong>
+              <AvalonPlayerIdentity
+                :player="player"
+                compact
+                :is-leader="player.id === view.leaderId"
+                :is-lake-holder="player.id === view.lakeHolderId"
+              />
             </button>
           </div>
           <button
@@ -599,7 +693,14 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
           <strong class="avalon-vote-history-heading">
             <span>第 {{ entry.vote.missionNumber }} 個任務 ·</span>
             <AvalonPlayerIdentity :player="entry.leader" compact />
-            <span>提案 {{ entry.vote.accepted ? '通過' : '遭否決' }}</span>
+            <span>提案</span>
+            <span
+              class="avalon-vote-stamp"
+              :class="entry.vote.accepted ? 'is-accepted' : 'is-rejected'"
+            >
+              <span aria-hidden="true">{{ entry.vote.accepted ? '✓' : '×' }}</span>
+              {{ entry.vote.accepted ? '通過' : '遭否決' }}
+            </span>
           </strong>
           <small class="avalon-vote-history-team">
             <span>隊伍：</span>
@@ -608,6 +709,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
               :key="player.id"
               :player="player"
               compact
+              is-on-team
             />
             <span>· {{ entry.vote.approveCount }} 同意 / {{ entry.vote.rejectCount }} 反對</span>
           </small>
@@ -629,11 +731,18 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
     <section v-if="view.missions.length" class="avalon-history-card">
       <h3>任務結果</h3>
       <ul class="avalon-mission-results">
-        <li v-for="entry in missionResultRows" :key="entry.mission.missionNumber">
+        <li
+          v-for="entry in missionResultRows"
+          :key="entry.mission.missionNumber"
+          :class="entry.mission.outcome === 'success' ? 'is-success' : 'is-failure'"
+        >
           <div>
-            <strong>
-              第 {{ entry.mission.missionNumber }} 個任務 ·
-              {{ entry.mission.outcome === 'success' ? '成功' : '失敗' }}
+            <strong class="avalon-mission-result-heading">
+              <img :src="avalonMissionIconUrl(entry.mission.outcome)" alt="" />
+              <span>
+                第 {{ entry.mission.missionNumber }} 個任務 ·
+                {{ entry.mission.outcome === 'success' ? '成功' : '失敗' }}
+              </span>
             </strong>
             <small class="avalon-mission-result-players">
               <span>隊長</span>
@@ -644,10 +753,13 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
                 :key="player.id"
                 :player="player"
                 compact
+                is-on-team
               />
             </small>
           </div>
-          <span>{{ entry.mission.successCount }} 成功 / {{ entry.mission.failCount }} 失敗</span>
+          <span class="avalon-mission-result-counts">
+            {{ entry.mission.successCount }} 成功 / {{ entry.mission.failCount }} 失敗
+          </span>
         </li>
       </ul>
     </section>
@@ -672,6 +784,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
           @click="selectGuessRole(role.id)"
           @dragstart="startRoleGuessDrag($event, role.id)"
         >
+          <img :src="avalonRoleIconUrl(role.id)" alt="" />
           <span class="avalon-role-guess-camp">{{ role.camp === 'good' ? '正義' : '邪惡' }}</span>
           <span>{{ role.name }}</span>
           <strong>× {{ role.count }}</strong>
@@ -722,37 +835,101 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 
 <style scoped>
 .avalon-game {
+  --avalon-parchment: #f4f0e4;
+  --avalon-paper: #fffdf7;
+  --avalon-ink: #302d3d;
+  --avalon-good: #3e7659;
+  --avalon-good-soft: #e3f0e7;
+  --avalon-evil: #853f4c;
+  --avalon-evil-soft: #f5e5e3;
+  --avalon-gold: #d5aa58;
+  --avalon-lake: #4a9aa0;
+  --avalon-lake-soft: #e1f1f0;
   display: grid;
   gap: 14px;
   width: 100%;
-  color: var(--ink);
+  color: var(--avalon-ink);
   text-align: left;
 }
 
 .avalon-game-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "brand phase"
+    "summary summary"
+    "markers markers";
+  align-items: center;
+  gap: 9px 14px;
+  padding: 12px 14px;
+  border: 1px solid #ded4bc;
+  border-radius: 18px;
+  background: var(--avalon-paper);
+}
+
+.avalon-game-brand {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
+  min-width: 0;
+  grid-area: brand;
+  align-items: center;
+  gap: 10px;
+}
+
+.avalon-brand-crest {
+  display: block;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+}
+
+.avalon-game-title {
+  min-width: 0;
+}
+
+.avalon-game-title .eyebrow {
+  color: var(--avalon-good);
+}
+
+.avalon-current-phase {
+  display: inline-flex;
+  grid-area: phase;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px 5px 5px;
+  border: 1px solid #e5d7b5;
+  border-radius: 999px;
+  background: #fbf4e4;
+  color: #725820;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.avalon-current-phase img {
+  display: block;
+  width: 30px;
+  height: 30px;
 }
 
 .avalon-game-heading h2 {
   margin: 3px 0 5px;
-  font-size: 22px;
+  color: var(--avalon-ink);
+  font-size: clamp(18px, 3vw, 22px);
 }
 
 .avalon-phase-summary {
+  grid-area: summary;
   margin: 0;
-  color: #6d6982;
+  color: #514e5b;
   font-size: 11px;
   line-height: 1.55;
 }
 
 .avalon-public-markers {
   display: flex;
+  grid-area: markers;
   flex-wrap: wrap;
   gap: 5px;
-  margin-top: 8px;
 }
 
 .avalon-public-marker {
@@ -760,9 +937,10 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   align-items: center;
   gap: 5px;
   padding: 3px 7px 3px 8px;
+  border: 1px solid #e9e1d0;
   border-radius: 999px;
-  background: #f0edfa;
-  color: #69647f;
+  background: var(--avalon-parchment);
+  color: #514e5b;
   font-size: 9px;
 }
 
@@ -770,130 +948,175 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   font-size: 9px;
 }
 
-.avalon-score {
-  display: grid;
-  flex: 0 0 auto;
-  gap: 5px;
-  padding: 9px 11px;
-  border: 1px solid #ece9f4;
-  border-radius: 12px;
-  background: #fff;
-  color: #77738a;
-  font-size: 9px;
-}
-
-.avalon-score strong {
-  margin-right: 3px;
-  color: var(--purple-dark);
-  font-size: 14px;
-}
-
 .avalon-mission-track {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
+  gap: 2px;
+  margin: 0;
+  padding: 8px 0 0;
+  list-style: none;
+}
+
+.avalon-mission-track::before {
+  position: absolute;
+  top: 27px;
+  right: 10%;
+  left: 10%;
+  height: 2px;
+  background: #ded4bc;
+  content: "";
 }
 
 .avalon-mission-marker {
+  position: relative;
+  z-index: 1;
   display: grid;
   justify-items: center;
-  gap: 3px;
-  padding: 7px 4px;
-  border: 1px solid #eeeaf6;
-  border-radius: 10px;
-  background: #fff;
-  color: #87839a;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 2px 4px;
+  color: #686473;
   font-size: 9px;
+  text-align: center;
+}
+
+.avalon-mission-node {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid #ded4bc;
+  background: var(--avalon-paper);
+  color: #514e5b;
+  font-size: 11px;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.avalon-mission-node img {
+  display: block;
+  width: 32px;
+  height: 32px;
 }
 
 .avalon-mission-marker strong {
-  display: grid;
-  width: 23px;
-  height: 23px;
-  place-items: center;
-  border-radius: 50%;
-  background: #f1eff7;
-  color: #726d87;
-  font-size: 11px;
+  color: var(--avalon-ink);
+  font-size: 9px;
 }
 
-.avalon-mission-marker.is-current {
-  border-color: #9787eb;
-  box-shadow: 0 0 0 2px rgb(151 135 235 / 12%);
+.avalon-mission-marker.is-current .avalon-mission-node {
+  border-color: var(--avalon-gold);
+  box-shadow: 0 0 0 4px rgb(213 170 88 / 18%);
+  transform: translateY(-2px);
 }
 
-.avalon-mission-marker.is-success {
-  background: #effaf5;
-  color: #378262;
-}
-
+.avalon-mission-marker.is-success,
 .avalon-mission-marker.is-success strong {
-  background: #d9f2e5;
-  color: #28734e;
+  color: var(--avalon-good);
 }
 
-.avalon-mission-marker.is-failure {
-  background: #fff2f1;
-  color: #a95950;
-}
-
+.avalon-mission-marker.is-failure,
 .avalon-mission-marker.is-failure strong {
-  background: #fbe0dd;
-  color: #9e4841;
+  color: var(--avalon-evil);
+}
+
+.avalon-mission-status {
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.avalon-mission-marker.is-success .avalon-mission-node img,
+.avalon-mission-marker.is-failure .avalon-mission-node img {
+  animation: avalon-stamp-in 340ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .avalon-role-card,
 .avalon-stage,
 .avalon-history-card {
   padding: 14px;
-  border: 1px solid #ebe8f3;
+  border: 1px solid #e4dccb;
   border-radius: 15px;
-  background: #fff;
+  background: var(--avalon-paper);
 }
 
 .avalon-role-card {
-  border-color: #dcd6f8;
-  background: linear-gradient(135deg, #fbfaff, #f1efff);
+  border-color: #c9dccd;
+  background: linear-gradient(135deg, #fffdf7, #e3f0e7);
+  animation: avalon-role-reveal 420ms ease-out both;
 }
 
-.avalon-role-heading {
+.avalon-role-card.is-evil {
+  border-color: #e3c5c3;
+  background: linear-gradient(135deg, #fffdf7, #f5e5e3);
+}
+
+.avalon-role-card-topline {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
+  justify-content: space-between;
   gap: 6px;
 }
 
 .avalon-camp-badge,
 .avalon-lake-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 4px 8px;
   border-radius: 999px;
   font-size: 9px;
   font-weight: 800;
 }
 
+.avalon-camp-badge img,
+.avalon-lake-badge img {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
 .avalon-camp-badge.is-good {
-  background: #e2f6ec;
-  color: #2f8058;
+  background: var(--avalon-good-soft);
+  color: var(--avalon-good);
 }
 
 .avalon-camp-badge.is-evil {
-  background: #fde8e6;
-  color: #a24f48;
+  background: var(--avalon-evil-soft);
+  color: var(--avalon-evil);
 }
 
 .avalon-lake-badge {
-  background: #e3f4fb;
-  color: #397e99;
+  background: var(--avalon-lake-soft);
+  color: #367d82;
+}
+
+.avalon-role-card-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 9px;
+}
+
+.avalon-role-icon {
+  display: block;
+  width: 68px;
+  height: 68px;
+  flex: 0 0 auto;
+  border-radius: 16px;
+  background: rgb(255 253 247 / 75%);
 }
 
 .avalon-role-card h3 {
-  margin: 8px 0 4px;
-  color: #38334f;
+  margin: 2px 0 4px;
+  color: var(--avalon-ink);
   font-size: 17px;
 }
 
-.avalon-role-card > p {
+.avalon-role-card-intro p {
   margin: 0;
-  color: #6c6880;
+  color: #514e5b;
   font-size: 10px;
   line-height: 1.55;
 }
@@ -910,7 +1133,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 }
 
 .avalon-known-players > strong {
-  color: #655b9f;
+  color: var(--avalon-good);
   font-size: 10px;
 }
 
@@ -935,7 +1158,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   gap: 10px;
   padding: 7px 9px;
   border-radius: 9px;
-  background: rgb(255 255 255 / 82%);
+  background: rgb(255 253 247 / 86%);
   font-size: 10px;
 }
 
@@ -947,7 +1170,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 }
 
 .avalon-player-list strong.is-ready {
-  color: #32815b;
+  color: var(--avalon-good);
 }
 
 .avalon-role-guess-heading {
@@ -956,13 +1179,13 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 
 .avalon-role-guess-heading h3 {
   margin: 0;
-  color: #403b59;
+  color: var(--avalon-ink);
   font-size: 14px;
 }
 
 .avalon-role-guess-heading p {
   margin: 5px 0 0;
-  color: #77738a;
+  color: #696575;
   font-size: 10px;
   line-height: 1.5;
 }
@@ -979,30 +1202,39 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   align-items: center;
   gap: 5px;
   padding: 7px;
-  border: 1px solid #e7e4ef;
+  border: 1px solid #e4dccb;
   border-radius: 10px;
-  background: #fff;
-  color: #55516b;
+  background: var(--avalon-paper);
+  color: var(--avalon-ink);
   font: inherit;
   font-size: 10px;
   text-align: left;
   cursor: grab;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
 .avalon-role-guess-option.is-good {
-  background: #f5fbf7;
+  background: #f5faf5;
 }
 
 .avalon-role-guess-option.is-evil {
-  background: #fff7f6;
+  background: #fcf5f4;
 }
 
 .avalon-role-guess-option.is-selected {
-  border-color: #8b7ae3;
-  box-shadow: 0 0 0 2px rgb(139 122 227 / 14%);
+  border-color: var(--avalon-gold);
+  box-shadow: 0 0 0 2px rgb(213 170 88 / 22%);
+  transform: translateY(-1px);
 }
 
-.avalon-role-guess-option > span:nth-child(2) {
+.avalon-role-guess-option > img {
+  display: block;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+}
+
+.avalon-role-guess-option > span:nth-of-type(2) {
   min-width: 0;
   flex: 1;
   overflow-wrap: anywhere;
@@ -1010,27 +1242,27 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 
 .avalon-role-guess-option strong {
   flex: 0 0 auto;
-  color: #77738a;
+  color: #696575;
   font-size: 9px;
 }
 
 .avalon-role-guess-camp {
   padding: 3px 5px;
   border-radius: 999px;
-  background: #e2f6ec;
-  color: #2f8058;
+  background: var(--avalon-good-soft);
+  color: var(--avalon-good);
   font-size: 8px;
   font-weight: 800;
 }
 
 .avalon-role-guess-option.is-evil .avalon-role-guess-camp {
-  background: #fde8e6;
-  color: #a24f48;
+  background: var(--avalon-evil-soft);
+  color: var(--avalon-evil);
 }
 
 .avalon-guess-status {
   margin: 8px 0 0;
-  color: #77738a;
+  color: #696575;
   font-size: 9px;
   line-height: 1.5;
 }
@@ -1056,19 +1288,20 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   justify-content: space-between;
   gap: 5px;
   padding: 5px 7px;
-  border: 1px solid #e7e4ef;
+  border: 1px solid #e4dccb;
   border-radius: 9px;
-  background: #fff;
-  color: #55516b;
+  background: var(--avalon-paper);
+  color: var(--avalon-ink);
   font: inherit;
   font-size: 9px;
   text-align: left;
   cursor: pointer;
+  transition: border-color 180ms ease, background-color 180ms ease;
 }
 
 .avalon-role-guess-target.is-targeting {
-  border-color: #a89be9;
-  background: #faf9ff;
+  border-color: var(--avalon-gold);
+  background: #fbf4e4;
 }
 
 .avalon-role-guess-target strong,
@@ -1084,17 +1317,17 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 .avalon-role-guess-target strong.avalon-player-guess {
   padding: 3px 5px;
   border-radius: 999px;
-  background: #eeebff;
-  color: #6558ae;
+  background: #f5ecd5;
+  color: #725820;
 }
 
 .avalon-guess-clear {
   width: 28px;
   flex: 0 0 auto;
-  border: 1px solid #e7e4ef;
+  border: 1px solid #e4dccb;
   border-radius: 8px;
-  background: #fff;
-  color: #89859a;
+  background: var(--avalon-paper);
+  color: #686473;
   font: inherit;
   font-size: 14px;
   cursor: pointer;
@@ -1103,21 +1336,47 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 .avalon-stage h3,
 .avalon-history-card h3 {
   margin: 0 0 6px;
-  color: #403b59;
+  color: var(--avalon-ink);
   font-size: 14px;
+}
+
+.avalon-stage {
+  border-color: #dfd1af;
+  box-shadow: 0 8px 22px rgb(48 45 61 / 5%);
+}
+
+.avalon-stage-banner {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  margin-bottom: 10px;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid #e5d7b5;
+  border-radius: 999px;
+  background: #fbf4e4;
+  color: #725820;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.avalon-stage-banner img {
+  display: block;
+  width: 30px;
+  height: 30px;
 }
 
 .avalon-stage > p,
 .avalon-history-card > p {
   margin: 0 0 10px;
-  color: #77738a;
+  color: #514e5b;
   font-size: 10px;
   line-height: 1.55;
 }
 
 .avalon-role-guess-card > .avalon-guess-status {
   margin: 8px 0 0;
-  color: #77738a;
+  color: #696575;
   font-size: 9px;
 }
 
@@ -1136,29 +1395,36 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   gap: 7px;
   min-height: 39px;
   padding: 7px 9px;
-  border: 1px solid #e7e4ef;
+  border: 1px solid #e4dccb;
   border-radius: 10px;
-  background: #fff;
-  color: #55516b;
+  background: var(--avalon-paper);
+  color: var(--avalon-ink);
   font: inherit;
   font-size: 10px;
   text-align: left;
   cursor: pointer;
+  transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
 .avalon-player-button strong {
-  color: #89859a;
+  color: #686473;
   font-size: 9px;
 }
 
 .avalon-player-button.is-selected {
-  border-color: #8b7ae3;
-  background: #f3f0ff;
-  color: #5c50a0;
+  border-color: var(--avalon-gold);
+  background: #fbf4e4;
+  box-shadow: 0 0 0 2px rgb(213 170 88 / 18%);
+  color: #725820;
 }
 
 .avalon-player-button.is-selected strong {
-  color: #6858bc;
+  color: #725820;
+}
+
+.avalon-player-button:not(:disabled):hover {
+  box-shadow: 0 5px 12px rgb(48 45 61 / 9%);
+  transform: translateY(-1px);
 }
 
 .avalon-player-button:disabled {
@@ -1178,8 +1444,9 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   gap: 4px;
   padding: 6px 9px;
   border-radius: 999px;
-  background: #f0edff;
-  color: #6558ae;
+  border: 1px solid #d4e4d7;
+  background: var(--avalon-good-soft);
+  color: var(--avalon-good);
   font-size: 10px;
   font-weight: 700;
 }
@@ -1190,7 +1457,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   justify-content: space-between;
   gap: 10px;
   margin-top: 10px;
-  color: #77738a;
+  color: #514e5b;
   font-size: 10px;
 }
 
@@ -1206,19 +1473,50 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   margin-top: 11px;
 }
 
+.avalon-stage .avalon-action-button.button-primary {
+  border-color: #b88935;
+  background: var(--avalon-gold);
+  color: #302d3d;
+}
+
+.avalon-stage .avalon-action-row .button-primary {
+  border-color: #b88935;
+  background: var(--avalon-gold);
+  color: var(--avalon-ink);
+}
+
 .avalon-vote-actions,
 .avalon-mission-actions {
   justify-content: flex-start;
 }
 
+.avalon-vote-actions .button-primary,
+.avalon-mission-actions .button-primary {
+  border-color: var(--avalon-good);
+  background: var(--avalon-good);
+  color: #fffdf7;
+}
+
+.avalon-vote-actions .button-secondary,
+.avalon-mission-actions .button-secondary {
+  border-color: #d4aaa5;
+  background: var(--avalon-evil-soft);
+  color: var(--avalon-evil);
+}
+
+.avalon-game button:focus-visible {
+  outline: 3px solid rgb(213 170 88 / 78%);
+  outline-offset: 3px;
+}
+
 .avalon-warning {
   margin: 10px 0 0 !important;
-  color: #aa5d39 !important;
+  color: #86542e !important;
 }
 
 .avalon-private-status {
   margin-top: 8px !important;
-  color: #665ab1 !important;
+  color: #367d82 !important;
 }
 
 .avalon-vote-list {
@@ -1242,11 +1540,11 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 }
 
 .avalon-vote-list strong.is-approve {
-  color: #31815a;
+  color: var(--avalon-good);
 }
 
 .avalon-vote-list strong.is-reject {
-  color: #aa5b52;
+  color: var(--avalon-evil);
 }
 
 .avalon-vote-history {
@@ -1263,16 +1561,16 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   gap: 4px;
   padding: 9px;
   border-radius: 10px;
-  background: #f8f7fb;
+  background: var(--avalon-parchment);
   font-size: 10px;
 }
 
 .avalon-vote-history > li > strong {
-  color: #514c67;
+  color: var(--avalon-ink);
 }
 
 .avalon-vote-history > li > small {
-  color: #858197;
+  color: #696575;
   font-size: 9px;
   line-height: 1.5;
 }
@@ -1288,7 +1586,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 }
 
 .avalon-vote-history-team {
-  color: #858197;
+  color: #696575;
   font-size: 9px;
   line-height: 1.5;
 }
@@ -1301,7 +1599,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 
 .avalon-vote-history summary {
   max-width: 100%;
-  color: #6c629f;
+  color: #725820;
   font-size: 9px;
   overflow-wrap: anywhere;
   cursor: pointer;
@@ -1322,7 +1620,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   gap: 12px;
   padding: 9px;
   border-radius: 10px;
-  background: #f8f7fb;
+  background: var(--avalon-parchment);
   font-size: 9px;
 }
 
@@ -1336,14 +1634,88 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 }
 
 .avalon-mission-results strong {
-  color: #514c67;
+  color: var(--avalon-ink);
   font-size: 10px;
 }
 
 .avalon-mission-results small,
 .avalon-mission-results li > span {
-  color: #858197;
+  color: #696575;
   font-size: 9px;
+}
+
+.avalon-mission-results li.is-success {
+  background: var(--avalon-good-soft);
+}
+
+.avalon-mission-results li.is-failure {
+  background: var(--avalon-evil-soft);
+}
+
+.avalon-mission-result-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.avalon-mission-result-heading img {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
+.avalon-mission-result-counts {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.avalon-vote-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.avalon-vote-stamp.is-accepted {
+  background: var(--avalon-good-soft);
+  color: var(--avalon-good);
+}
+
+.avalon-vote-stamp.is-rejected {
+  background: var(--avalon-evil-soft);
+  color: var(--avalon-evil);
+}
+
+.avalon-vote-stamp > span {
+  animation: avalon-stamp-in 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes avalon-stamp-in {
+  from {
+    opacity: 0.45;
+    transform: scale(0.72) rotate(-8deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes avalon-role-reveal {
+  from {
+    opacity: 0.88;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 760px) {
@@ -1354,13 +1726,24 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 
 @media (max-width: 520px) {
   .avalon-game-heading {
-    flex-direction: column;
+    gap: 8px 6px;
+    padding: 10px;
   }
 
-  .avalon-score {
-    display: flex;
-    width: 100%;
-    justify-content: space-around;
+  .avalon-brand-crest {
+    width: 46px;
+    height: 46px;
+  }
+
+  .avalon-current-phase {
+    gap: 4px;
+    padding-right: 7px;
+    font-size: 9px;
+  }
+
+  .avalon-current-phase img {
+    width: 26px;
+    height: 26px;
   }
 
   .avalon-vote-list {
@@ -1374,6 +1757,28 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   .avalon-mission-results li {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avalon-role-card,
+  .avalon-mission-marker.is-success .avalon-mission-node img,
+  .avalon-mission-marker.is-failure .avalon-mission-node img,
+  .avalon-vote-stamp > span {
+    animation: none;
+  }
+
+  .avalon-mission-node,
+  .avalon-role-guess-option,
+  .avalon-role-guess-target,
+  .avalon-player-button {
+    transition: none;
+  }
+
+  .avalon-mission-marker.is-current .avalon-mission-node,
+  .avalon-role-guess-option.is-selected,
+  .avalon-player-button:not(:disabled):hover {
+    transform: none;
   }
 }
 </style>
