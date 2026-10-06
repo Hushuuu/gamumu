@@ -206,10 +206,10 @@ onUnmounted(() => {
       {{ canSelect ? committedGame.icon : '✦' }}
     </span>
     <span class="game-selection-trigger-copy">
-      <small>{{ canSelect ? '房主遊戲選擇' : '派對遊戲圖鑑' }}</small>
-      <strong>{{ canSelect ? '選擇本局遊戲' : '瀏覽遊戲列表' }}</strong>
+      <small>{{ canSelect ? '' : '遊戲圖鑑' }}</small>
+      <strong>{{ canSelect ? '選擇遊戲' : '瀏覽遊戲列表' }}</strong>
       <span v-if="canSelect">
-        {{ selectionConfirmed ? `目前：${committedGame.name}` : '還沒有選定遊戲' }}
+        {{ selectionConfirmed ? `已選：${committedGame.name}` : '還沒有選定遊戲' }}
       </span>
     </span>
     <span class="game-selection-trigger-arrow" aria-hidden="true">↗</span>
@@ -229,10 +229,10 @@ onUnmounted(() => {
           <div>
             <p class="game-selection-overline">GAMUMU · THE PARTY COLLECTION</p>
             <h2 id="game-selection-title">
-              {{ canSelect ? '下一場派對，玩點什麼？' : '找到今晚的派對主題' }}
+              {{ canSelect ? '下一場派對，玩點什麼？' : '找到今天的派對主題' }}
             </h2>
             <p class="game-selection-subtitle">
-              {{ canSelect ? '左右滑動探索，選好後再與大家同步。' : '左右滑動卡片，看看有哪些遊戲等著開場。' }}
+              {{ canSelect ? '左右滑動探索' : '左右滑動卡片，看看有哪些遊戲' }}
             </p>
           </div>
           <div class="game-selection-header-actions">
@@ -340,7 +340,7 @@ onUnmounted(() => {
               :aria-label="`顯示第 ${index + 1} 款：${game.name}`"
               :aria-current="selectedIndex === index ? 'step' : undefined"
               @click="scrollToSlide(index)"
-            />
+            ></button>
           </div>
           <span class="game-selection-swipe-hint">
             <span aria-hidden="true">↔</span> 滑動探索
@@ -874,7 +874,7 @@ onUnmounted(() => {
   overflow-y: auto;
   padding: 6px 4px;
   text-align: left;
-  overscroll-behavior: contain;
+  /* overscroll-behavior: contain; */
 }
 
 .game-selection-badges {

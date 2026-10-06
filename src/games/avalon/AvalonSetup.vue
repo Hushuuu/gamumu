@@ -79,8 +79,8 @@ function applySettings(): void {
     <div class="draw-settings-heading">
       <div>
         <p class="eyebrow">本局設定</p>
-        <h3 id="avalon-settings-title">阿瓦隆角色</h3>
-        <p>固定包含梅林與刺客；選配角色會替換同陣營的基本角色，不增加陣營人數。</p>
+        <h3 id="avalon-settings-title">角色設定</h3>
+        <p>固定包含梅林與刺客；選配角色會替換同陣營的基本角色，不增加人數。</p>
       </div>
       <span class="draw-settings-icon" aria-hidden="true">
         <img :src="avalonAssetUrl('avalon-crest.svg')" alt="" />
@@ -115,7 +115,7 @@ function applySettings(): void {
         </span>
         <span class="avalon-setting-copy">
           <strong>莫德雷德</strong>
-          <small>壞人；梅林看不到他。</small>
+          <small>壞人；可隱蔽身分，梅林看不到他。</small>
         </span>
       </label>
       <label class="avalon-setting-option">
@@ -125,7 +125,7 @@ function applySettings(): void {
         </span>
         <span class="avalon-setting-copy">
           <strong>奧伯倫</strong>
-          <small>壞人；與其他壞人互不認識，湖中女神會查出好人。</small>
+          <small>壞人；與其他壞人無法認出彼此，湖中女神查驗為好人。</small>
         </span>
       </label>
       <label class="avalon-setting-option">
@@ -135,7 +135,7 @@ function applySettings(): void {
         </span>
         <span class="avalon-setting-copy">
           <strong>湖中女神</strong>
-          <small>7 人以上啟用；第 2、3、4 個任務後私下查驗陣營並傳遞標記。</small>
+          <small>7 人以上啟用；第 2、3、4 個任務後，持有女神標記玩家可私下查驗陣營</small>
         </span>
       </label>
     </form>
@@ -159,7 +159,7 @@ function applySettings(): void {
     </p>
     <p class="draw-settings-note">
       {{ isHost ? '' : '由房主調整本局角色。' }}
-      壞人角色選配過多時，需求人數會提高；完整規則請查看「規則說明」。
+      角色選配過多時，需求人數會提高；完整規則請查看「規則說明」。
     </p>
   </section>
 </template>

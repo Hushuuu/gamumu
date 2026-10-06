@@ -47,6 +47,8 @@ const PHASE_TITLES: Record<AvalonPhase, string> = {
 const ROLE_GUESS_DRAG_TYPE = 'application/x-gamumu-avalon-role-guess'
 
 const privateState = ref<AvalonPrivateState | null>(null)
+const hasAnimatedRoleCard = ref(false)
+const animateRoleCard = ref(false)
 const selectedTeamIds = ref<string[]>([])
 const selectedLakeTargetId = ref('')
 const selectedAssassinationTargetId = ref('')
@@ -184,7 +186,7 @@ const phaseDescription = computed(() => {
         : '任務隊伍正在私下出牌；系統只會公布成功與失敗牌數。'
     case 'lake-check':
       return isLakeHolder.value
-        ? '選擇一位從未持有過標記的玩家，私下查看其忠誠陣營後傳遞標記。'
+        ? '選擇一位從未持有過女神標記的玩家，私下查看其忠誠陣營後傳遞標記。'
         : '等待湖中女神持有人完成查驗。'
     case 'assassination':
       return currentPrivateState.value?.roleId === 'assassin'
@@ -212,6 +214,26 @@ const roleInfo = computed(() => {
   return roleId ? AVALON_ROLES[roleId] : null
 })
 const campLabel = computed(() => currentPrivateState.value?.camp === 'good' ? '正義陣營' : '邪惡陣營')
+
+watch(
+  [() => view.value?.phase, roleInfo],
+  ([phase, role], [previousPhase]) => {
+    if (phase === 'role-reveal' && previousPhase !== 'role-reveal') {
+      hasAnimatedRoleCard.value = false
+      animateRoleCard.value = false
+    }
+
+    if (!role) {
+      animateRoleCard.value = false
+      return
+    }
+
+    if (!hasAnimatedRoleCard.value) {
+      hasAnimatedRoleCard.value = true
+      animateRoleCard.value = true
+    }
+  },
+)
 
 watch(() => props.gameEvent, (event) => {
   if (
@@ -424,7 +446,11 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       </li>
     </ol>
 
-    <section v-if="roleInfo" class="avalon-role-card" :class="`is-${currentPrivateState?.camp}`">
+    <section
+      v-if="roleInfo"
+      class="avalon-role-card"
+      :class="[`is-${roleInfo.camp}`, { 'is-revealing': animateRoleCard }]"
+    >
       <div class="avalon-role-card-topline">
         <span class="avalon-camp-badge" :class="`is-${roleInfo.camp}`">
           <img :src="avalonCampIconUrl(roleInfo.camp)" alt="" />
@@ -1043,6 +1069,9 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 .avalon-role-card {
   border-color: #c9dccd;
   background: linear-gradient(135deg, #fffdf7, #e3f0e7);
+}
+
+.avalon-role-card.is-revealing {
   animation: avalon-role-reveal 420ms ease-out both;
 }
 
@@ -1761,7 +1790,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .avalon-role-card,
+  .avalon-role-card.is-revealing,
   .avalon-mission-marker.is-success .avalon-mission-node img,
   .avalon-mission-marker.is-failure .avalon-mission-node img,
   .avalon-vote-stamp > span {

@@ -864,7 +864,7 @@ function connectionLabel(): string {
               {{
                 snapshot.status === 'waiting' &&
                 !snapshot.gameSelectionConfirmed
-                  ? isHost ? '尚未選擇遊戲' : '等待室長選擇遊戲'
+                  ? ''
                   : selectedGame.name
               }}
             </span>
