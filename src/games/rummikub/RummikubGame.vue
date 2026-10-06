@@ -1049,11 +1049,76 @@ function drawOrPass(): void {
         >
           <header class="rummikub-meld-heading">
             <strong>組合 {{ index + 1 }}</strong>
-            <span v-if="isDraftingBoard && !isValidRummikubMeld(meld.tiles)">尚未完成</span>
-            <span v-else-if="isMeldChanged(meld)" class="rummikub-meld-change-label">
-              {{ isMeldPreviewChanged(meld) ? '異動預覽' : '上次異動' }}
+            <span
+              v-if="isDraftingBoard || isMeldChanged(meld)"
+              class="rummikub-meld-markers"
+            >
+              <svg
+                v-if="isDraftingBoard && !isMeldChanged(meld) && isValidRummikubMeld(meld.tiles)"
+                class="rummikub-meld-marker is-valid"
+                viewBox="0 0 20 20"
+                role="img"
+                aria-label="合法組合"
+                focusable="false"
+              >
+                <circle cx="10" cy="10" r="8" fill="#e7f2e8" stroke="#5a8c55" stroke-width="1.5" />
+                <path
+                  d="m6 10 2.5 2.5L14.5 7"
+                  fill="none"
+                  stroke="#3e7659"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+              </svg>
+              <!--<svg
+                v-if="isMeldChanged(meld) && isMeldPreviewChanged(meld)"
+                class="rummikub-meld-marker is-preview"
+                viewBox="0 0 20 20"
+                role="img"
+                aria-label="異動預覽"
+                focusable="false"
+              >
+                <path
+                  d="M4 7a6 6 0 0 1 10-2l2 2M16 3v4h-4M16 13a6 6 0 0 1-10 2l-2-2M4 17v-4h4"
+                  fill="none"
+                  stroke="#617cae"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.7"
+                />
+              </svg>-->
+              <svg
+                v-if="isMeldChanged(meld) && !isMeldPreviewChanged(meld)"
+                class="rummikub-meld-marker is-last-change"
+                viewBox="0 0 20 20"
+                role="img"
+                aria-label="上次異動"
+                focusable="false"
+              >
+                <circle cx="10" cy="10" r="7.5" fill="#eef2fb" stroke="#617cae" stroke-width="1.5" />
+                <path
+                  d="M10 5.5V10l3 2"
+                  fill="none"
+                  stroke="#617cae"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.7"
+                />
+              </svg>
+              <svg
+                v-if="isDraftingBoard && !isValidRummikubMeld(meld.tiles)"
+                class="rummikub-meld-marker is-incomplete"
+                viewBox="0 0 24 18"
+                role="img"
+                aria-label="尚未完成"
+                focusable="false"
+              >
+                <rect x="1" y="4" width="6" height="10" rx="1.2" fill="#fff4e8" stroke="#cb8a55" stroke-width="1.3" />
+                <rect x="9" y="4" width="6" height="10" rx="1.2" fill="#fff4e8" stroke="#cb8a55" stroke-width="1.3" />
+                <rect x="17" y="4" width="6" height="10" rx="1.2" fill="none" stroke="#cb8a55" stroke-dasharray="2 1.5" stroke-width="1.3" />
+              </svg>
             </span>
-            <span v-else-if="isDraftingBoard">合法組合</span>
             <button
               v-if="isEditing"
               class="rummikub-meld-target"
@@ -1950,9 +2015,20 @@ function drawOrPass(): void {
   font-size: 10px;
 }
 
-.rummikub-meld-change-label {
-  color: #617cae;
-  font-weight: 700;
+.rummikub-meld-markers {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+}
+
+.rummikub-meld-marker {
+  width: 16px;
+  height: 16px;
+}
+
+.rummikub-meld-marker.is-incomplete {
+  width: 21px;
 }
 
 .rummikub-meld-target {
