@@ -191,7 +191,7 @@ const voteHistoryRows = computed(() => {
             <strong class="avalon-result-mission-heading">
               <img :src="avalonMissionIconUrl(entry.mission.outcome)" alt="" />
               <span>
-                第 {{ entry.mission.missionNumber }} 個任務 ·
+                任務 {{ entry.mission.missionNumber }} ·
                 {{ entry.mission.outcome === 'success' ? '成功' : '失敗' }}
               </span>
             </strong>
@@ -226,7 +226,7 @@ const voteHistoryRows = computed(() => {
       <ol class="avalon-result-votes">
         <li v-for="entry in voteHistoryRows" :key="entry.key">
           <strong class="avalon-result-vote-heading">
-            <span>第 {{ entry.vote.missionNumber }} 個任務 ·</span>
+            <span>任務 {{ entry.vote.missionNumber }} ·</span>
             <AvalonPlayerIdentity :player="entry.leader" compact />
             <span>提案</span>
             <span
@@ -234,7 +234,7 @@ const voteHistoryRows = computed(() => {
               :class="entry.vote.accepted ? 'is-accepted' : 'is-rejected'"
             >
               <span aria-hidden="true">{{ entry.vote.accepted ? '✓' : '×' }}</span>
-              {{ entry.vote.accepted ? '通過' : '遭否決' }}
+              {{ entry.vote.accepted ? '通過' : '否決' }}
             </span>
           </strong>
           <small class="avalon-result-players">

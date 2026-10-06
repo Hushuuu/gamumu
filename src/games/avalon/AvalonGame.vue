@@ -177,12 +177,12 @@ const phaseDescription = computed(() => {
     case 'team-selection':
       return isCurrentLeader.value
         ? `你是隊長，請選出 ${current.teamSize} 位玩家組成第 ${current.missionNumber} 個任務隊伍。`
-        : `等待目前隊長組隊；每個任務需要 ${current.teamSize} 位玩家。`
+        : `等待目前隊長組隊；任務需要 ${current.teamSize} 位玩家。`
     case 'team-vote':
       return '所有玩家私下投票；全員完成後才會同時公布結果。'
     case 'mission':
       return isOnMissionTeam.value
-        ? '任務隊伍成員私下選擇任務牌；正義陣營只能選成功。'
+        ? '任務成員私下選擇任務牌；正義陣營只能選成功。'
         : '任務隊伍正在私下出牌；系統只會公布成功與失敗牌數。'
     case 'lake-check':
       return isLakeHolder.value
@@ -403,7 +403,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       </div>
     </header>
 
-    <ol class="avalon-mission-track" aria-label="前往王國的五站任務路線">
+    <ol class="avalon-mission-track" aria-label="前往王國的五個任務路線">
       <li
         v-for="mission in missionRoute"
         :key="mission.missionNumber"
@@ -413,7 +413,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
           'is-success': mission.outcome === 'success',
           'is-failure': mission.outcome === 'failure',
         }"
-        :aria-label="`第 ${mission.missionNumber} 個任務：${
+        :aria-label="`任務 ${mission.missionNumber}：${
           mission.outcome === 'success'
             ? '成功'
             : mission.outcome === 'failure'
@@ -478,7 +478,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
         </ul>
       </div>
       <div v-if="currentPrivateState?.lakeResults.length" class="avalon-known-players">
-        <strong>你查驗過的忠誠資訊</strong>
+        <strong>查驗資訊</strong>
         <ul>
           <li v-for="result in currentPrivateState.lakeResults" :key="`${result.missionNumber}-${result.targetId}`">
             <AvalonPlayerIdentity :player="playerInfoOf(result.targetId)" compact />
@@ -525,7 +525,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       <template v-else-if="view.phase === 'team-selection'">
         <h3>第 {{ view.missionNumber }} 個任務 · 選出 {{ view.teamSize }} 人</h3>
         <p v-if="isCurrentLeader">點選玩家組成任務隊伍；選好後送出提案，所有人再投票。</p>
-        <p v-else>每個任務需要 {{ view.teamSize }} 位玩家；目前隊長請見上方標記。</p>
+        <p v-else>任務需要 {{ view.teamSize }} 位玩家；目前隊長請見上方標記。</p>
         <div class="avalon-player-grid">
           <button
             v-for="player in playerRows"
@@ -558,7 +558,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       </template>
 
       <template v-else-if="view.phase === 'team-vote'">
-        <h3>第 {{ view.missionNumber }} 個任務隊伍</h3>
+        <h3>任務 {{ view.missionNumber }}</h3>
         <ul class="avalon-team-list">
           <li v-for="player in teamNames" :key="player.id">
             <AvalonPlayerIdentity
@@ -717,7 +717,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       <ol class="avalon-vote-history">
         <li v-for="entry in voteHistoryRows" :key="entry.key">
           <strong class="avalon-vote-history-heading">
-            <span>第 {{ entry.vote.missionNumber }} 個任務 ·</span>
+            <span>任務 {{ entry.vote.missionNumber }} ·</span>
             <AvalonPlayerIdentity :player="entry.leader" compact />
             <span>提案</span>
             <span
@@ -725,7 +725,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
               :class="entry.vote.accepted ? 'is-accepted' : 'is-rejected'"
             >
               <span aria-hidden="true">{{ entry.vote.accepted ? '✓' : '×' }}</span>
-              {{ entry.vote.accepted ? '通過' : '遭否決' }}
+              {{ entry.vote.accepted ? '通過' : '否決' }}
             </span>
           </strong>
           <small class="avalon-vote-history-team">
@@ -766,7 +766,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
             <strong class="avalon-mission-result-heading">
               <img :src="avalonMissionIconUrl(entry.mission.outcome)" alt="" />
               <span>
-                第 {{ entry.mission.missionNumber }} 個任務 ·
+                任務 {{ entry.mission.missionNumber }} ·
                 {{ entry.mission.outcome === 'success' ? '成功' : '失敗' }}
               </span>
             </strong>
