@@ -122,13 +122,17 @@ function collectTableTileIds(melds: readonly RummikubMeld[]): Set<number> {
   return new Set(melds.flatMap((meld) => meld.tiles.map((tile) => tile.id)))
 }
 
-function parseBoard(game: StoredRummikub, payload: Record<string, unknown>): BoardParseResult {
+function parseBoard(
+  game: StoredRummikub,
+  payload: Record<string, unknown>,
+  allowIncompleteMelds = false,
+): BoardParseResult {
   const rawMelds = payload.melds
   const rawJokers = payload.jokers
   if (
     !Array.isArray(rawMelds) ||
-    rawMelds.length === 0 ||
-    rawMelds.length > MAX_MELD_COUNT ||
+    (!allowIncompleteMelds && rawMelds.length === 0) ||
+    rawMelds.length > (allowIncompleteMelds ? RUMMIKUB_TILE_COUNT : MAX_MELD_COUNT) ||
     !Array.isArray(rawJokers) ||
     rawJokers.length > 2
   ) {
@@ -174,7 +178,11 @@ function parseBoard(game: StoredRummikub, payload: Record<string, unknown>): Boa
   let totalTiles = 0
 
   for (const rawMeld of rawMelds) {
-    if (!Array.isArray(rawMeld) || rawMeld.length < 3 || rawMeld.length > 13) {
+    if (
+      !Array.isArray(rawMeld) ||
+      rawMeld.length < (allowIncompleteMelds ? 1 : 3) ||
+      rawMeld.length > 13
+    ) {
       return {
         ok: false,
         code: 'INVALID_MELD',
@@ -231,7 +239,7 @@ function parseBoard(game: StoredRummikub, payload: Record<string, unknown>): Boa
       }
     }
 
-    if (!isValidRummikubMeld(tiles)) {
+    if (!allowIncompleteMelds && !isValidRummikubMeld(tiles)) {
       return {
         ok: false,
         code: 'INVALID_MELD',
@@ -282,6 +290,8 @@ function scoreRack(game: StoredRummikub, playerId: string): number {
 
 function clearCombo(game: StoredRummikub): void {
   game.combo = null
+  game.pendingTurnMove = null
+  game.pendingTurnPreview = null
 }
 
 function settleGame(
@@ -292,7 +302,6 @@ function settleGame(
   awardScores: boolean,
 ): void {
   clearCombo(game)
-  game.pendingTurnMove = null
   const roundScores: Record<string, number> = {}
   if (winnerId !== null && awardScores) {
     const remainingPoints = new Map(
@@ -340,9 +349,7 @@ function advanceTurn(
   if (currentIndex < 0 || activeOrder.length === 0) {
     throw new Error('Rummikub current player is not in the active turn order.')
   }
-
   clearCombo(game)
-  game.pendingTurnMove = null
   game.lastTurnCombo = lastTurnCombo
   game.currentPlayerId = activeOrder[(currentIndex + 1) % activeOrder.length]!
   game.turnNumber += 1
@@ -382,6 +389,31 @@ function samePendingTurnMove(
     JSON.stringify(current.move) === JSON.stringify(next.move)
 }
 
+function samePendingTurnPreview(
+  current: StoredRummikub['pendingTurnPreview'],
+  next: NonNullable<StoredRummikub['pendingTurnPreview']> | null,
+): boolean {
+  if (current == null || next === null) {
+    return current == null && next === null
+  }
+
+  return current.playerId === next.playerId &&
+    current.turnNumber === next.turnNumber &&
+    JSON.stringify(current.melds) === JSON.stringify(next.melds)
+}
+
+function invalidCombo(game: StoredRummikub): GameActionResult {
+  const changed = game.combo != null ||
+    game.pendingTurnMove != null ||
+    game.pendingTurnPreview != null
+  clearCombo(game)
+  return actionError(
+    'INVALID_COMBO',
+    'Combo 同步資訊無效，請重新整理後再試。',
+    changed,
+  )
+}
+
 function updateComboPreview(
   game: StoredRummikub,
   playerId: string,
@@ -393,13 +425,7 @@ function updateComboPreview(
     return actionError('INVALID_COMBO', 'Combo 同步資訊無效，請重新整理後再試。')
   }
   if (!Array.isArray(rawTileIds) || rawTileIds.length > hand.length) {
-    const pendingMoveChanged = game.pendingTurnMove != null
-    game.pendingTurnMove = null
-    return actionError(
-      'INVALID_COMBO',
-      'Combo 同步資訊無效，請重新整理後再試。',
-      pendingMoveChanged,
-    )
+    return invalidCombo(game)
   }
 
   const handTileIds = new Set(hand)
@@ -411,32 +437,58 @@ function updateComboPreview(
       !handTileIds.has(rawTileId) ||
       comboTileIds.has(rawTileId)
     ) {
-      const pendingMoveChanged = game.pendingTurnMove != null
-      game.pendingTurnMove = null
-      return actionError(
-        'INVALID_COMBO',
-        'Combo 同步資訊無效，請重新整理後再試。',
-        pendingMoveChanged,
-      )
+      return invalidCombo(game)
     }
     comboTileIds.add(rawTileId)
   }
 
   let nextPendingMove: NonNullable<StoredRummikub['pendingTurnMove']> | null = null
-  if (isRecord(payload.move)) {
+  let nextTurnPreview: NonNullable<StoredRummikub['pendingTurnPreview']> | null = null
+  if (payload.move !== undefined) {
+    if (!isRecord(payload.move)) {
+      return invalidCombo(game)
+    }
+
+    const parsedPreview = parseBoard(game, payload.move, true)
+    if (!parsedPreview.ok) {
+      return invalidCombo(game)
+    }
+
+    const tableTileIds = collectTableTileIds(game.table)
+    const preservesTable = [...tableTileIds].every((tileId) => {
+      return parsedPreview.tileIds.has(tileId)
+    })
+    const usesAvailableTiles = [...parsedPreview.tileIds].every((tileId) => {
+      return tableTileIds.has(tileId) || handTileIds.has(tileId)
+    })
+    const usedHandTileIds = new Set(
+      [...parsedPreview.tileIds].filter((tileId) => handTileIds.has(tileId)),
+    )
+    const comboMatchesPreview = usedHandTileIds.size === comboTileIds.size &&
+      [...usedHandTileIds].every((tileId) => comboTileIds.has(tileId))
+    const preservesOpeningRules = game.openedPlayerIds.includes(playerId) ||
+      preservesOriginalMelds(game.table, parsedPreview.melds)
+    if (
+      !preservesTable ||
+      !usesAvailableTiles ||
+      !comboMatchesPreview ||
+      !preservesOpeningRules
+    ) {
+      return invalidCombo(game)
+    }
+
+    nextTurnPreview = {
+      playerId,
+      turnNumber: game.turnNumber,
+      melds: parsedPreview.melds,
+    }
+
     const parsedMove = parseBoard(game, payload.move)
     if (parsedMove.ok) {
-      const usedHandTileIds = new Set(
-        [...parsedMove.tileIds].filter((tileId) => handTileIds.has(tileId)),
-      )
-      const comboMatchesMove = usedHandTileIds.size === comboTileIds.size &&
-        [...usedHandTileIds].every((tileId) => comboTileIds.has(tileId))
-      if (comboMatchesMove) {
-        nextPendingMove = {
-          playerId,
-          turnNumber: game.turnNumber,
-          move: createMoveFromMelds(parsedMove.melds),
-        }
+      nextPendingMove = {
+        playerId,
+        turnNumber: game.turnNumber,
+        move: createMoveFromMelds(parsedMove.melds),
       }
     }
   }
@@ -450,12 +502,17 @@ function updateComboPreview(
     currentCombo?.count === nextCombo?.count
   )
   const pendingMoveChanged = !samePendingTurnMove(game.pendingTurnMove, nextPendingMove)
-  if (!comboChanged && !pendingMoveChanged) {
+  const turnPreviewChanged = !samePendingTurnPreview(
+    game.pendingTurnPreview,
+    nextTurnPreview,
+  )
+  if (!comboChanged && !pendingMoveChanged && !turnPreviewChanged) {
     return { ok: true, changed: false }
   }
 
   game.combo = nextCombo
   game.pendingTurnMove = nextPendingMove
+  game.pendingTurnPreview = nextTurnPreview
   return { ok: true, changed: true }
 }
 
@@ -658,6 +715,7 @@ function startRummikub(room: GameRoomContext, now: number): void {
     lastTurnCombo: null,
     lastTurnChangedMelds: [],
     pendingTurnMove: null,
+    pendingTurnPreview: null,
     turnOrder,
     currentPlayerId: turnOrder[0]!,
     turnTimeSeconds: settings.turnTimeSeconds,
@@ -816,6 +874,7 @@ export const rummikubGame: GameModule = {
       combo: game.combo ?? null,
       lastTurnCombo: game.lastTurnCombo ?? null,
       lastTurnChangedMelds: game.lastTurnChangedMelds ?? [],
+      turnPreview: game.pendingTurnPreview ?? null,
       players: room.players.map((player) => ({
         id: player.id,
         tileCount: getHand(game, player.id).length,

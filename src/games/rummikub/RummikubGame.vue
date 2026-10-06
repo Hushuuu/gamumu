@@ -281,6 +281,18 @@ const ownGamePlayer = computed(() => {
 const isMyTurn = computed(() => {
   return Boolean(game.value && game.value.currentPlayerId === props.playerId)
 })
+const activeTurnPreview = computed(() => {
+  const currentGame = game.value
+  const preview = currentGame?.turnPreview
+  return preview &&
+    preview.playerId === currentGame.currentPlayerId &&
+    preview.turnNumber === currentGame.turnNumber
+    ? preview
+    : null
+})
+const isDraftingBoard = computed(() => {
+  return isEditing.value || activeTurnPreview.value !== null
+})
 watch(
   () => ({
     turnNumber: game.value?.turnNumber ?? null,
@@ -359,20 +371,30 @@ const visibleMelds = computed<DraftMeld[]>(() => {
   if (isEditing.value) {
     return draftMelds.value
   }
+  const preview = activeTurnPreview.value
+  if (preview) {
+    return preview.melds.map((meld, index) => ({
+      id: `preview-${preview.turnNumber}-${index}`,
+      tiles: meld.tiles,
+    }))
+  }
   return (game.value?.table ?? []).map((meld, index) => ({
     id: `table-${index}`,
     tiles: meld.tiles,
   }))
 })
 const previewChangedMeldSignatures = computed(() => {
-  if (!isEditing.value) {
-    return new Set<string>()
-  }
+  const previewMelds = isEditing.value
+    ? draftMelds.value
+    : activeTurnPreview.value?.melds ?? []
+  const originalBoard = isEditing.value
+    ? originalMelds.value
+    : game.value?.table ?? []
 
   return new Set(
-    draftMelds.value
+    previewMelds
       .filter((meld) => {
-        return !originalMelds.value.some((originalMeld) => {
+        return !originalBoard.some((originalMeld) => {
           return areRummikubMeldsEqual(originalMeld, meld)
         })
       })
@@ -395,6 +417,12 @@ const visibleHand = computed(() => {
   )
 })
 const playerNameById = computed(() => new Map(props.players.map((player) => [player.id, player.name])))
+const turnPreviewPlayerName = computed(() => {
+  const preview = activeTurnPreview.value
+  return preview
+    ? playerNameById.value.get(preview.playerId) ?? '目前玩家'
+    : ''
+})
 const activeCombo = computed(() => {
   const combo = game.value?.combo
   if (!combo || combo.playerId !== game.value?.currentPlayerId) {
@@ -454,6 +482,27 @@ const visibleJokers = computed<BoardJoker[]>(() => {
   return draftMelds.value.flatMap((meld) => {
     return meld.tiles.filter((tile): tile is BoardJoker => tile.kind === 'joker')
   })
+})
+const jokerNumberById = computed(() => {
+  const currentGame = game.value
+  const knownTiles: (RummikubTile | RummikubBoardTile)[] = isEditing.value
+    ? [
+        ...originalHand.value,
+        ...originalMelds.value.flatMap((meld) => meld.tiles),
+      ]
+    : [
+        ...privateHand.value,
+        ...(currentGame?.table.flatMap((meld) => meld.tiles) ?? []),
+        ...(activeTurnPreview.value?.melds.flatMap((meld) => meld.tiles) ?? []),
+      ]
+  const jokerIds = [...new Set(
+    knownTiles
+      .filter((tile) => tile.kind === 'joker')
+      .map((tile) => tile.id),
+  )].sort((left, right) => left - right)
+  const markers = new Map<number, number>()
+  jokerIds.forEach((tileId, index) => markers.set(tileId, index + 1))
+  return markers
 })
 const numberValues = Array.from({ length: 13 }, (_value, index) => index + 1)
 const colors = [
@@ -573,14 +622,25 @@ function getTileLabel(tile: RummikubTile | RummikubBoardTile): string {
   return tile.kind === 'joker' ? '★' : String(tile.value)
 }
 
+function getJokerNumber(tileId: number): number | null {
+  return jokerNumberById.value.get(tileId) ?? null
+}
+
+function getJokerName(tileId: number): string {
+  const jokerNumber = getJokerNumber(tileId)
+  return jokerNumber === null ? 'Joker' : `Joker ${jokerNumber}`
+}
+
 function getTileAriaLabel(tile: RummikubTile | RummikubBoardTile): string {
+  let label: string
   if (tile.kind === 'number') {
-    return `${COLOR_NAMES[tile.color]}色 ${tile.value}`
+    label = `${COLOR_NAMES[tile.color]}色 ${tile.value}`
+  } else if ('representedAs' in tile) {
+    label = `${getJokerName(tile.id)}，代表${COLOR_NAMES[tile.representedAs.color]}色 ${tile.representedAs.value}`
+  } else {
+    label = `${getJokerName(tile.id)} 百搭牌`
   }
-  if ('representedAs' in tile) {
-    return `Joker，代表${COLOR_NAMES[tile.representedAs.color]}色 ${tile.representedAs.value}`
-  }
-  return 'Joker 百搭牌'
+  return tile.id === latestDrawnTileId.value ? `新抽牌，${label}` : label
 }
 
 function getMeldTiles(meld: DraftMeld): RummikubBoardTile[] {
@@ -961,13 +1021,20 @@ function drawOrPass(): void {
           <p class="rummikub-kicker">SHARED TABLE</p>
           <h3>桌面組合 <span>{{ visibleMelds.length }}</span></h3>
         </div>
-        <span v-if="isEditing" class="rummikub-selection-count">
+        <span v-if="!isEditing && activeTurnPreview" class="rummikub-preview-status" role="status">
+          {{ turnPreviewPlayerName }} 正在調整桌面
+        </span>
+        <span v-else-if="isEditing" class="rummikub-selection-count">
           已選 {{ selectedTileCount }} 張
         </span>
       </header>
 
       <p v-if="visibleMelds.length === 0" class="rummikub-empty-board">
-        桌上還沒有組合，先從自己的手牌建立新組合。
+        {{
+          !isEditing && activeTurnPreview
+            ? `${turnPreviewPlayerName} 正在整理桌面，尚未放置牌組。`
+            : '桌上還沒有組合，先從自己的手牌建立新組合。'
+        }}
       </p>
 
       <div v-else class="rummikub-meld-list">
@@ -976,17 +1043,17 @@ function drawOrPass(): void {
           :key="meld.id"
           class="rummikub-meld"
           :class="{
-            'is-invalid': isEditing && !isValidRummikubMeld(meld.tiles),
+            'is-invalid': isDraftingBoard && !isValidRummikubMeld(meld.tiles),
             'is-changed': isMeldChanged(meld),
           }"
         >
           <header class="rummikub-meld-heading">
             <strong>組合 {{ index + 1 }}</strong>
-            <span v-if="isEditing && !isValidRummikubMeld(meld.tiles)">尚未完成</span>
+            <span v-if="isDraftingBoard && !isValidRummikubMeld(meld.tiles)">尚未完成</span>
             <span v-else-if="isMeldChanged(meld)" class="rummikub-meld-change-label">
               {{ isMeldPreviewChanged(meld) ? '異動預覽' : '上次異動' }}
             </span>
-            <span v-else-if="isEditing">合法組合</span>
+            <span v-else-if="isDraftingBoard">合法組合</span>
             <button
               v-if="isEditing"
               class="rummikub-meld-target"
@@ -1019,6 +1086,40 @@ function drawOrPass(): void {
               <small v-if="tile.kind === 'joker' && 'representedAs' in tile">
                 {{ COLOR_NAMES[tile.representedAs.color] }}{{ tile.representedAs.value }}
               </small>
+              <span
+                v-if="tile.kind === 'joker' && getJokerNumber(tile.id) !== null"
+                class="rummikub-joker-identifier"
+                aria-hidden="true"
+              >
+                {{ getJokerNumber(tile.id) }}
+              </span>
+              <svg
+                v-if="tile.id === latestDrawnTileId"
+                class="rummikub-new-tile-mark"
+                viewBox="0 0 42 24"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  d="M5 1h36v22H5L1 12Z"
+                  fill="#3e7659"
+                  stroke="#fffdf7"
+                  stroke-width="2"
+                  stroke-linejoin="round"
+                />
+                <text
+                  x="23"
+                  y="16"
+                  fill="#fffdf7"
+                  font-family="Arial, sans-serif"
+                  font-size="12"
+                  font-weight="800"
+                  letter-spacing="0.4"
+                  text-anchor="middle"
+                >
+                  NEW
+                </text>
+              </svg>
             </button>
           </div>
         </article>
@@ -1110,7 +1211,6 @@ function drawOrPass(): void {
             {
               'is-selected': isEditing && selectedTileIds.includes(tile.id),
               'is-joker': tile.kind === 'joker',
-              'is-latest-draw': tile.id === latestDrawnTileId,
             },
           ]"
           type="button"
@@ -1120,7 +1220,41 @@ function drawOrPass(): void {
           @click="toggleTileSelection(tile.id, true)"
         >
           <span>{{ getTileLabel(tile) }}</span>
-          <small v-if="tile.kind === 'joker'">Joker</small>
+          <small v-if="tile.kind === 'joker'">{{ getJokerName(tile.id) }}</small>
+          <span
+            v-if="tile.kind === 'joker' && getJokerNumber(tile.id) !== null"
+            class="rummikub-joker-identifier"
+            aria-hidden="true"
+          >
+            {{ getJokerNumber(tile.id) }}
+          </span>
+          <svg
+            v-if="tile.id === latestDrawnTileId"
+            class="rummikub-new-tile-mark"
+            viewBox="0 0 42 24"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              d="M5 1h36v22H5L1 12Z"
+              fill="#3e7659"
+              stroke="#fffdf7"
+              stroke-width="2"
+              stroke-linejoin="round"
+            />
+            <text
+              x="23"
+              y="16"
+              fill="#fffdf7"
+              font-family="Arial, sans-serif"
+              font-size="12"
+              font-weight="800"
+              letter-spacing="0.4"
+              text-anchor="middle"
+            >
+              NEW
+            </text>
+          </svg>
         </button>
       </div>
 
@@ -1130,11 +1264,11 @@ function drawOrPass(): void {
           <h4>Joker 代表牌</h4>
         </div>
         <label v-for="joker in visibleJokers" :key="joker.id" class="rummikub-joker-control">
-          <span>Joker · {{ COLOR_NAMES[joker.representedAs.color] }}{{ joker.representedAs.value }}</span>
+          <span>{{ getJokerName(joker.id) }} · {{ COLOR_NAMES[joker.representedAs.color] }}{{ joker.representedAs.value }}</span>
           <select
             :value="joker.representedAs.color"
             :disabled="!props.canInteract || (!ownGamePlayer?.hasOpened && originalTableTileIds.has(joker.id))"
-            :aria-label="`Joker ${joker.id} 代表顏色`"
+            :aria-label="`${getJokerName(joker.id)} 代表顏色`"
             @change="changeJokerColor(joker.id, $event)"
           >
             <option v-for="color in colors" :key="color.value" :value="color.value">
@@ -1144,7 +1278,7 @@ function drawOrPass(): void {
           <select
             :value="joker.representedAs.value"
             :disabled="!props.canInteract || (!ownGamePlayer?.hasOpened && originalTableTileIds.has(joker.id))"
-            :aria-label="`Joker ${joker.id} 代表數字`"
+            :aria-label="`${getJokerName(joker.id)} 代表數字`"
             @change="changeJokerValue(joker.id, $event)"
           >
             <option v-for="value in numberValues" :key="value" :value="value">{{ value }}</option>
@@ -1703,6 +1837,13 @@ function drawOrPass(): void {
   font-weight: 700;
 }
 
+.rummikub-preview-status {
+  color: #737b63;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: right;
+}
+
 .rummikub-sort-controls {
   display: flex;
   gap: 3px;
@@ -1865,6 +2006,35 @@ function drawOrPass(): void {
   font-size: 7px;
   font-weight: 800;
   line-height: 1.1;
+}
+
+.rummikub-joker-identifier {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 2;
+  display: grid;
+  width: 9px;
+  height: 9px;
+  place-items: center;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  background: #45483f;
+  color: #fff;
+  font-size: 6px;
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.rummikub-new-tile-mark {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  z-index: 1;
+  width: 21px;
+  height: 12px;
+  pointer-events: none;
 }
 
 .rummikub-tile.tile-red {
@@ -2055,16 +2225,6 @@ function drawOrPass(): void {
 .rummikub-game.hand-theme-mist .rummikub-tile.is-selected {
   border-color: #8799bb;
   box-shadow: 0 0 0 2px rgb(135 153 187 / 22%), 0 5px 11px rgb(50 49 42 / 12%);
-}
-
-.rummikub-game.hand-theme-sage .rummikub-tile.is-latest-draw {
-  z-index: 1;
-  box-shadow: 0 0 0 4px rgb(119 158 109 / 48%), 0 7px 16px rgb(50 49 42 / 26%);
-}
-
-.rummikub-game.hand-theme-mist .rummikub-tile.is-latest-draw {
-  z-index: 1;
-  box-shadow: 0 0 0 4px rgb(135 153 187 / 48%), 0 7px 16px rgb(50 49 42 / 26%);
 }
 
 .rummikub-game.hand-theme-sage .rummikub-hand-panel.is-my-turn,
