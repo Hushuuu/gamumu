@@ -191,14 +191,16 @@ const voteHistoryRows = computed(() => {
             <strong class="avalon-result-mission-heading">
               <img :src="avalonMissionIconUrl(entry.mission.outcome)" alt="" />
               <span>
-                任務 {{ entry.mission.missionNumber }} ·
-                {{ entry.mission.outcome === 'success' ? '成功' : '失敗' }}
+                任務 {{ entry.mission.missionNumber }}
               </span>
+              <span>·{{ entry.mission.outcome === 'success' ? '成功' : '失敗' }}</span>
             </strong>
             <small class="avalon-result-players">
               <span>隊長</span>
               <AvalonPlayerIdentity :player="entry.leader" compact />
-              <span>· 隊伍</span>
+            </small>
+            <small class="avalon-result-players">
+              <span>隊伍</span>
               <AvalonPlayerIdentity
                 v-for="player in entry.team"
                 :key="player.id"

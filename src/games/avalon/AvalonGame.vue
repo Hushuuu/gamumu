@@ -545,7 +545,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
         </span>
       </li>
     </ol>
-    
+
     <section class="avalon-stage" :class="`is-${view.phase}`" aria-live="polite">
       <div class="avalon-stage-banner" aria-hidden="true">
         <img :src="avalonPhaseIconUrl(view.phase)" alt="" />
@@ -834,7 +834,9 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
               <small class="avalon-mission-result-players">
                 <span>隊長</span>
                 <AvalonPlayerIdentity :player="entry.leader" compact />
-                <span>· 隊伍</span>
+              </small>
+              <small>
+                <span>隊伍 &nbsp;</span>
                 <AvalonPlayerIdentity
                   v-for="player in entry.team"
                   :key="player.id"

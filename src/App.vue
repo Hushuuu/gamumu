@@ -116,6 +116,13 @@ const isHost = computed(() => {
   return Boolean(snapshot.value && playerId.value && snapshot.value.hostId === playerId.value)
 })
 const readyCount = computed(() => snapshot.value?.players.filter((player) => player.ready).length ?? 0)
+const shouldAnimateReadyButton = computed(() => Boolean(
+  snapshot.value?.status === 'waiting' &&
+  snapshot.value.gameSelectionConfirmed &&
+  connectionStatus.value === 'connected' &&
+  currentPlayer.value &&
+  !currentPlayer.value.ready,
+))
 const selectedGame = computed(() => {
   return getGameOption(snapshot.value?.selectedGameId ?? DEFAULT_GAME_ID)
 })
@@ -141,6 +148,7 @@ const devRoleOptions = computed(() => {
 const playerRange = computed(() => {
   return getPlayerRange(selectedGame.value.id, snapshot.value?.gameSettings)
 })
+const gamePanelSwitchEffectId = ref(0)
 const playerCountIssue = computed(() => {
   const count = snapshot.value?.players.length ?? 0
   if (count < playerRange.value.min) {
@@ -187,6 +195,18 @@ const shareUrl = computed(() => {
   return url.toString()
 })
 
+watch(() => snapshot.value?.selectedGameId, (gameId, previousGameId) => {
+  if (
+    !gameId ||
+    !previousGameId ||
+    gameId === previousGameId ||
+    snapshot.value?.status !== 'waiting'
+  ) {
+    return
+  }
+
+  gamePanelSwitchEffectId.value += 1
+})
 watch(
   [
     () => snapshot.value?.selectedGameId,
@@ -936,6 +956,13 @@ function connectionLabel(): string {
         </section>
 
         <section class="game-panel">
+          <span
+            v-if="gamePanelSwitchEffectId > 0"
+            :key="gamePanelSwitchEffectId"
+            class="game-panel-switch-effect"
+            aria-hidden="true"
+            @animationend="gamePanelSwitchEffectId = 0"
+          />
           <div class="game-panel-heading">
             <span class="game-type">
               <span aria-hidden="true">✦</span>
@@ -1072,6 +1099,7 @@ function connectionLabel(): string {
             <div class="ready-controls">
               <button
                 class="button button-secondary ready-button"
+                :class="{ 'ready-button-pulse': shouldAnimateReadyButton }"
                 type="button"
                 :disabled="connectionStatus !== 'connected' || !currentPlayer"
                 @click="toggleReady"
@@ -2111,8 +2139,39 @@ function connectionLabel(): string {
 }
 
 .game-panel {
+  position: relative;
   min-height: 306px;
   padding: 22px;
+}
+
+.game-panel-switch-effect {
+  position: absolute;
+  z-index: 1;
+  inset: -2px;
+  border: 2px solid rgba(105, 87, 232, 0.32);
+  border-radius: inherit;
+  box-shadow: 0 0 0 0 rgba(105, 87, 232, 0.24);
+  pointer-events: none;
+  animation: game-panel-switch-effect 760ms cubic-bezier(0.2, 0.75, 0.3, 1) both;
+}
+
+@keyframes game-panel-switch-effect {
+  0% {
+    opacity: 0;
+    transform: scale(0.99);
+  }
+
+  28% {
+    opacity: 1;
+    box-shadow: 0 0 0 6px rgba(105, 87, 232, 0.14);
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    box-shadow: 0 0 0 12px rgba(105, 87, 232, 0);
+    transform: scale(1.015);
+  }
 }
 
 .game-host-actions {
@@ -2774,6 +2833,22 @@ function connectionLabel(): string {
   min-height: 44px;
   margin-top: 0;
   padding-inline: 14px;
+}
+
+.ready-button-pulse {
+  animation: ready-button-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes ready-button-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(105, 87, 232, 0.24);
+    transform: scale(1);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px rgba(105, 87, 232, 0.12);
+    transform: scale(1.035);
+  }
 }
 
 .ready-count {
