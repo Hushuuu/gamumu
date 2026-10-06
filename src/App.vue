@@ -33,6 +33,14 @@ import {
 } from './services/betaSession'
 import { loadRoomToken, removeRoomToken, saveRoomToken } from './services/session'
 
+interface DeferredInstallPrompt extends Event {
+  prompt(): Promise<void>
+  userChoice: Promise<{
+    outcome: 'accepted' | 'dismissed'
+    platform: string
+  }>
+}
+
 const {
   snapshot,
   connectionStatus,
@@ -60,6 +68,8 @@ const isBetaLoading = ref(false)
 const isInviteJoinPromptOpen = ref(false)
 const shouldPromptForInviteJoin = ref(false)
 const inviteJoinDialog = ref<HTMLDialogElement | null>(null)
+const disclaimerDialog = ref<HTMLDialogElement | null>(null)
+const installGuideDialog = ref<HTMLDialogElement | null>(null)
 const inviteJoinNameInput = ref<HTMLInputElement | null>(null)
 const isRummikubSettingsOpen = ref(false)
 const isLoading = ref(false)
@@ -67,10 +77,18 @@ const pageError = ref('')
 const pageNotice = ref('')
 const devRoleId = ref<WerewolfRoleId | ''>('')
 const isDevelopmentBuild = import.meta.env.DEV
+const contactEmail = 'jim@nijidakku.cc'
+const contactEmailHref = `mailto:${contactEmail}`
+const deferredInstallPrompt = ref<DeferredInstallPrompt | null>(null)
+const isAppInstalled = ref(false)
+const isIosDevice = ref(false)
 
 let noticeTimer: number | undefined
 let betaExpiryTimer: number | undefined
 
+const canAddToHomeScreen = computed(() => {
+  return !isAppInstalled.value && (Boolean(deferredInstallPrompt.value) || isIosDevice.value)
+})
 const normalizedName = computed(() => playerName.value.trim())
 const hasBetaAccess = computed(() => {
   return betaStatus.value === 'authorized' && betaSessionExpiresAt.value > Date.now()
@@ -239,11 +257,71 @@ watch(isInviteJoinPromptOpen, (isOpen) => {
   })
 })
 
+function detectIosDevice(): boolean {
+  const { userAgent, platform, maxTouchPoints } = window.navigator
+  return /iPad|iPhone|iPod/.test(userAgent) || (platform === 'MacIntel' && maxTouchPoints > 1)
+}
+
+function isRunningStandalone(): boolean {
+  const navigatorWithStandalone = window.navigator as Navigator & { standalone?: boolean }
+  return window.matchMedia('(display-mode: standalone)').matches ||
+    navigatorWithStandalone.standalone === true
+}
+
+function handleBeforeInstallPrompt(event: Event): void {
+  const installPrompt = event as DeferredInstallPrompt
+  if (typeof installPrompt.prompt !== 'function') {
+    return
+  }
+
+  event.preventDefault()
+  deferredInstallPrompt.value = installPrompt
+}
+
+function handleAppInstalled(): void {
+  isAppInstalled.value = true
+  deferredInstallPrompt.value = null
+  installGuideDialog.value?.close()
+}
+
+function openDisclaimer(): void {
+  disclaimerDialog.value?.showModal()
+}
+
+async function addToHomeScreen(): Promise<void> {
+  const installPrompt = deferredInstallPrompt.value
+  if (!installPrompt) {
+    if (isIosDevice.value) {
+      installGuideDialog.value?.showModal()
+    }
+    return
+  }
+
+  try {
+    await installPrompt.prompt()
+    const choice = await installPrompt.userChoice
+    if (choice.outcome === 'accepted') {
+      isAppInstalled.value = true
+    }
+  } catch (error) {
+    console.error('Unable to open the PWA install prompt.', error)
+    showNotice('無法開啟安裝提示，請改用瀏覽器選單加入主畫面。')
+  } finally {
+    deferredInstallPrompt.value = null
+  }
+}
+
 onMounted(() => {
+  isIosDevice.value = detectIosDevice()
+  isAppInstalled.value = isRunningStandalone()
+  window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+  window.addEventListener('appinstalled', handleAppInstalled)
   void initializeBetaSession()
 })
 
 onUnmounted(() => {
+  window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+  window.removeEventListener('appinstalled', handleAppInstalled)
   if (noticeTimer !== undefined) {
     window.clearTimeout(noticeTimer)
   }
@@ -1174,11 +1252,63 @@ function connectionLabel(): string {
           </div>
         </form>
       </dialog>
+
+      <dialog
+        ref="disclaimerDialog"
+        class="site-info-dialog"
+        aria-labelledby="disclaimer-title"
+      >
+        <form method="dialog" class="site-info-dialog-content">
+          <p class="eyebrow">GAMUMU</p>
+          <h2 id="disclaimer-title">網站聲明</h2>
+          <p>
+            本站提供之遊戲內容，均自行設計、開發及製作，本身並未聲稱與任何第三方遊戲出版商、開發商、作者或其他權利人具有合作、授權、代理或隸屬關係。
+          </p>
+          <p>
+            遊戲所使用之名稱、角色、作品名稱及其他可能受智慧財產權保護之內容，如涉及第三方權利，相關權利仍歸其原權利人所有。本站不主張取得上述第三方權利之所有權。
+          </p>
+          <p>
+            若您認為本站任何內容涉及您的著作權、商標權或其他合法權利，請透過本站提供的聯絡方式與我們聯繫，並提供相關權利證明及具體內容，我們將儘速處理。
+          </p> 
+          <div class="site-info-dialog-actions">
+            <button class="button button-secondary" type="submit">關閉</button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog
+        ref="installGuideDialog"
+        class="site-info-dialog"
+        aria-labelledby="install-guide-title"
+      >
+        <form method="dialog" class="site-info-dialog-content">
+          <p class="eyebrow">GAMUMU</p>
+          <h2 id="install-guide-title">加入主畫面</h2>
+          <p>
+            在 Safari 點選「分享」，選擇「加入主畫面」，再點選「新增」。之後就能從主畫面直接開啟 GAMUMU。
+          </p>
+          <div class="site-info-dialog-actions">
+            <button class="button button-secondary" type="submit">知道了</button>
+          </div>
+        </form>
+      </dialog>
     </Teleport>
 
     <footer class="site-footer">
-      <span>GAMUMU <span aria-hidden="true">✦</span> 把日常變成派對</span>
-      <span>一起玩，才好玩。</span>
+      <span class="site-footer-brand">GAMUMU <span aria-hidden="true">✦</span> 把日常變成派對</span>
+      <span class="site-footer-slogan">一起玩，才好玩。</span>
+      <nav class="site-footer-links" aria-label="網站資訊">
+        <button
+          v-if="canAddToHomeScreen"
+          class="site-footer-link"
+          type="button"
+          @click="addToHomeScreen"
+        >
+          加入主畫面
+        </button>
+        <button class="site-footer-link" type="button" @click="openDisclaimer">網站聲明</button>
+        <a class="site-footer-link" :href="contactEmailHref">聯絡我們</a>
+      </nav>
     </footer>
   </div>
 </template>
@@ -1461,6 +1591,57 @@ function connectionLabel(): string {
   backdrop-filter: blur(3px);
 }
 
+.site-info-dialog {
+  width: min(440px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  border: 1px solid rgba(94, 83, 153, 0.14);
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 80px rgba(21, 18, 38, 0.24);
+}
+
+.site-info-dialog::backdrop {
+  background: rgb(25 22 39 / 64%);
+  backdrop-filter: blur(3px);
+}
+
+.site-info-dialog-content {
+  display: grid;
+  gap: 12px;
+  padding: 28px;
+}
+
+.site-info-dialog-content > .eyebrow,
+.site-info-dialog-content > h2,
+.site-info-dialog-content > p {
+  margin: 0;
+}
+
+.site-info-dialog-content > h2 {
+  font-size: 24px;
+  letter-spacing: -0.04em;
+}
+
+.site-info-dialog-content > p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.site-info-dialog-content a {
+  color: var(--purple-dark);
+  overflow-wrap: anywhere;
+}
+
+.site-info-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
 .invite-join-content {
   display: grid;
   gap: 10px;
@@ -1703,9 +1884,38 @@ function connectionLabel(): string {
   min-height: 56px;
   align-items: center;
   justify-content: space-between;
+  gap: 14px;
+  padding-block: 10px;
   border-top: 1px solid rgba(65, 56, 111, 0.08);
   color: #9a97aa;
   font-size: 10px;
+}
+
+.site-footer-brand,
+.site-footer-slogan {
+  flex-shrink: 0;
+}
+
+.site-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.site-footer-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-footer-link:hover {
+  color: var(--purple);
 }
 
 .site-footer span span {
@@ -2310,7 +2520,16 @@ function connectionLabel(): string {
 
   .site-footer {
     min-height: 50px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 7px;
+    padding-block: 12px;
     font-size: 9px;
+  }
+
+  .site-footer-links {
+    justify-content: center;
+    gap: 13px;
   }
 
   .room-main {

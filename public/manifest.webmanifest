@@ -1,0 +1,31 @@
+{
+  "id": "./",
+  "name": "GAMUMU｜把日常變成派對",
+  "short_name": "GAMUMU",
+  "description": "找朋友一起。不用下載，開了就能玩。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f6ff",
+  "theme_color": "#f7f6ff",
+  "icons": [
+    {
+      "src": "pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

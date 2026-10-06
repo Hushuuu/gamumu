@@ -242,6 +242,8 @@ npm run worker:check  # 產生 Wrangler 型別並檢查 Worker TypeScript
 
 首頁、等待大廳及共用玩家名單在 `src/App.vue`；遊戲進行與結算畫面則修改對應的 `src/games/<game-id>/` 元件。元件專屬樣式放在該 Vue SFC 的 `<style scoped>`；全域基礎與跨元件共用樣式放在 `src/style.css`。若要新增房間操作或連線行為，避免只在元件內建立一套 WebSocket 狀態；沿用 `useGameRoom.ts` 和 `src/services/` 的分工。
 
+PWA 安裝資訊分別設定於 `index.html` 與 `public/manifest.webmanifest`；manifest 的啟動路徑與圖示使用相對 URL，以支援 `VITE_BASE_PATH` 子路徑部署。`src/App.vue` 會在瀏覽器提供安裝事件時顯示安裝操作，iOS 則提供 Safari「加入主畫面」指引。目前未加入離線快取或 service worker。
+
 ### 新增房間操作或伺服器訊息
 
 1. 在 `shared/protocol.ts` 更新 `ClientMessage`、`ServerMessage` 或公開快照型別，並同步調整相應的執行期格式檢查。
