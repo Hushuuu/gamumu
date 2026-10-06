@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import {
   AVALON_PRIVATE_EVENT,
   AVALON_ROLES,
@@ -46,9 +46,14 @@ const PHASE_TITLES: Record<AvalonPhase, string> = {
 }
 const ROLE_GUESS_DRAG_TYPE = 'application/x-gamumu-avalon-role-guess'
 
+type AvalonHistoryTab = 'missions' | 'votes'
+
 const privateState = ref<AvalonPrivateState | null>(null)
 const hasAnimatedRoleCard = ref(false)
 const animateRoleCard = ref(false)
+const selectedHistoryTab = ref<AvalonHistoryTab>('missions')
+const missionHistoryTabButton = ref<HTMLButtonElement | null>(null)
+const voteHistoryTabButton = ref<HTMLButtonElement | null>(null)
 const selectedTeamIds = ref<string[]>([])
 const selectedLakeTargetId = ref('')
 const selectedAssassinationTargetId = ref('')
@@ -68,6 +73,10 @@ const view = computed(() => (props.game.gameId === 'avalon' ? props.game : null)
 const currentPrivateState = computed(() => {
   const state = privateState.value
   return state && view.value && state.stateVersion === view.value.stateVersion ? state : null
+})
+const displayPrivateState = computed(() => {
+  const state = privateState.value
+  return state && view.value && state.stateVersion <= view.value.stateVersion ? state : null
 })
 const playerRows = computed(() => {
   const current = view.value
@@ -203,17 +212,45 @@ const availableLakeTargets = computed(() => {
     : []
 })
 const knownPlayerRows = computed(() => {
-  const state = currentPrivateState.value
+  const state = displayPrivateState.value
   return (state?.knownPlayers ?? []).map((knownPlayer) => ({
     ...knownPlayer,
     ...playerInfoOf(knownPlayer.playerId),
   }))
 })
 const roleInfo = computed(() => {
-  const roleId = currentPrivateState.value?.roleId
+  const roleId = displayPrivateState.value?.roleId
   return roleId ? AVALON_ROLES[roleId] : null
 })
-const campLabel = computed(() => currentPrivateState.value?.camp === 'good' ? '正義陣營' : '邪惡陣營')
+const campLabel = computed(() =>
+  displayPrivateState.value?.camp === 'good' ? '正義陣營' : '邪惡陣營',
+)
+
+function handleHistoryTabKeydown(event: KeyboardEvent, currentTab: AvalonHistoryTab): void {
+  let nextTab: AvalonHistoryTab | null = null
+  if (event.key === 'ArrowRight') {
+    nextTab = currentTab === 'missions' ? 'votes' : 'missions'
+  } else if (event.key === 'ArrowLeft') {
+    nextTab = currentTab === 'votes' ? 'missions' : 'votes'
+  } else if (event.key === 'Home') {
+    nextTab = 'missions'
+  } else if (event.key === 'End') {
+    nextTab = 'votes'
+  }
+
+  if (!nextTab) {
+    return
+  }
+
+  event.preventDefault()
+  selectedHistoryTab.value = nextTab
+  void nextTick(() => {
+    const button = nextTab === 'missions'
+      ? missionHistoryTabButton.value
+      : voteHistoryTabButton.value
+    button?.focus()
+  })
+}
 
 watch(
   [() => view.value?.phase, roleInfo],
@@ -231,6 +268,24 @@ watch(
     if (!hasAnimatedRoleCard.value) {
       hasAnimatedRoleCard.value = true
       animateRoleCard.value = true
+    }
+  },
+)
+
+watch(
+  [() => view.value?.phase, () => view.value?.stateVersion],
+  ([phase, stateVersion], [previousPhase, previousStateVersion]) => {
+    if (
+      (phase === 'role-reveal' && previousPhase === 'finished') ||
+      (
+        stateVersion !== undefined &&
+        previousStateVersion !== undefined &&
+        stateVersion < previousStateVersion
+      )
+    ) {
+      privateState.value = null
+      hasAnimatedRoleCard.value = false
+      animateRoleCard.value = false
     }
   },
 )
@@ -403,7 +458,52 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       </div>
     </header>
 
-    <ol class="avalon-mission-track" aria-label="前往王國的五個任務路線">
+    <section
+      v-if="roleInfo"
+      class="avalon-role-card"
+      :class="[`is-${roleInfo.camp}`, { 'is-revealing': animateRoleCard }]"
+    >
+      <div class="avalon-role-card-topline">
+        <span class="avalon-camp-badge" :class="`is-${roleInfo.camp}`">
+          <img :src="avalonCampIconUrl(roleInfo.camp)" alt="" />
+          {{ campLabel }}
+        </span>
+        <span v-if="view.lakeHolderId === playerId" class="avalon-lake-badge">
+          <img :src="avalonPhaseIconUrl('lake-check')" alt="" />
+          湖中女神標記
+        </span>
+      </div>
+      <div class="avalon-role-card-intro">
+        <img class="avalon-role-icon" :src="avalonRoleIconUrl(roleInfo.id)" alt="" />
+        <div>
+          <h3>{{ roleInfo.name }}</h3>
+          <p>{{ roleInfo.description }}</p>
+        </div>
+      </div>
+      <div v-if="knownPlayerRows.length" class="avalon-known-players">
+        <strong>已獲得資訊</strong>
+        <ul>
+          <li v-for="knownPlayer in knownPlayerRows" :key="knownPlayer.playerId">
+            <AvalonPlayerIdentity :player="knownPlayer" compact />
+            <small>{{ knowledgeLabel(knownPlayer.knowledge) }}</small>
+          </li>
+        </ul>
+      </div>
+      <div v-if="displayPrivateState?.lakeResults.length" class="avalon-known-players">
+        <strong>查驗資訊</strong>
+        <ul>
+          <li v-for="result in displayPrivateState.lakeResults" :key="`${result.missionNumber}-${result.targetId}`">
+            <AvalonPlayerIdentity :player="playerInfoOf(result.targetId)" compact />
+            <small>{{ result.camp === 'good' ? '好人' : '邪惡' }} · 第 {{ result.missionNumber }} 個任務後</small>
+          </li>
+        </ul>
+      </div>
+    </section>
+    <section v-else class="avalon-role-card avalon-role-loading" aria-live="polite">
+      正在接收資訊……
+    </section>
+
+        <ol class="avalon-mission-track" aria-label="前往王國的五個任務路線">
       <li
         v-for="mission in missionRoute"
         :key="mission.missionNumber"
@@ -445,52 +545,7 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
         </span>
       </li>
     </ol>
-
-    <section
-      v-if="roleInfo"
-      class="avalon-role-card"
-      :class="[`is-${roleInfo.camp}`, { 'is-revealing': animateRoleCard }]"
-    >
-      <div class="avalon-role-card-topline">
-        <span class="avalon-camp-badge" :class="`is-${roleInfo.camp}`">
-          <img :src="avalonCampIconUrl(roleInfo.camp)" alt="" />
-          {{ campLabel }}
-        </span>
-        <span v-if="view.lakeHolderId === playerId" class="avalon-lake-badge">
-          <img :src="avalonPhaseIconUrl('lake-check')" alt="" />
-          湖中女神標記
-        </span>
-      </div>
-      <div class="avalon-role-card-intro">
-        <img class="avalon-role-icon" :src="avalonRoleIconUrl(roleInfo.id)" alt="" />
-        <div>
-          <h3>{{ roleInfo.name }}</h3>
-          <p>{{ roleInfo.description }}</p>
-        </div>
-      </div>
-      <div v-if="knownPlayerRows.length" class="avalon-known-players">
-        <strong>已獲得資訊</strong>
-        <ul>
-          <li v-for="knownPlayer in knownPlayerRows" :key="knownPlayer.playerId">
-            <AvalonPlayerIdentity :player="knownPlayer" compact />
-            <small>{{ knowledgeLabel(knownPlayer.knowledge) }}</small>
-          </li>
-        </ul>
-      </div>
-      <div v-if="currentPrivateState?.lakeResults.length" class="avalon-known-players">
-        <strong>查驗資訊</strong>
-        <ul>
-          <li v-for="result in currentPrivateState.lakeResults" :key="`${result.missionNumber}-${result.targetId}`">
-            <AvalonPlayerIdentity :player="playerInfoOf(result.targetId)" compact />
-            <small>{{ result.camp === 'good' ? '好人' : '邪惡' }} · 第 {{ result.missionNumber }} 個任務後</small>
-          </li>
-        </ul>
-      </div>
-    </section>
-    <section v-else class="avalon-role-card avalon-role-loading" aria-live="polite">
-      正在接收資訊……
-    </section>
-
+    
     <section class="avalon-stage" :class="`is-${view.phase}`" aria-live="polite">
       <div class="avalon-stage-banner" aria-hidden="true">
         <img :src="avalonPhaseIconUrl(view.phase)" alt="" />
@@ -575,8 +630,8 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
           <button
             class="button button-primary"
             type="button"
-            :disabled="!canInteract || !currentPrivateState"
-            :aria-pressed="currentPrivateState?.voteSelection === true"
+            :disabled="!canInteract"
+            :aria-pressed="displayPrivateState?.voteSelection === true"
             @click="voteTeam(true)"
           >
             同意
@@ -584,15 +639,15 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
           <button
             class="button button-secondary"
             type="button"
-            :disabled="!canInteract || !currentPrivateState"
-            :aria-pressed="currentPrivateState?.voteSelection === false"
+            :disabled="!canInteract"
+            :aria-pressed="displayPrivateState?.voteSelection === false"
             @click="voteTeam(false)"
           >
             反對
           </button>
         </div>
-        <p v-if="currentPrivateState?.voteSelection !== null && currentPrivateState" class="avalon-private-status">
-          你已{{ currentPrivateState.voteSelection ? '同意' : '反對' }}；在全員投票前可以修改。
+        <p v-if="displayPrivateState?.voteSelection !== null && displayPrivateState" class="avalon-private-status">
+          你已{{ displayPrivateState.voteSelection ? '同意' : '反對' }}；在全員投票前可以修改。
         </p>
       </template>
 
@@ -712,68 +767,115 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       </template>
     </section>
 
-    <section v-if="view.voteHistory.length" class="avalon-history-card">
-      <h3>隊伍投票紀錄</h3>
-      <ol class="avalon-vote-history">
-        <li v-for="entry in voteHistoryRows" :key="entry.key">
-          <strong class="avalon-vote-history-heading">
-            <span>任務 {{ entry.vote.missionNumber }} ·</span>
-            <AvalonPlayerIdentity :player="entry.leader" compact />
-            <span>提案</span>
-            <span
-              class="avalon-vote-stamp"
-              :class="entry.vote.accepted ? 'is-accepted' : 'is-rejected'"
-            >
-              <span aria-hidden="true">{{ entry.vote.accepted ? '✓' : '×' }}</span>
-              {{ entry.vote.accepted ? '通過' : '否決' }}
-            </span>
-          </strong>
-          <small class="avalon-vote-history-team">
-            <span>隊伍：</span>
-            <AvalonPlayerIdentity
-              v-for="player in entry.team"
-              :key="player.id"
-              :player="player"
-              compact
-              is-on-team
-            />
-            <span>· {{ entry.vote.approveCount }} 同意 / {{ entry.vote.rejectCount }} 反對</span>
-          </small>
-          <details>
-            <summary>查看投票</summary>
-            <ul class="avalon-vote-list">
-              <li v-for="player in playerRows" :key="player.id">
-                <AvalonPlayerIdentity :player="player" compact />
-                <strong :class="entry.vote.votes[player.id] ? 'is-approve' : 'is-reject'">
-                  {{ entry.vote.votes[player.id] ? '同意' : '反對' }}
-                </strong>
-              </li>
-            </ul>
-          </details>
-        </li>
-      </ol>
-    </section>
-
-    <section v-if="view.missions.length" class="avalon-history-card">
-      <h3>任務結果</h3>
-      <ul class="avalon-mission-results">
-        <li
-          v-for="entry in missionResultRows"
-          :key="entry.mission.missionNumber"
-          :class="entry.mission.outcome === 'success' ? 'is-success' : 'is-failure'"
+    <section
+      v-if="view.voteHistory.length || view.missions.length"
+      class="avalon-history-card avalon-history-tabs-card"
+      aria-label="遊戲紀錄"
+    >
+      <div class="avalon-history-tablist" role="tablist" aria-label="遊戲紀錄">
+        <button
+          id="avalon-missions-tab"
+          ref="missionHistoryTabButton"
+          class="avalon-history-tab"
+          :class="{ 'is-active': selectedHistoryTab === 'missions' }"
+          type="button"
+          role="tab"
+          aria-controls="avalon-missions-panel"
+          :aria-selected="selectedHistoryTab === 'missions'"
+          :tabindex="selectedHistoryTab === 'missions' ? 0 : -1"
+          @click="selectedHistoryTab = 'missions'"
+          @keydown="handleHistoryTabKeydown($event, 'missions')"
         >
-          <div>
-            <strong class="avalon-mission-result-heading">
-              <img :src="avalonMissionIconUrl(entry.mission.outcome)" alt="" />
-              <span>
-                任務 {{ entry.mission.missionNumber }} ·
-                {{ entry.mission.outcome === 'success' ? '成功' : '失敗' }}
+          <img :src="avalonPhaseIconUrl('mission')" alt="" />
+          任務結果
+          <span class="avalon-history-tab-count">{{ missionResultRows.length }}</span>
+        </button>
+        <button
+          id="avalon-votes-tab"
+          ref="voteHistoryTabButton"
+          class="avalon-history-tab"
+          :class="{ 'is-active': selectedHistoryTab === 'votes' }"
+          type="button"
+          role="tab"
+          aria-controls="avalon-votes-panel"
+          :aria-selected="selectedHistoryTab === 'votes'"
+          :tabindex="selectedHistoryTab === 'votes' ? 0 : -1"
+          @click="selectedHistoryTab = 'votes'"
+          @keydown="handleHistoryTabKeydown($event, 'votes')"
+        >
+          <img :src="avalonPhaseIconUrl('team-vote')" alt="" />
+          隊伍投票紀錄
+          <span class="avalon-history-tab-count">{{ voteHistoryRows.length }}</span>
+        </button>
+      </div>
+
+      <section
+        id="avalon-missions-panel"
+        class="avalon-history-panel"
+        role="tabpanel"
+        aria-labelledby="avalon-missions-tab"
+        tabindex="0"
+        v-show="selectedHistoryTab === 'missions'"
+      >
+        <ul v-if="missionResultRows.length" class="avalon-mission-results">
+          <li
+            v-for="entry in missionResultRows"
+            :key="entry.mission.missionNumber"
+            :class="entry.mission.outcome === 'success' ? 'is-success' : 'is-failure'"
+          >
+            <div>
+              <strong class="avalon-mission-result-heading">
+                <img :src="avalonMissionIconUrl(entry.mission.outcome)" alt="" />
+                <span>
+                  任務 {{ entry.mission.missionNumber }} ·
+                  {{ entry.mission.outcome === 'success' ? '成功' : '失敗' }}
+                </span>
+              </strong>
+              <small class="avalon-mission-result-players">
+                <span>隊長</span>
+                <AvalonPlayerIdentity :player="entry.leader" compact />
+                <span>· 隊伍</span>
+                <AvalonPlayerIdentity
+                  v-for="player in entry.team"
+                  :key="player.id"
+                  :player="player"
+                  compact
+                  is-on-team
+                />
+              </small>
+            </div>
+            <span class="avalon-mission-result-counts">
+              {{ entry.mission.successCount }} 成功 / {{ entry.mission.failCount }} 失敗
+            </span>
+          </li>
+        </ul>
+        <p v-else class="avalon-history-empty">任務結果公布後會顯示在這裡。</p>
+      </section>
+
+      <section
+        id="avalon-votes-panel"
+        class="avalon-history-panel"
+        role="tabpanel"
+        aria-labelledby="avalon-votes-tab"
+        tabindex="0"
+        v-show="selectedHistoryTab === 'votes'"
+      >
+        <ol v-if="voteHistoryRows.length" class="avalon-vote-history">
+          <li v-for="entry in voteHistoryRows" :key="entry.key">
+            <strong class="avalon-vote-history-heading">
+              <span>任務 {{ entry.vote.missionNumber }} ·</span>
+              <AvalonPlayerIdentity :player="entry.leader" compact />
+              <span>提案</span>
+              <span
+                class="avalon-vote-stamp"
+                :class="entry.vote.accepted ? 'is-accepted' : 'is-rejected'"
+              >
+                <span aria-hidden="true">{{ entry.vote.accepted ? '✓' : '×' }}</span>
+                {{ entry.vote.accepted ? '通過' : '否決' }}
               </span>
             </strong>
-            <small class="avalon-mission-result-players">
-              <span>隊長</span>
-              <AvalonPlayerIdentity :player="entry.leader" compact />
-              <span>· 隊伍</span>
+            <small class="avalon-vote-history-team">
+              <span>隊伍：</span>
               <AvalonPlayerIdentity
                 v-for="player in entry.team"
                 :key="player.id"
@@ -781,13 +883,23 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
                 compact
                 is-on-team
               />
+              <span>· {{ entry.vote.approveCount }} 同意 / {{ entry.vote.rejectCount }} 反對</span>
             </small>
-          </div>
-          <span class="avalon-mission-result-counts">
-            {{ entry.mission.successCount }} 成功 / {{ entry.mission.failCount }} 失敗
-          </span>
-        </li>
-      </ul>
+            <details>
+              <summary>查看投票</summary>
+              <ul class="avalon-vote-list">
+                <li v-for="player in playerRows" :key="player.id">
+                  <AvalonPlayerIdentity :player="player" compact />
+                  <strong :class="entry.vote.votes[player.id] ? 'is-approve' : 'is-reject'">
+                    {{ entry.vote.votes[player.id] ? '同意' : '反對' }}
+                  </strong>
+                </li>
+              </ul>
+            </details>
+          </li>
+        </ol>
+        <p v-else class="avalon-history-empty">隊伍提案投票結果公布後會顯示在這裡。</p>
+      </section>
     </section>
 
     <section class="avalon-history-card avalon-role-guess-card" aria-label="本局角色配置與推測">
@@ -1064,6 +1176,83 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   border: 1px solid #e4dccb;
   border-radius: 15px;
   background: var(--avalon-paper);
+}
+
+.avalon-history-tabs-card {
+  display: grid;
+  gap: 10px;
+}
+
+.avalon-history-tablist {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--avalon-parchment);
+}
+
+.avalon-history-tab {
+  display: flex;
+  min-width: 0;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #696575;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 180ms ease, background-color 180ms ease, color 180ms ease;
+}
+
+.avalon-history-tab img {
+  display: block;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+
+.avalon-history-tab.is-active {
+  border-color: #e4dccb;
+  background: var(--avalon-paper);
+  color: var(--avalon-ink);
+  box-shadow: 0 2px 6px rgb(48 45 61 / 6%);
+}
+
+.avalon-history-tab-count {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ece5d5;
+  color: #696575;
+  font-size: 8px;
+  line-height: 1;
+}
+
+.avalon-history-tab.is-active .avalon-history-tab-count {
+  background: #fbf4e4;
+  color: #725820;
+}
+
+.avalon-history-panel {
+  min-width: 0;
+}
+
+.avalon-history-empty {
+  margin: 0;
+  color: #696575;
+  font-size: 10px;
+  line-height: 1.5;
 }
 
 .avalon-role-card {
@@ -1777,6 +1966,17 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 
   .avalon-vote-list {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .avalon-history-tab {
+    gap: 3px;
+    padding-inline: 4px;
+    font-size: 9px;
+  }
+
+  .avalon-history-tab img {
+    width: 20px;
+    height: 20px;
   }
 
   .avalon-role-guess-players {
