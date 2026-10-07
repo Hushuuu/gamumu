@@ -5,5 +5,6 @@ export interface Env {
   ALLOWED_ORIGINS?: string
   BETA_CODES?: string
   BETA_SESSION_SECRET?: string
-  ENABLE_DEV_ROLE_SELECTION?: string
+  ENABLE_DEV_ROLE_SELECTION?: string,
+  BETA_REDEEM_RATE_LIMITER: RateLimit
 }

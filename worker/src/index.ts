@@ -42,6 +42,21 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
       return jsonResponse({ code: 'METHOD_NOT_ALLOWED', message: '此路徑只接受 POST。' }, 405)
     }
 
+    const ip =
+      request.headers.get("CF-Connecting-IP") ?? "unknown";
+
+    const { success } =
+      await env.BETA_REDEEM_RATE_LIMITER.limit({
+        key: ip
+      });
+
+    if (!success) {
+      return jsonResponse(
+        { code: 'RATE_LIMIT_EXCEEDED', message: '請勿高頻操作，稍後1分鐘再試。' },
+        429
+      );
+    }
+
     const betaConfig = getBetaConfig(env)
     if (!betaConfig) {
       return betaNotConfiguredResponse()
