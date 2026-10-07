@@ -38,7 +38,9 @@ const GAME_RULE_IMAGES: Record<GameId, RuleImage[]> = {
     { src: "games/rummikub/rummikub_rules.png", alt: '規則圖' },
   ],
   werewolf: [],
-  avalon: [],
+  avalon: [
+    { src: "games/avalon/avalon_rules2.png", alt: '規則圖' },
+  ],
 }
 
 const props = defineProps<{
@@ -464,9 +466,9 @@ onUnmounted(() => {
 }
 
 .game-rules-images img {
-  width: min(100%, 450px);
+  width: min(100%, 500px);
   aspect-ratio: 1;
-  flex: 0 1 450px;
+  flex: 0 1 500px;
   padding: 12px;
   border: 1px solid #eceaf3;
   border-radius: 16px;
