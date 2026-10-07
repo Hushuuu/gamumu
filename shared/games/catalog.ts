@@ -21,7 +21,7 @@ const ALL_GAME_OPTIONS = [
   {
     id: 'draw-guess',
     name: '你畫我猜',
-    description: '輪流設定題目、畫圖，讓其他玩家猜答案。',
+    description: '',
     icon: '✎',
     enabled: true,
     minPlayers: 2,
@@ -30,7 +30,7 @@ const ALL_GAME_OPTIONS = [
   {
     id: 'rummikub',
     name: '拉密',
-    description: '組成數字牌組並重整桌面，搶先出清手牌。',
+    description: '',
     icon: '13',
     enabled: true,
     minPlayers: 2,
@@ -39,7 +39,7 @@ const ALL_GAME_OPTIONS = [
   {
     id: 'werewolf',
     name: '狼人殺',
-    description: '經典社交推理，找出隱藏在村莊裡的狼人。',
+    description: '',
     icon: '🐺',
     enabled: true,
     minPlayers: 6,
@@ -48,7 +48,7 @@ const ALL_GAME_OPTIONS = [
   {
     id: 'avalon',
     name: '阿瓦隆',
-    description: '隱藏身分、組隊完成任務，並保護梅林不被刺客識破。',
+    description: '',
     icon: '⚔',
     enabled: true,
     minPlayers: 5,

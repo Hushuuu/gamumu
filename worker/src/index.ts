@@ -52,7 +52,7 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
 
     if (!success) {
       return jsonResponse(
-        { code: 'RATE_LIMIT_EXCEEDED', message: '請勿高頻操作，稍後1分鐘再試。' },
+        { code: 'RATE_LIMIT_EXCEEDED', message: '請勿高頻操作，稍候1分鐘再試。' },
         429
       );
     }
