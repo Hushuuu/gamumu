@@ -57,6 +57,8 @@ const {
   leaveRoom: leaveGameRoom,
 } = useGameRoom()
 
+const INITIAL_QUERY_LOADING_MIN_DURATION_MS = 250
+const hasInitialQueryString = window.location.search.length > 0
 const playerName = ref('')
 const roomCodeInput = ref('')
 const activeRoomCode = ref('')
@@ -68,9 +70,11 @@ const betaError = ref('')
 const isBetaLoading = ref(false)
 const isInviteJoinPromptOpen = ref(false)
 const shouldPromptForInviteJoin = ref(false)
+const isQueryInitializationLoading = ref(hasInitialQueryString)
 const inviteJoinDialog = ref<HTMLDialogElement | null>(null)
 const disclaimerDialog = ref<HTMLDialogElement | null>(null)
 const installGuideDialog = ref<HTMLDialogElement | null>(null)
+const inviteJoinBetaCodeInput = ref<HTMLInputElement | null>(null)
 const inviteJoinNameInput = ref<HTMLInputElement | null>(null)
 const isRummikubSettingsOpen = ref(false)
 const isLoading = ref(false)
@@ -257,26 +261,33 @@ watch(betaAccessExpired, (expired) => {
   }
 })
 
-watch(isInviteJoinPromptOpen, (isOpen) => {
-  if (!isOpen) {
-    return
-  }
-
-  void nextTick(() => {
-    if (!isInviteJoinPromptOpen.value) {
+watch(
+  [isInviteJoinPromptOpen, hasBetaAccess, isQueryInitializationLoading],
+  () => {
+    if (!isInviteJoinPromptOpen.value || isQueryInitializationLoading.value) {
       return
     }
 
-    const dialog = inviteJoinDialog.value
-    if (!dialog) {
-      return
-    }
-    if (!dialog.open) {
-      dialog.showModal()
-    }
-    inviteJoinNameInput.value?.focus()
-  })
-})
+    void nextTick(() => {
+      if (!isInviteJoinPromptOpen.value || isQueryInitializationLoading.value) {
+        return
+      }
+
+      const dialog = inviteJoinDialog.value
+      if (!dialog) {
+        return
+      }
+      if (!dialog.open) {
+        dialog.showModal()
+      }
+      if (hasBetaAccess.value) {
+        inviteJoinNameInput.value?.focus()
+      } else {
+        inviteJoinBetaCodeInput.value?.focus()
+      }
+    })
+  },
+)
 
 function detectIosDevice(): boolean {
   const { userAgent, platform, maxTouchPoints } = window.navigator
@@ -337,7 +348,28 @@ onMounted(() => {
   isAppInstalled.value = isRunningStandalone()
   window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
   window.addEventListener('appinstalled', handleAppInstalled)
+  const initializationStartedAt = Date.now()
   void initializeBetaSession()
+    .catch((error) => {
+      betaStatus.value = 'error'
+      betaError.value = errorMessageFrom(error)
+      if (shouldPromptForInviteJoin.value) {
+        isInviteJoinPromptOpen.value = true
+      }
+    })
+    .finally(() => {
+      if (!hasInitialQueryString) {
+        return
+      }
+
+      const remainingDuration = Math.max(
+        0,
+        INITIAL_QUERY_LOADING_MIN_DURATION_MS - (Date.now() - initializationStartedAt),
+      )
+      window.setTimeout(() => {
+        isQueryInitializationLoading.value = false
+      }, remainingDuration)
+    })
 })
 
 onUnmounted(() => {
@@ -364,6 +396,7 @@ async function initializeBetaSession(): Promise<void> {
 
   if (hasValidRoomCode) {
     roomCodeInput.value = roomCode
+    shouldPromptForInviteJoin.value = true
   }
   if (hasBetaCodeQuery) {
     url.searchParams.delete('beta')
@@ -371,9 +404,11 @@ async function initializeBetaSession(): Promise<void> {
     window.history.replaceState(null, '', url)
   }
   if (betaCodeFromUrl) {
-    shouldPromptForInviteJoin.value = hasValidRoomCode
     betaCode.value = betaCodeFromUrl
     await unlockBeta()
+    if (hasValidRoomCode && !hasBetaAccess.value) {
+      isInviteJoinPromptOpen.value = true
+    }
     return
   }
 
@@ -383,6 +418,9 @@ async function initializeBetaSession(): Promise<void> {
   }
   if (!storedBetaSession.session) {
     betaStatus.value = 'locked'
+    if (hasValidRoomCode) {
+      isInviteJoinPromptOpen.value = true
+    }
     return
   }
 
@@ -396,11 +434,17 @@ async function initializeBetaSession(): Promise<void> {
       removeBetaSession()
       betaStatus.value = 'locked'
       betaError.value = error.message
+      if (hasValidRoomCode) {
+        isInviteJoinPromptOpen.value = true
+      }
       return
     }
 
     betaStatus.value = 'error'
     betaError.value = errorMessageFrom(error)
+    if (hasValidRoomCode) {
+      isInviteJoinPromptOpen.value = true
+    }
   }
 }
 
@@ -495,6 +539,14 @@ function resumeRoomFromUrl(): void {
     pageError.value = ''
     isInviteJoinPromptOpen.value = true
   }
+}
+
+async function submitInviteJoinPrompt(): Promise<void> {
+  if (hasBetaAccess.value) {
+    await joinRoom()
+    return
+  }
+  await unlockBeta()
 }
 
 function cancelInviteJoinPrompt(): void {
@@ -616,7 +668,7 @@ async function copyInviteLink(): Promise<void> {
 }
 
 async function leaveRoom(): Promise<void> {
-  if (!window.confirm('確定離開房間嗎？離開後會從玩家列表移除。')) {
+  if (!window.confirm('確定離開房間嗎？')) {
     return
   }
 
@@ -740,6 +792,16 @@ function connectionLabel(): string {
 
 <template>
   <div class="app-shell">
+    <div
+      v-if="isQueryInitializationLoading"
+      class="query-loading-overlay"
+      role="status"
+      aria-busy="true"
+    >
+      <span class="loading-spinner" aria-hidden="true"></span>
+      <span>正在確認邀請資訊…</span>
+    </div>
+
     <header class="site-header">
       <a class="brand" href="./" aria-label="GAMUMU 首頁">
         <span class="brand-mark" aria-hidden="true">
@@ -828,8 +890,8 @@ function connectionLabel(): string {
           class="text-input"
           type="text"
           autocomplete="nickname"
-          maxlength="20"
-          placeholder="輸入暱稱，最多 20 個字"
+          maxlength="15"
+          placeholder="輸入暱稱，最多 15 個字"
           @keydown.enter.prevent="createRoom"
         />
 
@@ -844,7 +906,7 @@ function connectionLabel(): string {
 
         <div class="separator"><span>或加入朋友的房間</span></div>
 
-        <label class="field-label" for="room-code">輸入 6 碼房間代碼</label>
+        <label class="field-label" for="room-code">輸入房間代碼</label>
         <div class="join-row">
           <input
             id="room-code"
@@ -854,7 +916,7 @@ function connectionLabel(): string {
             autocomplete="off"
             maxlength="6"
             :value="roomCodeInput"
-            placeholder="例如 A7K2MP"
+            placeholder="例如 ABCDEF"
             aria-label="房間代碼"
             @input="updateRoomCodeInput"
             @keydown.enter.prevent="joinRoom"
@@ -870,11 +932,10 @@ function connectionLabel(): string {
 
         <p v-if="pageError" class="inline-message error-message" role="alert">{{ pageError }}</p>
         <p v-else-if="pageNotice" class="inline-message notice-message" role="status">{{ pageNotice }}</p>
-        <p class="privacy-note"><span aria-hidden="true">✦</span> 不用註冊，也不需要帳號</p>
       </section>
 
       <section class="how-it-works" aria-label="遊戲流程">
-        <div><span class="how-number">01</span><span>開一間房</span></div>
+        <div><span class="how-number">01</span><span>建立房間</span></div>
         <span class="how-arrow" aria-hidden="true">→</span>
         <div><span class="how-number">02</span><span>分享給朋友</span></div>
         <span class="how-arrow" aria-hidden="true">→</span>
@@ -1241,45 +1302,80 @@ function connectionLabel(): string {
 
     <Teleport to="body">
       <dialog
-        v-if="isInviteJoinPromptOpen"
+        v-if="isInviteJoinPromptOpen && !isQueryInitializationLoading"
         ref="inviteJoinDialog"
         class="invite-join-dialog"
         aria-labelledby="invite-join-title"
         @cancel.prevent="cancelInviteJoinPrompt"
         @click.self="cancelInviteJoinPrompt"
       >
-        <form class="invite-join-content" @submit.prevent="joinRoom">
+        <form class="invite-join-content" @submit.prevent="submitInviteJoinPrompt">
           <p class="eyebrow">加入朋友的房間</p>
-          <h2 id="invite-join-title">先留個稱呼</h2>
+          <h2 id="invite-join-title">{{ hasBetaAccess ? '先留個稱呼' : '先驗證封測資格' }}</h2>
           <p class="invite-join-description">
-            輸入暱稱後，就會加入房間 <strong>{{ normalizedRoomCode }}</strong>。
+            <template v-if="hasBetaAccess">
+              輸入暱稱後，就會加入房間 <strong>{{ normalizedRoomCode }}</strong>。
+            </template>
+            <template v-else>
+              請先輸入封測驗證碼，驗證通過後即可加入房間 <strong>{{ normalizedRoomCode }}</strong>。
+            </template>
           </p>
-          <label class="field-label" for="invite-player-name">大家會怎麼稱呼你？</label>
-          <input
-            id="invite-player-name"
-            ref="inviteJoinNameInput"
-            v-model="playerName"
-            class="text-input"
-            type="text"
-            autocomplete="nickname"
-            maxlength="20"
-            placeholder="輸入暱稱，最多 20 個字"
-            :disabled="isLoading"
-          />
-          <p v-if="pageError" class="inline-message error-message" role="alert">{{ pageError }}</p>
+          <template v-if="hasBetaAccess">
+            <label class="field-label" for="invite-player-name">大家會怎麼稱呼你？</label>
+            <input
+              id="invite-player-name"
+              ref="inviteJoinNameInput"
+              v-model="playerName"
+              class="text-input"
+              type="text"
+              autocomplete="nickname"
+              maxlength="20"
+              placeholder="輸入暱稱，最多 20 個字"
+              :disabled="isLoading"
+            />
+            <p v-if="pageError" class="inline-message error-message" role="alert">{{ pageError }}</p>
+          </template>
+          <template v-else>
+            <label class="field-label" for="invite-beta-code">封測驗證碼</label>
+            <div class="beta-code-row">
+              <input
+                id="invite-beta-code"
+                ref="inviteJoinBetaCodeInput"
+                v-model="betaCode"
+                class="text-input beta-code-input"
+                type="text"
+                autocomplete="off"
+                autocapitalize="characters"
+                spellcheck="false"
+                maxlength="64"
+                placeholder="輸入封測碼"
+                :disabled="isBetaLoading"
+              />
+              <button
+                class="button button-primary beta-verify-button"
+                type="submit"
+                :disabled="isBetaLoading"
+              >
+                {{ isBetaLoading ? '驗證中…' : '驗證' }}
+              </button>
+            </div>
+            <p class="beta-hint">驗證通過後，此分頁可使用 6 小時。</p>
+            <p v-if="betaError" class="inline-message error-message" role="alert">{{ betaError }}</p>
+          </template>
           <div class="invite-join-actions">
             <button
               class="button button-secondary"
               type="button"
-              :disabled="isLoading"
+              :disabled="isLoading || isBetaLoading"
               @click="cancelInviteJoinPrompt"
             >
               取消
             </button>
             <button
+              v-if="hasBetaAccess"
               class="button button-primary"
               type="submit"
-              :disabled="isLoading || !validName || !hasBetaAccess"
+              :disabled="isLoading || !validName"
             >
               {{ isLoading ? '加入中…' : '確定加入' }}
             </button>
@@ -1353,6 +1449,21 @@ function connectionLabel(): string {
   min-height: 100vh;
   flex-direction: column;
   overflow: hidden;
+}
+
+.query-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .site-header, .site-footer {
