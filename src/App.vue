@@ -875,7 +875,7 @@ function connectionLabel(): string {
               {{ isBetaLoading ? '驗證中…' : '驗證' }}
             </button>
           </div>
-          <p class="beta-hint">驗證通過後，此分頁可使用 6 小時。</p>
+          <p class="beta-hint">驗證通過後，可使用 6 小時。</p>
           <p v-if="betaError" class="inline-message error-message" role="alert">{{ betaError }}</p>
         </form>
         <div v-else class="beta-session-banner" role="status">
@@ -1358,7 +1358,7 @@ function connectionLabel(): string {
                 {{ isBetaLoading ? '驗證中…' : '驗證' }}
               </button>
             </div>
-            <p class="beta-hint">驗證通過後，此分頁可使用 6 小時。</p>
+            <p class="beta-hint">驗證通過後，可使用 6 小時。</p>
             <p v-if="betaError" class="inline-message error-message" role="alert">{{ betaError }}</p>
           </template>
           <div class="invite-join-actions">
@@ -1391,7 +1391,7 @@ function connectionLabel(): string {
           <p class="eyebrow">GAMUMU</p>
           <h2 id="disclaimer-title">網站聲明</h2>
           <p>
-            本站提供之遊戲內容，均自行設計、開發及製作，本身並未聲稱與任何第三方遊戲出版商、開發商、作者或其他權利人具有合作、授權、代理或隸屬關係。
+            本站提供之遊戲內容，均自行製作，並未與任何第三方遊戲出版商、開發商、作者或其他權利人具有合作、授權、代理或隸屬關係。
           </p>
           <p>
             遊戲所使用之名稱、角色、作品名稱及其他可能受智慧財產權保護之內容，如涉及第三方權利，相關權利仍歸其原權利人所有。本站不主張取得上述第三方權利之所有權。

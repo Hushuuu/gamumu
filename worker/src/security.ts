@@ -2,7 +2,7 @@ import { isRecord } from '../../shared/protocol'
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const BETA_SESSION_TTL_MS = 6 * 60 * 60 * 1000
-const BETA_CODE_PATTERN = /^[A-Z0-9]{12,64}$/
+const BETA_CODE_PATTERN = /^[A-Z0-9]{6,64}$/
 const BETA_WEBSOCKET_PROTOCOL_PREFIX = 'gamumu-beta.'
 const textEncoder = new TextEncoder()
 

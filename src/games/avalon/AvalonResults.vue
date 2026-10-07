@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { AVALON_ROLES } from '../../../shared/games/avalon'
 import type { GameView, PlayerView } from '../../../shared/protocol'
 import AvalonPlayerIdentity from './AvalonPlayerIdentity.vue'
+import { getAvalonVictoryEnding } from './victoryEndings'
 import {
   avalonAssetUrl,
   avalonCampIconUrl,
@@ -29,14 +30,41 @@ type Explanation = {
 }
 
 const view = computed(() => (props.game?.gameId === 'avalon' ? props.game : null))
-const resultArtworkStyle = computed(() => {
-  const winner = view.value?.winner
-  return {
-    '--avalon-result-art': winner
-      ? `url("${avalonAssetUrl(`avalon-${winner}-victory.webp`)}")`
-      : 'none',
+const victoryEnding = computed(() => (view.value ? getAvalonVictoryEnding(view.value) : null))
+const victoryEndingVisible = ref(false)
+const victoryEndingCloseButton = ref<HTMLButtonElement | null>(null)
+const VICTORY_ENDING_DISPLAY_SECONDS = 10
+let victoryEndingDismissTimer: ReturnType<typeof setTimeout> | undefined
+
+function closeVictoryEnding(): void {
+  victoryEndingVisible.value = false
+  if (victoryEndingDismissTimer !== undefined) {
+    clearTimeout(victoryEndingDismissTimer)
+    victoryEndingDismissTimer = undefined
   }
-})
+}
+
+function keepVictoryEndingFocus(): void {
+  victoryEndingCloseButton.value?.focus({ preventScroll: true })
+}
+
+watch(
+  () => victoryEnding.value?.id ?? null,
+  (endingId) => {
+    closeVictoryEnding()
+    if (!endingId) {
+      return
+    }
+
+    victoryEndingVisible.value = true
+    victoryEndingDismissTimer = setTimeout(closeVictoryEnding, VICTORY_ENDING_DISPLAY_SECONDS * 1000)
+    void nextTick(() => victoryEndingCloseButton.value?.focus({ preventScroll: true }))
+  },
+  { immediate: true },
+)
+
+onUnmounted(closeVictoryEnding)
+
 function playerInfoOf(playerId: string): AvalonResultPlayer {
   const player = props.players.find((candidate) => candidate.id === playerId)
   return {
@@ -155,7 +183,6 @@ const voteHistoryRows = computed(() => {
     <section
       class="avalon-result-hero"
       :class="view?.winner ? `is-${view.winner}` : 'is-neutral'"
-      :style="resultArtworkStyle"
       aria-live="polite"
     >
       <div class="avalon-finish-icon" aria-hidden="true">
@@ -283,6 +310,60 @@ const voteHistoryRows = computed(() => {
         </li>
       </ul>
     </section>
+
+    <Teleport to="body">
+      <Transition name="avalon-ending">
+        <div
+          v-if="victoryEndingVisible && victoryEnding"
+          class="avalon-ending-overlay"
+          @click.self="closeVictoryEnding"
+          @keydown.esc.stop.prevent="closeVictoryEnding"
+          @keydown.tab.prevent="keepVictoryEndingFocus"
+        >
+          <section
+            class="avalon-ending-dialog"
+            :class="`is-${victoryEnding.camp}`"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="avalon-ending-title"
+            aria-describedby="avalon-ending-description"
+          >
+            <div class="avalon-ending-art">
+              <img
+                v-if="victoryEnding.artwork"
+                :src="avalonAssetUrl(victoryEnding.artwork)"
+                :alt="victoryEnding.title"
+              />
+              <div v-else class="avalon-ending-art-placeholder" aria-hidden="true">
+                <span>結局立繪預留區</span>
+              </div>
+            </div>
+            <div class="avalon-ending-copy">
+              <p class="avalon-ending-eyebrow">
+                {{ victoryEnding.camp === 'good' ? '正義陣營獲勝' : '邪惡陣營獲勝' }}
+              </p>
+              <h2 id="avalon-ending-title">{{ victoryEnding.title }}</h2>
+              <p id="avalon-ending-description" class="avalon-ending-description">
+                {{ victoryEnding.description }}
+              </p>
+              <p class="avalon-ending-dismiss-note">
+                {{ VICTORY_ENDING_DISPLAY_SECONDS }} 秒後自動關閉，也可以手動關閉。
+              </p>
+            </div>
+            <button
+              ref="victoryEndingCloseButton"
+              class="avalon-ending-close"
+              type="button"
+              aria-label="關閉結局立繪"
+              @click="closeVictoryEnding"
+            >
+              <span aria-hidden="true">×</span>
+              <span>關閉</span>
+            </button>
+          </section>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -325,14 +406,12 @@ const voteHistoryRows = computed(() => {
 .avalon-result-hero.is-good {
   background-image:
     linear-gradient(180deg, rgb(255 253 247 / 92%), rgb(255 253 247 / 74%) 62%, rgb(255 253 247 / 25%)),
-    var(--avalon-result-art),
     radial-gradient(circle at 75% 20%, #d9eadb, #f4f0e4 68%);
 }
 
 .avalon-result-hero.is-evil {
   background-image:
     linear-gradient(180deg, rgb(255 253 247 / 92%), rgb(255 253 247 / 76%) 62%, rgb(245 229 227 / 25%)),
-    var(--avalon-result-art),
     radial-gradient(circle at 75% 20%, #edd5d4, #f4f0e4 68%);
 }
 
@@ -590,6 +669,193 @@ const voteHistoryRows = computed(() => {
   font-size: 8px;
 }
 
+.avalon-ending-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px;
+  background: rgb(25 22 39 / 72%);
+  backdrop-filter: blur(7px);
+}
+
+.avalon-ending-dialog {
+  position: relative;
+  display: grid;
+  --avalon-ink: #302d3d;
+  grid-template-columns: minmax(250px, 0.88fr) minmax(0, 1fr);
+  width: min(100%, 960px);
+  height: min(72vh, 680px);
+  height: min(72dvh, 680px);
+  min-height: min(440px, calc(100vh - 40px));
+  min-height: min(440px, calc(100dvh - 40px));
+  max-height: min(820px, calc(100vh - 40px));
+  max-height: min(820px, calc(100dvh - 40px));
+  overflow: hidden;
+  border: 1px solid rgb(255 253 247 / 72%);
+  border-radius: 24px;
+  background: #fffdf7;
+  box-shadow: 0 24px 90px rgb(13 12 20 / 42%);
+}
+
+.avalon-ending-dialog.is-good {
+  --avalon-ending-accent: #3e7659;
+  --avalon-ending-art-background: radial-gradient(circle at 50% 38%, #f7efdc, #dce9d8 76%);
+}
+
+.avalon-ending-dialog.is-evil {
+  --avalon-ending-accent: #853f4c;
+  --avalon-ending-art-background: radial-gradient(circle at 50% 38%, #f3e6d9, #e5d2d4 76%);
+}
+
+.avalon-ending-art {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--avalon-ending-art-background);
+}
+
+.avalon-ending-art > img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 14px;
+  object-fit: contain;
+  object-position: center bottom;
+}
+
+.avalon-ending-art-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse at center, rgb(255 253 247 / 34%), transparent 64%),
+    var(--avalon-ending-art-background);
+}
+
+.avalon-ending-art-placeholder::before {
+  position: absolute;
+  inset: 18px;
+  border: 1px solid rgb(255 253 247 / 72%);
+  border-radius: 16px;
+  content: "";
+}
+
+.avalon-ending-art-placeholder span {
+  padding: 8px 12px;
+  border: 1px solid rgb(255 253 247 / 78%);
+  border-radius: 999px;
+  background: rgb(255 253 247 / 72%);
+  color: #686473;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.avalon-ending-copy {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 64px clamp(26px, 5vw, 56px) 40px;
+  text-align: left;
+}
+
+.avalon-ending-eyebrow {
+  margin: 0;
+  color: var(--avalon-ending-accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.avalon-ending-copy h2 {
+  margin: 0;
+  color: var(--avalon-ink);
+  font-size: clamp(26px, 4vw, 38px);
+  line-height: 1.25;
+}
+
+.avalon-ending-description {
+  max-width: 34em;
+  margin: 0;
+  color: #514e5b;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.avalon-ending-dismiss-note {
+  margin: 10px 0 0;
+  color: #777382;
+  font-size: 11px;
+}
+
+.avalon-ending-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1;
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 12px;
+  border: 1px solid rgb(255 253 247 / 42%);
+  border-radius: 999px;
+  background: rgb(48 45 61 / 82%);
+  color: #fffdf7;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.avalon-ending-close:hover {
+  background: #302d3d;
+  transform: translateY(-1px);
+}
+
+.avalon-ending-close:focus-visible {
+  outline: 3px solid #e8c56f;
+  outline-offset: 3px;
+}
+
+.avalon-ending-close > span:first-child {
+  font-size: 19px;
+  line-height: 1;
+}
+
+.avalon-ending-enter-active,
+.avalon-ending-leave-active {
+  transition: opacity 260ms ease;
+}
+
+.avalon-ending-enter-active .avalon-ending-dialog,
+.avalon-ending-leave-active .avalon-ending-dialog {
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.avalon-ending-enter-from,
+.avalon-ending-leave-to {
+  opacity: 0;
+}
+
+.avalon-ending-enter-from .avalon-ending-dialog,
+.avalon-ending-leave-to .avalon-ending-dialog {
+  transform: translateY(12px) scale(0.985);
+}
+
 @keyframes avalon-result-reveal {
   from {
     opacity: 0.9;
@@ -599,6 +865,55 @@ const voteHistoryRows = computed(() => {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .avalon-ending-overlay {
+    padding:
+      max(12px, env(safe-area-inset-top))
+      max(12px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
+  }
+
+  .avalon-ending-dialog {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(130px, 35vh) minmax(0, 1fr);
+    grid-template-rows: minmax(130px, 35dvh) minmax(0, 1fr);
+    width: min(100%, 520px);
+    height: min(760px, calc(100vh - 24px));
+    height: min(760px, calc(100dvh - 24px));
+    min-height: 0;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    border-radius: 19px;
+  }
+
+  .avalon-ending-art {
+    min-height: 0;
+  }
+
+  .avalon-ending-art > img {
+    padding: 4px 12px 0;
+  }
+
+  .avalon-ending-copy {
+    gap: 9px;
+    padding: 22px 22px 24px;
+  }
+
+  .avalon-ending-copy h2 {
+    font-size: clamp(24px, 7vw, 32px);
+  }
+
+  .avalon-ending-description {
+    font-size: 14px;
+  }
+
+  .avalon-ending-close {
+    top: 10px;
+    right: 10px;
   }
 }
 
@@ -621,6 +936,13 @@ const voteHistoryRows = computed(() => {
 @media (prefers-reduced-motion: reduce) {
   .avalon-result-hero {
     animation: none;
+  }
+
+  .avalon-ending-enter-active,
+  .avalon-ending-leave-active,
+  .avalon-ending-enter-active .avalon-ending-dialog,
+  .avalon-ending-leave-active .avalon-ending-dialog {
+    transition-duration: 1ms;
   }
 }
 </style>
