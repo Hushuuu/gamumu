@@ -61,7 +61,6 @@ function applySettings(): void {
         <h3 id="rummikub-settings-title">拉密</h3>
         <p>設定每位玩家的回合思考時間。</p>
       </div>
-      <span class="draw-settings-icon" aria-hidden="true">13</span>
     </div>
 
     <form

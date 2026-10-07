@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import { gameAssetUrl } from './gameAssets'
 import {
   getGameOption,
   getPlayerRange,
@@ -203,7 +204,8 @@ onUnmounted(() => {
     @click="open"
   >
     <span class="game-selection-trigger-icon" aria-hidden="true">
-      {{ canSelect ? committedGame.icon : '✦' }}
+      <img v-if="canSelect" :src="gameAssetUrl(committedGame.icon)" alt="" />
+      <span v-else>✦</span>
     </span>
     <span class="game-selection-trigger-copy">
       <small>{{ canSelect ? '' : '遊戲圖鑑' }}</small>
@@ -285,7 +287,9 @@ onUnmounted(() => {
                 <span class="game-poster-glow"></span>
                 <span class="game-poster-spark poster-spark-one">✦</span>
                 <span class="game-poster-spark poster-spark-two">✧</span>
-                <span class="game-poster-icon">{{ game.icon }}</span>
+                <span class="game-poster-icon">
+                  <img :src="gameAssetUrl(game.icon)" alt="" />
+                </span>
                 <span class="game-poster-stamp">{{ GAME_PROMOS[game.id].stamp }}</span>
                 <span class="game-poster-index">{{ String(index + 1).padStart(2, '0') }}</span>
               </div>
@@ -411,6 +415,12 @@ onUnmounted(() => {
   color: #fff;
   font-size: 17px;
   font-weight: 900;
+}
+
+.game-selection-trigger-icon img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
 }
 
 .game-selection-trigger-copy {
@@ -792,17 +802,19 @@ onUnmounted(() => {
   box-shadow:
     0 26px 46px rgb(20 16 62 / 24%),
     inset 0 0 0 8px rgb(255 255 255 / 8%);
-  color: #fff;
-  font-size: clamp(55px, 9vw, 112px);
-  font-weight: 900;
-  text-shadow: 0 6px 25px rgb(35 24 91 / 30%);
   transform: rotate(-7deg);
   backdrop-filter: blur(5px);
 }
 
+.game-poster-icon img {
+  width: 76%;
+  height: 76%;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 8px rgb(35 24 91 / 20%));
+}
+
 .theme-werewolf .game-poster-icon {
   border-radius: 50%;
-  font-size: clamp(68px, 10vw, 126px);
   transform: rotate(0);
 }
 
@@ -812,8 +824,6 @@ onUnmounted(() => {
 
 .theme-rummikub .game-poster-icon {
   border-radius: 24%;
-  color: #39734e;
-  text-shadow: 0 3px 12px rgb(255 255 255 / 50%);
   transform: rotate(-7deg);
 }
 
@@ -1259,11 +1269,6 @@ onUnmounted(() => {
 
   .game-poster-icon {
     width: min(35%, 110px);
-    font-size: clamp(40px, 14vw, 68px);
-  }
-
-  .theme-werewolf .game-poster-icon {
-    font-size: clamp(48px, 16vw, 82px);
   }
 
   .game-selection-copy {

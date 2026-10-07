@@ -16,6 +16,7 @@ import {
 } from '../shared/games'
 import type { ClientMessage } from '../shared/protocol'
 import { useGameRoom } from './composables/useGameRoom'
+import { gameAssetUrl } from './games/gameAssets'
 import { GAME_COMPONENTS } from './games/registry'
 import GameSelectionDialog from './games/GameSelectionDialog.vue'
 import GameRulesDialog from './games/GameRulesDialog.vue'
@@ -1028,7 +1029,12 @@ function connectionLabel(): string {
               </div>
               <div v-else class="game-choice-wait" role="status">
                 <span class="game-choice-wait-icon" aria-hidden="true">
-                  {{ snapshot.gameSelectionConfirmed ? selectedGame.icon : '…' }}
+                  <img
+                    v-if="snapshot.gameSelectionConfirmed"
+                    :src="gameAssetUrl(selectedGame.icon)"
+                    alt=""
+                  />
+                  <span v-else>…</span>
                 </span>
                 <span>
                   <strong>
@@ -2754,6 +2760,12 @@ function connectionLabel(): string {
   color: var(--purple-dark);
   font-size: 17px;
   font-weight: 800;
+}
+
+.game-choice-wait-icon img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
 }
 
 .game-choice-wait > span:last-child {

@@ -12,16 +12,33 @@ import {
   WEREWOLF_SCRIPTS,
   type GameId,
 } from '../../shared/games'
+import { gameAssetUrl } from './gameAssets'
 
 interface RuleSection {
   title: string
   items: string[]
 }
 
+interface RuleImage {
+  src: string
+  alt: string
+}
+
 interface RulesContent {
   title: string
   description: string
   sections: RuleSection[]
+  images: RuleImage[]
+}
+
+const GAME_RULE_IMAGES: Record<GameId, RuleImage[]> = {
+  'word-guess': [],
+  'draw-guess': [],
+  rummikub: [
+    { src: "games/rummikub/rummikub_rules.png", alt: '規則圖' },
+  ],
+  werewolf: [],
+  avalon: [],
 }
 
 const props = defineProps<{
@@ -40,6 +57,7 @@ const werewolfRoleCounts = computed(() => {
   return getWerewolfRoleCounts(werewolfScript.value.id, props.playerCount)
 })
 const content = computed<RulesContent>(() => {
+  const images = GAME_RULE_IMAGES[props.gameId]
   switch (props.gameId) {
     case 'word-guess':
       return {
@@ -58,6 +76,7 @@ const content = computed<RulesContent>(() => {
             items: ['答對一題可得 100 分；答錯不扣分。'],
           },
         ],
+        images,
       }
     // case 'blank':
     //   return {
@@ -98,6 +117,7 @@ const content = computed<RulesContent>(() => {
             ],
           },
         ],
+        images,
       }
     }
     case 'rummikub':
@@ -131,6 +151,7 @@ const content = computed<RulesContent>(() => {
             ],
           },
         ],
+        images,
       }
     case 'avalon': {
       const roleCounts = getAvalonRoleCounts(props.playerCount, props.gameSettings)
@@ -188,6 +209,7 @@ const content = computed<RulesContent>(() => {
               }]
             : []),
         ],
+        images,
       }
     }
     case 'werewolf': {
@@ -250,6 +272,7 @@ const content = computed<RulesContent>(() => {
             ],
           },
         ],
+        images,
       }
     }
   }
@@ -324,6 +347,14 @@ onUnmounted(() => {
               <li v-for="(item, index) in section.items" :key="index">{{ item }}</li>
             </ul>
           </section>
+          <div v-if="content.images.length" class="game-rules-images" role="group" aria-label="規則插圖">
+            <img
+              v-for="image in content.images"
+              :key="image.src"
+              :src="gameAssetUrl(image.src)"
+              :alt="image.alt"
+            />
+          </div>
         </div>
       </section>
     </div>
@@ -424,6 +455,25 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
+.game-rules-images {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.game-rules-images img {
+  width: min(100%, 450px);
+  aspect-ratio: 1;
+  flex: 0 1 450px;
+  padding: 12px;
+  border: 1px solid #eceaf3;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #fff, #f8f7fc);
+  object-fit: contain;
+}
+
 @media (max-width: 520px) {
 
   .game-rules-trigger {
@@ -453,6 +503,11 @@ onUnmounted(() => {
 
   .game-rules-content {
     padding: 14px 16px 22px;
+  }
+
+  .game-rules-images {
+    gap: 8px;
+    margin-top: 20px;
   }
 }
 </style>

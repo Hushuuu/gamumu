@@ -277,12 +277,12 @@ PWA 安裝資訊分別設定於 `index.html` 與 `public/manifest.webmanifest`�
 
 #### Worker 與遊戲模組的實作流程
 
-1. **登錄遊戲選項**：在 `shared/games/catalog.ts` 加入唯一 `GameId`、名稱、說明與最少／最多人數（不得超過 `ROOM_CAPACITY`）。
+1. **登錄遊戲選項**：在 `shared/games/catalog.ts` 加入唯一 `GameId`、名稱、說明、`public/` 下的 SVG 圖示路徑與最少／最多人數（不得超過 `ROOM_CAPACITY`）；遊戲圖示放在 `public/games/icons/`。
 2. **定義前後端契約**：在 `shared/games/<game-id>.ts` 定義設定、公開 `GameView`、phase 型別與 runtime validator；將新型別加入 `shared/games/types.ts`，並在 `shared/games/index.ts` 匯出及註冊 validator。只有通用 WebSocket 封包或房間快照形狀改變時才修改 `shared/protocol.ts`；個別 action 通常使用既有的 `game_action { gameId, action, payload }`，不必為每種遊戲操作增加新的頂層訊息。
 3. **建立伺服器模組**：在 `worker/src/games/<game-id>/types.ts` 定義可序列化的 `Stored<...>` 狀態，在 `index.ts` 實作 `GameModule`。將伺服器狀態型別加入 `worker/src/games/types.ts` 的 `StoredGame` 聯集，再把模組加入 `worker/src/games/registry.ts`。
 4. **把規則放在正確的 callback**：`defaultSettings()` 提供預設；`configure()` 驗證並保存等待階段設定；`publicSettings()` 只公開安全設定；`start()` 初始化本局；`handleAction()` 驗證 phase、玩家身分、輸入與分數；`nextAlarmAt()`／`handleAlarm()` 處理期限；`onPlayerLeave()` 處理明確離房；`privateState()`、`playerFlags()`、`toView()` 分別提供個人狀態、共用玩家旗標與公開快照。
 5. **讓共用 DO 處理共用工作**：設定操作使用既有 `configure_game`，由 `GameRoom` 檢查房主與 `waiting` 狀態後呼叫模組；若設定有變更，房間會保留既有 Ready 狀態、保存並廣播。開始遊戲時，`GameRoom` 先檢查遊戲人數及全員在線 Ready，再呼叫模組的 `start()`。遊戲中的所有 payload 都要由 `handleAction()` 再驗證，不能只靠 Vue 的 `disabled` 屬性。
-6. **建立獨立前端資料夾**：在 `src/games/<game-id>/` 放置設定（若需要）、進行中與結算 `.vue` 元件；在 `src/games/registry.ts` 註冊元件。沿用 `useGameRoom.ts` 管理 WebSocket，畫面以 `game-action` 送出 action，接收 `GameView`／`gameEvent` 呈現結果，不直接連接 Durable Object。遊戲設定元件透過 `configure-game` 事件送出設定。
+6. **建立獨立前端資料夾**：在 `src/games/<game-id>/` 放置設定（若需要）、進行中與結算 `.vue` 元件；在 `src/games/registry.ts` 註冊元件。沿用 `useGameRoom.ts` 管理 WebSocket，畫面以 `game-action` 送出 action，接收 `GameView`／`gameEvent` 呈現結果，不直接連接 Durable Object。遊戲設定元件透過 `configure-game` 事件送出設定；若需在規則文字後顯示多張插圖，於 `GameRulesDialog.vue` 的遊戲規則內容 `images` 陣列指定以 `public/` 為基準的路徑及替代文字。
 
 #### GameModule 回傳結果時的注意事項
 

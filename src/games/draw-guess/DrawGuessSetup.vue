@@ -62,7 +62,6 @@ function applySettings(): void {
         <h3 id="draw-settings-title">你畫我猜</h3>
         <p>每位玩家依序繪畫指定輪數；繪圖者可跳過。</p>
       </div>
-      <span class="draw-settings-icon" aria-hidden="true">✎</span>
     </div>
 
     <form

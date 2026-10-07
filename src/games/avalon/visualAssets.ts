@@ -4,9 +4,10 @@ import type {
   AvalonPhase,
   AvalonRoleId,
 } from '../../../shared/games/avalon'
+import { gameAssetUrl } from '../gameAssets'
 
 export function avalonAssetUrl(filename: string): string {
-  return `${import.meta.env.BASE_URL}games/avalon/${filename}`
+  return gameAssetUrl(`games/avalon/${filename}`)
 }
 
 export function avalonRoleIconUrl(roleId: AvalonRoleId): string {
