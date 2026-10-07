@@ -996,7 +996,6 @@ function connectionLabel(): string {
             <div>
               <p class="eyebrow">你的識別</p>
               <h2 id="avatar-panel-title">選擇你的頭像</h2>
-              <p>房間裡的玩家都看得到，也可以隨時更換。</p>
             </div>
           </div>
           <div class="avatar-grid" role="group" aria-label="可選頭像">

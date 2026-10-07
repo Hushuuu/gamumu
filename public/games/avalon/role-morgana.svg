@@ -1,7 +1,54 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <path d="M79 19a37 37 0 1 0 30 58A34 34 0 0 1 79 19Z" fill="#D5AA58" stroke="#302D3D" stroke-width="5" stroke-linejoin="round"/>
-  <path d="M31 68c0-17 14-30 33-30s33 13 33 30v17c0 11-9 20-20 20H51c-11 0-20-9-20-20Z" fill="#853F4C" stroke="#302D3D" stroke-width="5" stroke-linejoin="round"/>
-  <path d="M42 71c6-7 13-10 22-10s16 3 22 10l-8 18H50Z" fill="#F5E5E3" stroke="#302D3D" stroke-width="4" stroke-linejoin="round"/>
-  <path d="m50 75 8 2m20-2-8 2" fill="none" stroke="#302D3D" stroke-width="4" stroke-linecap="round"/>
-  <path d="M54 96h20" fill="none" stroke="#D5AA58" stroke-width="4" stroke-linecap="round"/>
+  <!-- Purple crescent moon -->
+  <path
+    d="M82 13
+       C58 16 42 36 42 59
+       C42 86 64 106 88 106
+       C99 106 109 102 117 96
+       C106 98 95 95 87 89
+       C73 79 68 62 72 46
+       C75 32 84 21 96 16
+       C91 14 87 13 82 13Z"
+    fill="#805B9E"
+    stroke="#302D3D"
+    stroke-width="5"
+    stroke-linejoin="round"
+  />
+
+  <!-- Moon surface craters -->
+  <ellipse cx="61" cy="54" rx="6" ry="4" fill="#69457F" opacity=".7"/>
+  <circle cx="57" cy="73" r="3.5" fill="#69457F" opacity=".65"/>
+  <ellipse cx="73" cy="88" rx="5" ry="3" fill="#69457F" opacity=".55"/>
+  <circle cx="64" cy="36" r="2.5" fill="#A981BD" opacity=".7"/>
+  <circle cx="51" cy="64" r="1.8" fill="#A981BD" opacity=".7"/>
+
+  <!-- Golden witch star -->
+  <path
+    d="m31 27 2.5 7.5L41 37l-7.5 2.5L31 47l-2.5-7.5L21 37l7.5-2.5Z"
+    fill="#D5AA58"
+    stroke="#302D3D"
+    stroke-width="2.5"
+    stroke-linejoin="round"
+  />
+
+  <!-- Small star -->
+  <path
+    d="m102 28 2 6 6 2-6 2-2 6-2-6-6-2 6-2Z"
+    fill="#F5E5E3"
+    stroke="#302D3D"
+    stroke-width="2.5"
+    stroke-linejoin="round"
+  />
+
+  <!-- Small star -->
+  <path
+    d="m32 82 2 6 6 2-6 2-2 6-2-6-6-2 6-2Z"
+    fill="#F5E5E3"
+    stroke="#302D3D"
+    stroke-width="2.5"
+    stroke-linejoin="round"
+  />
+
+  <!-- Tiny golden star -->
+  <circle cx="106" cy="88" r="3.5" fill="#D5AA58"/>
 </svg>
