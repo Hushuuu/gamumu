@@ -60,6 +60,12 @@ export interface RummikubComboState {
   count: number
 }
 
+export interface RummikubTurnPreview {
+  playerId: string
+  turnNumber: number
+  melds: RummikubMeld[]
+}
+
 export type RummikubComboTier = 'spark' | 'surge' | 'overdrive'
 
 export function getRummikubComboTier(count: number): RummikubComboTier {
@@ -83,6 +89,7 @@ export interface RummikubView {
   combo?: RummikubComboState | null
   lastTurnCombo?: RummikubComboState | null
   lastTurnChangedMelds?: number[][]
+  turnPreview?: RummikubTurnPreview | null
   turnDeadlineAt: number | null
   turnNumber: number
   drawPileCount: number
@@ -284,6 +291,40 @@ export function isRummikubPrivateState(value: unknown): value is RummikubPrivate
   return true
 }
 
+function isRummikubTurnPreview(value: unknown): value is RummikubTurnPreview {
+  if (
+    !isRecord(value) ||
+    typeof value.playerId !== 'string' ||
+    !Number.isInteger(value.turnNumber) ||
+    Number(value.turnNumber) < 1 ||
+    !Array.isArray(value.melds) ||
+    value.melds.length > RUMMIKUB_TILE_COUNT
+  ) {
+    return false
+  }
+
+  const tileIds = new Set<number>()
+  for (const meld of value.melds) {
+    if (
+      !isRecord(meld) ||
+      !Array.isArray(meld.tiles) ||
+      meld.tiles.length < 1 ||
+      meld.tiles.length > 13
+    ) {
+      return false
+    }
+
+    for (const tile of meld.tiles) {
+      if (!isRummikubBoardTile(tile) || tileIds.has(tile.id)) {
+        return false
+      }
+      tileIds.add(tile.id)
+    }
+  }
+
+  return true
+}
+
 export function isRummikubView(value: unknown): value is RummikubView {
   if (!isRecord(value)) {
     return false
@@ -292,6 +333,7 @@ export function isRummikubView(value: unknown): value is RummikubView {
   const combo = value.combo
   const lastTurnCombo = value.lastTurnCombo
   const lastTurnChangedMelds = value.lastTurnChangedMelds
+  const turnPreview = value.turnPreview
   if (
     (combo !== undefined && combo !== null && !isRummikubComboState(combo)) ||
     (
@@ -302,6 +344,11 @@ export function isRummikubView(value: unknown): value is RummikubView {
     (
       lastTurnChangedMelds !== undefined &&
       !isRummikubMeldTileIdGroups(lastTurnChangedMelds)
+    ) ||
+    (
+      turnPreview !== undefined &&
+      turnPreview !== null &&
+      !isRummikubTurnPreview(turnPreview)
     )
   ) {
     return false
@@ -410,6 +457,22 @@ export function isRummikubView(value: unknown): value is RummikubView {
     tableMeldTileIdSignatures.add(
       meld.tiles.map((tile) => tile.id).sort((left, right) => left - right).join(','),
     )
+  }
+
+  if (turnPreview !== undefined && turnPreview !== null) {
+    if (
+      turnPreview.playerId !== value.currentPlayerId ||
+      turnPreview.turnNumber !== Number(value.turnNumber)
+    ) {
+      return false
+    }
+
+    const previewTileIds = new Set(
+      turnPreview.melds.flatMap((meld) => meld.tiles.map((tile) => tile.id)),
+    )
+    if ([...tileIds].some((tileId) => !previewTileIds.has(tileId))) {
+      return false
+    }
   }
 
   if (lastTurnChangedMelds !== undefined) {

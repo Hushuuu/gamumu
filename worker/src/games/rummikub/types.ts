@@ -4,6 +4,7 @@ import type {
   RummikubMeld,
   RummikubMove,
   RummikubTile,
+  RummikubTurnPreview,
 } from '../../../../shared/games/rummikub'
 
 export interface StoredRummikub {
@@ -20,6 +21,7 @@ export interface StoredRummikub {
     turnNumber: number
     move: RummikubMove
   } | null
+  pendingTurnPreview?: RummikubTurnPreview | null
   turnOrder: string[]
   currentPlayerId: string | null
   turnTimeSeconds?: number | null
