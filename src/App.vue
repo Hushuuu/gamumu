@@ -1134,7 +1134,7 @@ function connectionLabel(): string {
               aria-labelledby="dev-role-selection-title"
             >
               <label for="dev-role-selection">
-                <span id="dev-role-selection-title">開發測試：房主角色自選</span>
+                <span id="dev-role-selection-title">開發測試：房主自選</span>
                 <select
                   id="dev-role-selection"
                   v-model="devRoleId"
@@ -1146,7 +1146,6 @@ function connectionLabel(): string {
                   </option>
                 </select>
               </label>
-              <p>只指定房主自己的身分，其他玩家仍依本局劇本隨機分配</p>
               <p v-if="devRoleOptions.length === 0" class="dev-role-selection-warning">
                 目前人數不適用所選劇本，請先調整劇本或玩家人數。
               </p>
