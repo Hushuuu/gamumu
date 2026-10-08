@@ -10,7 +10,7 @@
 | 討論 | 不做聊天；面對面／自備語音，App 只負責流程、夜間行動與投票 |
 | 人數 | 6–12 人（`ROOM_CAPACITY` = 12） |
 | 基本版角色 | 狼人、村民、預言家、女巫、獵人 |
-| 勝負 | 屠城：狼人殺光好人，或好人殺光狼人 |
+| 勝負 | 房主可選屠城或屠邊；屠城時狼人殺光好人，屠邊時村民或神職其中一方全出局且好人出局總數至少達總好人數一半；好人殺光狼人時好人勝 |
 | 計分 | 勝利陣營每位玩家 +100 分（沿用跨遊戲累積分數） |
 
 ### 預設規則（可於劇本規則旗標調整，若你不同意請告知）
@@ -83,7 +83,7 @@ src/games/werewolf/
 ### 3.2 為「多劇本」預留的擴充點
 
 - **`RoleDefinition`**（伺服器）：`id`、`camp`（`good`／`wolf`）、夜間行動的 `validate`／`apply`、`privateInfo`（該角色能看到什麼）、`onDeath` 掛鉤（獵人開槍）。
-- **`ScriptDefinition`**：`id`、名稱說明、人數範圍、`roleSetup(playerCount) → RoleId[]`、`nightSteps: RoleId[][]`（同一步驟的角色同時行動）、規則旗標（平票處理、女巫自救、死亡是否公開身分…）、可選的自訂 `checkWin`（預設屠城）。
+- **`ScriptDefinition`**：`id`、名稱說明、人數範圍、`roleSetup(playerCount) → RoleId[]`、`nightSteps: RoleId[][]`（同一步驟的角色同時行動）、規則旗標（平票處理、女巫自救、死亡是否公開身分…）及自訂 `checkWin`；`WerewolfSettings.winCondition` 選擇屠城或屠邊。
 - 新增劇本＝新增 `scripts/<id>.ts` ＋（如有新角色）`roles/<role>.ts`，並在 shared metadata 與兩個 registry 各補一行；狀態機不需重寫。
 - `RoleId` 與劇本清單放在 shared，UI 的設定頁與身分卡文字由 metadata 產生。
 - 基本版只實作 5 個角色需要的掛鉤，不預先做守衛、丘比特、警長、白痴等，但介面形狀要能容納（例如第一晚專屬步驟、放逐前後掛鉤）。
@@ -105,7 +105,7 @@ role-reveal  → night(step 1..n) → dawn → [hunter-shot] → day-discussion 
 | `vote-result` | 公開每個人的票與被放逐者（或平票） | 數秒 |
 | `finished` | 公布勝方、全員身分、發放分數（`room.status = 'finished'`，`room.game` 保留） | — |
 
-- 每次推進後都要判斷勝負：好人數（含神職＋村民）＝0 → 狼人勝；狼人數＝0 → 好人勝；**狼人數 ≥ 好人數不算勝利**（屠城規則，保持你選的定義）。
+- 每次推進後都要判斷勝負：狼人全出局 → 好人勝；屠城時好人全出局 → 狼人勝；屠邊時村民或神職其中一方全出局且好人出局總數至少達總好人數一半 → 狼人勝。狼人數量大於好人時，仍會在進入投票前判定狼人獲勝。
 - 所有 deadline 存在 `room.game`；`handleAlarm(room, now)` 用 `now` 判斷、可安全重試，一次處理所有到期事件。`handleAction` 遇到 action 抵達時 deadline 已過，先推進階段並回傳 `changed: true`，再拒絕過期操作。
 - 斷線：玩家仍在名單，夜間行動逾時視為未行動、投票視為棄票。明確離房（`onPlayerLeave`）：該玩家視為死亡（不公開身分）、若持有待處理夜間目標則清除、再判斷勝負。開始後不可加入（既有行為）。
 

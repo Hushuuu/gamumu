@@ -56,6 +56,7 @@ export {
   isWerewolfScriptId,
   isWerewolfSettings,
   isWerewolfView,
+  isWerewolfWinCondition,
 } from './werewolf'
 export type {
   WerewolfCamp,
@@ -73,6 +74,7 @@ export type {
   WerewolfSeerResult,
   WerewolfSettings,
   WerewolfView,
+  WerewolfWinCondition,
   WerewolfWitchState,
 } from './werewolf'
 export {

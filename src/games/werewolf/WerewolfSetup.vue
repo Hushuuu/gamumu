@@ -5,8 +5,10 @@ import {
   WEREWOLF_ROLES,
   WEREWOLF_SCRIPTS,
   isWerewolfScriptId,
+  isWerewolfWinCondition,
   type WerewolfScriptId,
   type WerewolfSettings,
+  type WerewolfWinCondition,
 } from '../../../shared/games/werewolf'
 import WerewolfRoleIcon from './components/WerewolfRoleIcon.vue'
 
@@ -22,6 +24,7 @@ const emit = defineEmits<{
 }>()
 
 const scriptId = ref<WerewolfScriptId>(DEFAULT_WEREWOLF_SETTINGS.scriptId)
+const winCondition = ref<WerewolfWinCondition>(DEFAULT_WEREWOLF_SETTINGS.winCondition)
 const discussionSeconds = ref(DEFAULT_WEREWOLF_SETTINGS.discussionSeconds)
 const speechMode = ref(DEFAULT_WEREWOLF_SETTINGS.speechMode)
 const speechSeconds = ref(DEFAULT_WEREWOLF_SETTINGS.speechSeconds)
@@ -37,6 +40,7 @@ const isValid = computed(() => {
     Number.isInteger(discussionSeconds.value) &&
     discussionSeconds.value >= 30 &&
     discussionSeconds.value <= 600 &&
+    isWerewolfWinCondition(winCondition.value) &&
     Number.isInteger(speechSeconds.value) &&
     speechSeconds.value >= 10 &&
     speechSeconds.value <= 180 &&
@@ -55,6 +59,9 @@ const disabled = computed(() => !props.isHost || !props.canConfigure)
 
 watch(() => props.settings, (settings) => {
   scriptId.value = isWerewolfScriptId(settings.scriptId) ? settings.scriptId : DEFAULT_WEREWOLF_SETTINGS.scriptId
+  winCondition.value = isWerewolfWinCondition(settings.winCondition)
+    ? settings.winCondition
+    : DEFAULT_WEREWOLF_SETTINGS.winCondition
   discussionSeconds.value = settingNumber(settings.discussionSeconds, DEFAULT_WEREWOLF_SETTINGS.discussionSeconds)
   speechMode.value = settings.speechMode === true
   speechSeconds.value = settingNumber(settings.speechSeconds, DEFAULT_WEREWOLF_SETTINGS.speechSeconds)
@@ -75,6 +82,14 @@ function selectScript(event: Event): void {
   scriptId.value = target.value
 }
 
+function selectWinCondition(event: Event): void {
+  const target = event.target
+  if (!(target instanceof HTMLSelectElement) || !isWerewolfWinCondition(target.value)) {
+    return
+  }
+  winCondition.value = target.value
+}
+
 function applySettings(): void {
   if (disabled.value || !isValid.value) {
     return
@@ -82,6 +97,7 @@ function applySettings(): void {
 
   emit('configure-game', {
     scriptId: scriptId.value,
+    winCondition: winCondition.value,
     discussionSeconds: discussionSeconds.value,
     speechMode: speechMode.value,
     speechSeconds: speechSeconds.value,
@@ -124,10 +140,21 @@ function applySettings(): void {
         </select>
         <small>角色依人數自動配置</small>
       </label>
+      <label>
+        <span>狼人勝利條件</span>
+        <select :value="winCondition" :disabled="disabled" @change="selectWinCondition">
+          <option value="city">屠城</option>
+          <option value="side">屠邊</option>
+        </select>
+        <small v-if="winCondition === 'side'">
+          村民或神職其中一方全出局，且好人出局數達好人總數一半
+        </small>
+        <small v-else>所有好人都出局。</small>
+      </label>
       <label class="ww-checkbox">
         <span>輪流發言</span>
         <input v-model="speechMode" type="checkbox" :disabled="disabled" />
-        <small>每天隨機安排存活玩家依序發言，發言者可提早結束</small>
+        <small>存活玩家輪流發言，發言者可提早結束</small>
       </label>
       <label v-if="speechMode">
         <span>每人發言時間（秒）</span>

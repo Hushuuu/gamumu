@@ -46,5 +46,36 @@ export const checkWinByElimination: ScriptDefinition['checkWin'] = (game) => {
   if (wolves.length === 0) {
     return 'good'
   }
+
+  if (game.settings.winCondition === 'side') {
+    let totalGood = 0
+    let eliminatedGood = 0
+    let villagersAlive = false
+    let godsAlive = false
+
+    for (const playerId of game.playerIds) {
+      const roleId = game.roles[playerId]
+      if (!roleId || WEREWOLF_ROLES[roleId].camp !== 'good') {
+        continue
+      }
+
+      totalGood += 1
+      if (!game.alive[playerId]) {
+        eliminatedGood += 1
+      } else if (roleId === 'villager') {
+        villagersAlive = true
+      } else {
+        godsAlive = true
+      }
+    }
+
+    if (
+      (!villagersAlive || !godsAlive) &&
+      eliminatedGood * 2 >= totalGood
+    ) {
+      return 'wolf'
+    }
+  }
+
   return alive.length === wolves.length ? 'wolf' : null
 }

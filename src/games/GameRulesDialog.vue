@@ -229,6 +229,10 @@ const content = computed<RulesContent>(() => {
       const roleDescriptions = rolesInThisGame.map(
         (roleId) => `${WEREWOLF_ROLES[roleId].name}：${WEREWOLF_ROLES[roleId].description}`,
       )
+      const wolfWinCondition =
+        props.gameSettings.winCondition === 'side'
+          ? '屠邊：村民或神職其中一方全數出局，且好人出局總數至少達好人總數的一半（奇數時向上取整）；配置不均時，少數方出局後還需多數方出局至達門檻。'
+          : '屠城：所有好人出局時，狼人陣營獲勝。'
       const scriptRules =
         script.id === 'wolf-guard'
           ? [
@@ -247,7 +251,11 @@ const content = computed<RulesContent>(() => {
         sections: [
           {
             title: '勝負條件',
-            items: ['所有狼人出局，好人陣營獲勝。', '所有好人出局，狼人陣營獲勝。'],
+            items: [
+              '所有狼人出局，好人陣營獲勝。',
+              wolfWinCondition,
+              '若存活狼人數量大於存活好人，會在進入投票前判定狼人獲勝。',
+            ],
           },
           {
             title: '遊戲流程',

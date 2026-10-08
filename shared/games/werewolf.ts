@@ -8,6 +8,7 @@ export type WerewolfRoleId =
   | 'hunter'
   | 'guard'
 export type WerewolfScriptId = 'classic' | 'wolf-guard'
+export type WerewolfWinCondition = 'city' | 'side'
 export type WerewolfRoleCounts = Record<WerewolfRoleId, number>
 
 export type WerewolfPhase =
@@ -34,7 +35,7 @@ export const WEREWOLF_ROLES: Record<WerewolfRoleId, WerewolfRoleInfo> = {
     id: 'werewolf',
     name: '狼人',
     camp: 'wolf',
-    description: '每晚與同伴選擇一名玩家襲擊。殺光所有好人即可獲勝。',
+    description: '每晚與同伴選擇一名玩家襲擊。依本局勝利條件擊敗好人陣營即可獲勝。',
   },
   wolfKing: {
     id: 'wolfKing',
@@ -91,7 +92,7 @@ export const WEREWOLF_SCRIPTS: WerewolfScriptInfo[] = [
   {
     id: 'classic',
     name: '經典版',
-    description: '狼人、村民、預言家、女巫、獵人，屠城規則。',
+    description: '狼人、村民、預言家、女巫、獵人',
     minPlayers: 6,
     maxPlayers: 12,
     roles: ['werewolf', 'villager', 'seer', 'witch', 'hunter'],
@@ -99,7 +100,7 @@ export const WEREWOLF_SCRIPTS: WerewolfScriptInfo[] = [
   {
     id: 'wolf-guard',
     name: '狼王守衛版',
-    description: '在經典版加入狼王與守衛：預言家、女巫、獵人、守衛四神對抗狼王與狼人，屠城規則。',
+    description: '在經典版加入狼王與守衛：預言家、女巫、獵人、守衛四神對抗狼王與狼人',
     minPlayers: 10,
     maxPlayers: 12,
     roles: ['werewolf', 'wolfKing', 'villager', 'seer', 'witch', 'hunter', 'guard'],
@@ -160,8 +161,13 @@ export function isWerewolfScriptId(value: unknown): value is WerewolfScriptId {
   return WEREWOLF_SCRIPTS.some((script) => script.id === value)
 }
 
+export function isWerewolfWinCondition(value: unknown): value is WerewolfWinCondition {
+  return value === 'city' || value === 'side'
+}
+
 export interface WerewolfSettings {
   scriptId: WerewolfScriptId
+  winCondition: WerewolfWinCondition
   discussionSeconds: number
   speechMode: boolean
   speechSeconds: number
@@ -175,6 +181,7 @@ export const WEREWOLF_HUNTER_SHOT_MS = 20_000
 
 export const DEFAULT_WEREWOLF_SETTINGS: WerewolfSettings = {
   scriptId: 'classic',
+  winCondition: 'city',
   discussionSeconds: 120,
   speechMode: false,
   speechSeconds: 60,
@@ -195,6 +202,7 @@ export function isWerewolfSettings(value: unknown): value is WerewolfSettings {
   return (
     isRecord(value) &&
     isWerewolfScriptId(value.scriptId) &&
+    isWerewolfWinCondition(value.winCondition) &&
     isIntegerInRange(value.discussionSeconds, 30, 600) &&
     typeof value.speechMode === 'boolean' &&
     isIntegerInRange(value.speechSeconds, 10, 180) &&

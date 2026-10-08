@@ -5,6 +5,7 @@ import {
   WEREWOLF_ROLE_REVEAL_MS,
   WEREWOLF_ROLES,
   isWerewolfSettings,
+  isWerewolfWinCondition,
   type WerewolfCamp,
   type WerewolfPrivateState,
   type WerewolfRoleCounts,
@@ -180,6 +181,10 @@ function currentSettings(room: GameRoomContext): WerewolfSettings {
 function ensureStoredGameDefaults(game: StoredWerewolf): void {
   if (!game.voteSelections) {
     game.voteSelections = { ...game.votes }
+  }
+
+  if (!isWerewolfWinCondition(game.settings.winCondition)) {
+    game.settings.winCondition = DEFAULT_WEREWOLF_SETTINGS.winCondition
   }
 
   const announcementSeconds = game.settings.announcementSeconds
@@ -761,13 +766,14 @@ export const werewolfGame: GameModule = {
     if (!isWerewolfSettings(settings)) {
       return failure(
         'INVALID_GAME_SETTINGS',
-        '討論時間需為 30–600 秒、每人發言需為 10–180 秒、投票時間需為 15–180 秒、夜間每步驟需為 10–60 秒、結果公告需為 5–60 秒。',
+        '勝利條件需為屠城或屠邊；討論時間需為 30–600 秒、每人發言需為 10–180 秒、投票時間需為 15–180 秒、夜間每步驟需為 10–60 秒、結果公告需為 5–60 秒。',
       )
     }
 
     const current = currentSettings(room)
     if (
       current.scriptId === settings.scriptId &&
+      current.winCondition === settings.winCondition &&
       current.discussionSeconds === settings.discussionSeconds &&
       current.speechMode === settings.speechMode &&
       current.speechSeconds === settings.speechSeconds &&

@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers'
 import { AVATARS, isAvatarId, type AvatarId } from '../../../shared/avatars'
 import {
   DEFAULT_GAME_ID,
+  DEFAULT_WEREWOLF_SETTINGS,
   getGameOption,
   getPlayerRange,
   getWerewolfRoleCounts,
@@ -650,10 +651,14 @@ export class GameRoom extends DurableObject<Env> {
         return
       }
 
+      const werewolfSettings = {
+        ...DEFAULT_WEREWOLF_SETTINGS,
+        ...this.room.gameSettings,
+      }
       if (
         this.room.selectedGameId !== 'werewolf' ||
         !isWerewolfRoleId(devRoleId) ||
-        !isWerewolfSettings(this.room.gameSettings)
+        !isWerewolfSettings(werewolfSettings)
       ) {
         this.send(ws, {
           type: 'action_error',
@@ -664,7 +669,7 @@ export class GameRoom extends DurableObject<Env> {
       }
 
       const roleCounts = getWerewolfRoleCounts(
-        this.room.gameSettings.scriptId,
+        werewolfSettings.scriptId,
         this.room.players.length,
       )
       if (!roleCounts || roleCounts[devRoleId] === 0) {
