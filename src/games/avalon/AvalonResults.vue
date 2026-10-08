@@ -33,7 +33,7 @@ const view = computed(() => (props.game?.gameId === 'avalon' ? props.game : null
 const victoryEnding = computed(() => (view.value ? getAvalonVictoryEnding(view.value) : null))
 const victoryEndingVisible = ref(false)
 const victoryEndingCloseButton = ref<HTMLButtonElement | null>(null)
-const VICTORY_ENDING_DISPLAY_SECONDS = 10
+const VICTORY_ENDING_DISPLAY_SECONDS = 12
 let victoryEndingDismissTimer: ReturnType<typeof setTimeout> | undefined
 
 function closeVictoryEnding(): void {
@@ -339,6 +339,16 @@ const voteHistoryRows = computed(() => {
               </div>
             </div>
             <div class="avalon-ending-copy">
+              <button
+                ref="victoryEndingCloseButton"
+                class="avalon-ending-close"
+                type="button"
+                aria-label="關閉結局立繪"
+                @click="closeVictoryEnding"
+              >
+                <span aria-hidden="true">×</span>
+                <span>關閉</span>
+              </button>
               <p class="avalon-ending-eyebrow">
                 {{ victoryEnding.camp === 'good' ? '正義陣營獲勝' : '邪惡陣營獲勝' }}
               </p>
@@ -350,16 +360,6 @@ const voteHistoryRows = computed(() => {
                 {{ VICTORY_ENDING_DISPLAY_SECONDS }} 秒後自動關閉，也可以手動關閉。
               </p>
             </div>
-            <button
-              ref="victoryEndingCloseButton"
-              class="avalon-ending-close"
-              type="button"
-              aria-label="關閉結局立繪"
-              @click="closeVictoryEnding"
-            >
-              <span aria-hidden="true">×</span>
-              <span>關閉</span>
-            </button>
           </section>
         </div>
       </Transition>
@@ -727,7 +727,30 @@ const voteHistoryRows = computed(() => {
   height: 100%;
   padding: 14px;
   object-fit: contain;
-  object-position: center bottom;
+  object-position: center;
+  transform-origin: center;
+  animation: avalon-ending-art-zoom-out 10s linear both;
+  will-change: transform;
+}
+
+@keyframes avalon-ending-art-zoom-out {
+  from {
+    transform: scale(1.12);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes avalon-ending-art-mobile-zoom-out {
+  from {
+    transform: scale(1.08);
+  }
+
+  to {
+    transform: scale(1);
+  }
 }
 
 .avalon-ending-art-placeholder {
@@ -879,8 +902,11 @@ const voteHistoryRows = computed(() => {
 
   .avalon-ending-dialog {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(130px, 35vh) minmax(0, 1fr);
-    grid-template-rows: minmax(130px, 35dvh) minmax(0, 1fr);
+    grid-template-areas:
+      "copy"
+      "art";
+    grid-template-rows: minmax(0, 1fr) minmax(130px, 45vh);
+    grid-template-rows: minmax(0, 1fr) minmax(130px, 50dvh);
     width: min(100%, 520px);
     height: min(760px, calc(100vh - 24px));
     height: min(760px, calc(100dvh - 24px));
@@ -892,15 +918,18 @@ const voteHistoryRows = computed(() => {
 
   .avalon-ending-art {
     min-height: 0;
+    grid-area: art;
   }
 
   .avalon-ending-art > img {
     padding: 4px 12px 0;
+    animation-name: avalon-ending-art-mobile-zoom-out;
   }
 
   .avalon-ending-copy {
     gap: 9px;
     padding: 22px 22px 24px;
+    grid-area: copy;
   }
 
   .avalon-ending-copy h2 {
@@ -912,8 +941,13 @@ const voteHistoryRows = computed(() => {
   }
 
   .avalon-ending-close {
-    top: 10px;
-    right: 10px;
+    position: relative;
+    top: auto;
+    right: auto;
+    grid-area: art;
+    align-self: start;
+    justify-self: end;
+    margin: 10px;
   }
 }
 
@@ -936,6 +970,12 @@ const voteHistoryRows = computed(() => {
 @media (prefers-reduced-motion: reduce) {
   .avalon-result-hero {
     animation: none;
+  }
+
+  .avalon-ending-art > img {
+    animation: none;
+    transform: none;
+    will-change: auto;
   }
 
   .avalon-ending-enter-active,
