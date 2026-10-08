@@ -294,38 +294,62 @@ function clearCombo(game: StoredRummikub): void {
   game.pendingTurnPreview = null
 }
 
-function settleGame(
+function finishGame(
   room: GameRoomContext,
   game: StoredRummikub,
   winnerId: string | null,
   endReason: StoredRummikub['endReason'],
-  awardScores: boolean,
 ): void {
   clearCombo(game)
-  const roundScores: Record<string, number> = {}
-  if (winnerId !== null && awardScores) {
-    const remainingPoints = new Map(
-      room.players.map((player) => [player.id, scoreRack(game, player.id)]),
-    )
-    const winnerPoints = room.players.reduce((total, player) => {
-      return player.id === winnerId ? total : total + (remainingPoints.get(player.id) ?? 0)
-    }, 0)
-
-    for (const player of room.players) {
-      const points = player.id === winnerId
-        ? winnerPoints
-        : -(remainingPoints.get(player.id) ?? 0)
-      player.score += points
-      roundScores[player.id] = points
-    }
-  }
-
   game.currentPlayerId = null
   game.turnDeadlineAt = null
   game.winnerId = winnerId
   game.endReason = endReason
-  game.roundScores = roundScores
+  game.roundScores = {}
   room.status = 'finished'
+}
+
+function settleScores(
+  room: GameRoomContext,
+  game: StoredRummikub,
+  playerId: string,
+): GameActionResult {
+  if (playerId !== room.hostId) {
+    return actionError('HOST_ONLY', '只有房主可以結算分數。')
+  }
+  if (room.status !== 'finished' || game.endReason === null) {
+    return actionError('GAME_NOT_FINISHED', '本局尚未結束。')
+  }
+  if (game.endReason === 'player-left' || game.winnerId === null) {
+    return actionError('GAME_NOT_SCORABLE', '本局提前結束，不進行計分。')
+  }
+  if (Object.keys(game.roundScores).length > 0) {
+    return actionError('SCORES_ALREADY_SETTLED', '本局分數已結算。')
+  }
+
+  const winnerId = game.winnerId
+  const remainingPoints = new Map(
+    game.turnOrder.map((id) => [id, scoreRack(game, id)]),
+  )
+  const winnerPoints = game.turnOrder.reduce((total, id) => {
+    return id === winnerId ? total : total + (remainingPoints.get(id) ?? 0)
+  }, 0)
+  const roundScores: Record<string, number> = {}
+
+  for (const id of game.turnOrder) {
+    roundScores[id] = id === winnerId
+      ? winnerPoints
+      : -(remainingPoints.get(id) ?? 0)
+  }
+  for (const player of room.players) {
+    const points = roundScores[player.id]
+    if (points !== undefined) {
+      player.score += points
+    }
+  }
+
+  game.roundScores = roundScores
+  return { ok: true, changed: true }
 }
 
 function selectBlockedWinner(room: GameRoomContext, game: StoredRummikub): string {
@@ -595,7 +619,7 @@ function playTurn(
   const lastTurnCombo = { playerId, count: usedHandTileIds.size }
   if (game.hands[playerId]!.length === 0) {
     game.lastTurnCombo = lastTurnCombo
-    settleGame(room, game, playerId, 'played-out', true)
+    finishGame(room, game, playerId, 'played-out')
   } else {
     advanceTurn(room, game, now, lastTurnCombo)
   }
@@ -632,7 +656,7 @@ function passTurn(
   game.consecutivePasses += 1
   if (game.consecutivePasses >= room.players.length) {
     game.lastTurnCombo = null
-    settleGame(room, game, selectBlockedWinner(room, game), 'blocked', true)
+    finishGame(room, game, selectBlockedWinner(room, game), 'blocked')
   } else {
     advanceTurn(room, game, now)
   }
@@ -739,12 +763,19 @@ function handleRummikubAction(
   now: number,
 ): GameActionResult {
   const game = room.game
-  if (room.status !== 'playing' || game?.gameId !== 'rummikub') {
+  if (game?.gameId !== 'rummikub') {
     return actionError('GAME_NOT_STARTED', '拉密遊戲尚未開始。')
   }
 
   if (!room.players.some((player) => player.id === playerId)) {
     return actionError('PLAYER_NOT_FOUND', '你已不在這個房間。')
+  }
+
+  if (action === 'settle_scores') {
+    return settleScores(room, game, playerId)
+  }
+  if (room.status !== 'playing') {
+    return actionError('GAME_NOT_STARTED', '拉密遊戲尚未開始。')
   }
 
   if (game.turnDeadlineAt != null && game.turnDeadlineAt <= now) {
@@ -858,7 +889,7 @@ export const rummikubGame: GameModule = {
     if (game.lastTurnCombo?.playerId === playerId) {
       game.lastTurnCombo = null
     }
-    settleGame(room, game, null, 'player-left', false)
+    finishGame(room, game, null, 'player-left')
     return true
   },
   playerFlags: (_room, _playerId) => ({ answered: false, correct: false }),

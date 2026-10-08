@@ -293,6 +293,9 @@ const ownGamePlayer = computed(() => {
 const isMyTurn = computed(() => {
   return Boolean(game.value && game.value.currentPlayerId === props.playerId)
 })
+const isGameFinished = computed(() => {
+  return game.value !== null && game.value.endReason !== null
+})
 const activeTurnPreview = computed(() => {
   const currentGame = game.value
   const preview = currentGame?.turnPreview
@@ -725,6 +728,12 @@ function cancelEdit(syncComboPreview = true): void {
   lastDraftSignature = null
 }
 
+watch(isGameFinished, (isFinished) => {
+  if (isFinished) {
+    cancelEdit(false)
+  }
+})
+
 function getDraftMove(): RummikubMove {
   return {
     melds: draftMelds.value.map((meld) => meld.tiles.map((tile) => tile.id)),
@@ -955,23 +964,35 @@ function drawOrPass(): void {
   >
     <section class="rummikub-status-panel">
       <div>
-        <p class="rummikub-kicker">{{ gameName }} · 第 {{ game?.turnNumber ?? 1 }} 回合</p>
-        <h2 v-if="isMyTurn">輪到你了</h2>
+        <p v-if="isGameFinished" class="rummikub-kicker">{{ gameName }} · 牌局回顧</p>
+        <p v-else class="rummikub-kicker">{{ gameName }} · 第 {{ game?.turnNumber ?? 1 }} 回合</p>
+        <h2 v-if="isGameFinished">本局已結束</h2>
+        <h2 v-else-if="isMyTurn">輪到你了</h2>
         <h2 v-else-if="currentPlayer && !currentPlayer.online">
           等待 {{ currentPlayer.name }} 重新連線
         </h2>
         <h2 v-else>{{ currentPlayer ? `等待 ${currentPlayer.name} 行動` : '等待回合開始' }}</h2>
-        <p v-if="ownGamePlayer && !ownGamePlayer.hasOpened">
+        <p v-if="isGameFinished">
+          {{ game?.endReason === 'player-left'
+            ? '本局因玩家離開而提前結束，未進行計分。最後牌面已保留供大家檢視。'
+            : '最後牌面已保留供大家檢視；房主確認前不會結算分數。' }}
+        </p>
+        <p v-else-if="ownGamePlayer && !ownGamePlayer.hasOpened">
           先用自己的手牌完成累計至少 30 分之後，才能操作桌面牌組。
         </p>
         <p v-else-if="isMyTurn">選擇手牌與桌面牌，重排成合法組合並出牌。</p>
         <p v-else>等候對手出牌中。</p>
-        <p v-if="remainingTurnSeconds === 0" class="rummikub-timeout-message" role="status">
+        <p
+          v-if="!isGameFinished && remainingTurnSeconds === 0"
+          class="rummikub-timeout-message"
+          role="status"
+        >
           時間到，桌面上皆為合法的牌組會自動確認；否則還原並自動抽牌。
         </p>
       </div>
       <div class="rummikub-status-metrics">
         <div
+          v-if="!isGameFinished"
           class="rummikub-turn-countdown"
           :class="{ 'is-expiring': remainingTurnSeconds !== null && remainingTurnSeconds <= 10 }"
           role="timer"
@@ -1420,7 +1441,7 @@ function drawOrPass(): void {
       </button>
     </section>
 
-    <p v-else-if="!isEditing && !isMyTurn" class="rummikub-waiting-note">
+    <p v-else-if="!isGameFinished && !isEditing && !isMyTurn" class="rummikub-waiting-note">
       等待目前玩家出牌、抽牌或結束回合。
     </p>
 

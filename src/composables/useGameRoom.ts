@@ -179,14 +179,23 @@ export function useGameRoom() {
           case 'game_aborted':
             gameAbortedCount.value += 1
             return
-          case 'game_event':
+          case 'game_event': {
+            const currentSnapshot = snapshot.value
             if (
-              snapshot.value?.status === 'playing' &&
-              payload.gameId === snapshot.value.selectedGameId
+              currentSnapshot &&
+              (
+                currentSnapshot.status === 'playing' ||
+                (
+                  currentSnapshot.status === 'finished' &&
+                  currentSnapshot.selectedGameId === 'rummikub'
+                )
+              ) &&
+              payload.gameId === currentSnapshot.selectedGameId
             ) {
               gameEvent.value = payload
             }
             return
+          }
           case 'guess_result':
             return
           case 'action_error':

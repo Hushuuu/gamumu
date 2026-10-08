@@ -778,7 +778,11 @@ export class GameRoom extends DurableObject<Env> {
       return
     }
 
-    if (this.room.status !== 'playing') {
+    const isRummikubScoreSettlement =
+      this.room.status === 'finished' &&
+      gameIdValue === 'rummikub' &&
+      actionValue === 'settle_scores'
+    if (this.room.status !== 'playing' && !isRummikubScoreSettlement) {
       this.send(ws, { type: 'action_error', code: 'GAME_NOT_STARTED', message: '遊戲尚未開始。' })
       return
     }

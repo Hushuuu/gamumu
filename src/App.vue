@@ -191,6 +191,24 @@ const sortedPlayers = computed(() => {
   const players = snapshot.value?.players ?? []
   return [...players].sort((left, right) => right.score - left.score)
 })
+const isRummikubFinalBoardReview = computed(() => {
+  const room = snapshot.value
+  const game = room?.game
+  return (
+    room?.status === 'finished' &&
+    game?.gameId === 'rummikub' &&
+    game.endReason !== null &&
+    Object.keys(game.roundScores).length === 0
+  )
+})
+const rummikubScoreSettlementPending = computed(() => {
+  const game = snapshot.value?.game
+  return (
+    isRummikubFinalBoardReview.value &&
+    game?.gameId === 'rummikub' &&
+    game.endReason !== 'player-left'
+  )
+})
 const shareUrl = computed(() => {
   if (!activeRoomCode.value) {
     return ''
@@ -1225,6 +1243,60 @@ function connectionLabel(): string {
               :can-interact="connectionStatus === 'connected'"
               @game-action="sendGameAction"
             />
+          </div>
+
+          <div
+            v-else-if="isRummikubFinalBoardReview"
+            class="finished-state rummikub-review-state"
+          >
+            <component
+              :is="gameComponents.playing"
+              :game="snapshot.game"
+              :game-settings="snapshot.gameSettings"
+              :game-event="gameEvent"
+              :players="snapshot.players"
+              :player-id="playerId"
+              :game-name="selectedGame.name"
+              :is-host="isHost"
+              :can-interact="false"
+              :settings-open="false"
+              @close-settings="isRummikubSettingsOpen = false"
+              @game-action="sendGameAction"
+            />
+            <div class="rummikub-review-actions">
+              <template v-if="rummikubScoreSettlementPending">
+                <p>最後牌面已保留。房主確認後才會結算本局分數。</p>
+                <button
+                  v-if="isHost"
+                  class="button button-primary start-button"
+                  type="button"
+                  :disabled="connectionStatus !== 'connected'"
+                  @click="sendGameAction('settle_scores', {})"
+                >
+                  確認牌局並結算分數 <span aria-hidden="true">→</span>
+                </button>
+                <div v-else class="waiting-status">
+                  <span class="status-dot"></span>
+                  等待房主確認並結算分數
+                </div>
+              </template>
+              <template v-else>
+                <p>本局因玩家離開而提前結束，不進行計分。</p>
+                <button
+                  v-if="isHost"
+                  class="button button-primary start-button"
+                  type="button"
+                  :disabled="connectionStatus !== 'connected'"
+                  @click="prepareNextGame"
+                >
+                  準備下一局 <span aria-hidden="true">→</span>
+                </button>
+                <div v-else class="waiting-status">
+                  <span class="status-dot"></span>
+                  等待房主準備下一局
+                </div>
+              </template>
+            </div>
           </div>
 
           <div v-else class="finished-state">
@@ -2442,6 +2514,29 @@ function connectionLabel(): string {
 
 .finished-state {
   padding-top: 8px;
+}
+
+.rummikub-review-state {
+  width: 100%;
+  align-items: stretch;
+  text-align: left;
+}
+
+.rummikub-review-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  text-align: center;
+}
+
+.rummikub-review-actions > p {
+  max-width: 52ch;
+  margin: 0;
+  color: #89869b;
+  font-size: 11px;
+  line-height: 1.6;
 }
 
 .loading-panel {
