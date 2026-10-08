@@ -35,11 +35,11 @@ const GAME_RULE_IMAGES: Record<GameId, RuleImage[]> = {
   'word-guess': [],
   'draw-guess': [],
   rummikub: [
-    { src: "games/rummikub/rummikub_rules.png", alt: '規則圖' },
+    { src: "games/rummikub/rummikub_rules.webp", alt: '規則圖' },
   ],
   werewolf: [],
   avalon: [
-    { src: "games/avalon/avalon_rules2.png", alt: '規則圖' },
+    { src: "games/avalon/avalon_rules2.webp", alt: '規則圖' },
   ],
 }
 
