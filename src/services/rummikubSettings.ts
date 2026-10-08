@@ -1,6 +1,8 @@
 const RUMMIKUB_SETTINGS_STORAGE_KEY = 'gamumu:rummikub-settings'
 
-export type RummikubHandTheme = 'sage' | 'mist'
+export type RummikubHandTheme = 'arcane' | 'royal'
+
+type LegacyRummikubHandTheme = 'sage' | 'mist'
 
 export interface RummikubPersonalSettings {
   hitVolume: number
@@ -14,7 +16,12 @@ export interface LoadedRummikubSettings {
 
 export const DEFAULT_RUMMIKUB_SETTINGS: Readonly<RummikubPersonalSettings> = {
   hitVolume: 50,
-  handTheme: 'sage',
+  handTheme: 'arcane',
+}
+
+const LEGACY_HAND_THEME_MAP: Record<LegacyRummikubHandTheme, RummikubHandTheme> = {
+  sage: 'arcane',
+  mist: 'royal',
 }
 
 function settingsStorage(): Storage {
@@ -25,15 +32,35 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function isRummikubPersonalSettings(value: unknown): value is RummikubPersonalSettings {
-  return (
-    isRecord(value) &&
-    typeof value.hitVolume === 'number' &&
-    Number.isInteger(value.hitVolume) &&
-    value.hitVolume >= 0 &&
-    value.hitVolume <= 100 &&
-    (value.handTheme === 'sage' || value.handTheme === 'mist')
-  )
+function normalizeRummikubHandTheme(value: unknown): RummikubHandTheme | null {
+  if (value === 'arcane' || value === 'royal') {
+    return value
+  }
+
+  if (value === 'sage' || value === 'mist') {
+    return LEGACY_HAND_THEME_MAP[value]
+  }
+
+  return null
+}
+
+function parseRummikubPersonalSettings(value: unknown): RummikubPersonalSettings | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const handTheme = normalizeRummikubHandTheme(value.handTheme)
+  if (
+    typeof value.hitVolume !== 'number' ||
+    !Number.isInteger(value.hitVolume) ||
+    value.hitVolume < 0 ||
+    value.hitVolume > 100 ||
+    handTheme === null
+  ) {
+    return null
+  }
+
+  return { hitVolume: value.hitVolume, handTheme }
 }
 
 function defaultSettings(): RummikubPersonalSettings {
@@ -59,7 +86,8 @@ export function loadRummikubSettings(): LoadedRummikubSettings {
       }
     }
 
-    if (!isRummikubPersonalSettings(value)) {
+    const settings = parseRummikubPersonalSettings(value)
+    if (!settings) {
       storage.removeItem(RUMMIKUB_SETTINGS_STORAGE_KEY)
       return {
         settings: defaultSettings(),
@@ -68,7 +96,7 @@ export function loadRummikubSettings(): LoadedRummikubSettings {
     }
 
     return {
-      settings: { hitVolume: value.hitVolume, handTheme: value.handTheme },
+      settings,
       error: null,
     }
   } catch {

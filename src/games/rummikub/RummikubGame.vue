@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as Tone from 'tone'
+import { gameAssetUrl } from '../gameAssets'
 import {
   areRummikubMeldsEqual,
   getRummikubComboTier,
@@ -54,20 +55,31 @@ const COLOR_ORDER: Record<RummikubColor, number> = {
 
 const HAND_THEMES = [
   {
-    id: 'sage',
-    name: '晨霧鼠尾草',
-    description: '',
+    id: 'arcane',
+    name: '秘術星芒',
+    description: '紫晶魔法陣與金色框飾',
   },
   {
-    id: 'mist',
-    name: '月光霧藍',
-    description: '',
+    id: 'royal',
+    name: '皇家金紋',
+    description: '深藍紋飾與金色徽章',
   },
 ] as const satisfies readonly {
   id: RummikubHandTheme
   name: string
   description: string
 }[]
+
+const HAND_THEME_CARD_IMAGES: Record<RummikubHandTheme, string> = {
+  arcane: gameAssetUrl('games/rummikub/card1.svg'),
+  royal: gameAssetUrl('games/rummikub/card2.svg'),
+}
+
+function handThemeCardStyle(theme: RummikubHandTheme) {
+  return {
+    '--rummikub-card-image': `url("${HAND_THEME_CARD_IMAGES[theme]}")`,
+  }
+}
 
 const HIT_SOUND_NOTES = ['C5', 'D5', 'E5', 'G5', 'A5', 'C6', 'D6'] as const
 const TURN_REMINDER_NOTES = ['C6', 'D6'] as const
@@ -936,7 +948,11 @@ function drawOrPass(): void {
 </script>
 
 <template>
-  <div class="playing-state rummikub-game" :class="`hand-theme-${handTheme}`">
+  <div
+    class="playing-state rummikub-game"
+    :class="`hand-theme-${handTheme}`"
+    :style="handThemeCardStyle(handTheme)"
+  >
     <section class="rummikub-status-panel">
       <div>
         <p class="rummikub-kicker">{{ gameName }} · 第 {{ game?.turnNumber ?? 1 }} 回合</p>
@@ -946,12 +962,12 @@ function drawOrPass(): void {
         </h2>
         <h2 v-else>{{ currentPlayer ? `等待 ${currentPlayer.name} 行動` : '等待回合開始' }}</h2>
         <p v-if="ownGamePlayer && !ownGamePlayer.hasOpened">
-          先用自己的手牌完成至少 30 分登錄，才能操作桌面牌組。
+          先用自己的手牌完成累計至少 30 分之後，才能操作桌面牌組。
         </p>
         <p v-else-if="isMyTurn">選擇手牌與桌面牌，重排成合法組合並出牌。</p>
-        <p v-else>可隨時查看自己的手牌；輪到你時再開始整理。</p>
+        <p v-else>等候對手出牌中。</p>
         <p v-if="remainingTurnSeconds === 0" class="rummikub-timeout-message" role="status">
-          時間到，合法的桌面草稿會自動確認；否則還原編輯並自動抽牌或跳過。
+          時間到，桌面上皆為合法的牌組會自動確認；否則還原並自動抽牌。
         </p>
       </div>
       <div class="rummikub-status-metrics">
@@ -981,7 +997,7 @@ function drawOrPass(): void {
       :player-name="previousTurnCombo.playerName"
     />
 
-    <section class="rummikub-player-strip" aria-label="玩家手牌與登錄狀態">
+    <section class="rummikub-player-strip" aria-label="玩家手牌與狀態">
       <div
         v-for="player in game?.players ?? []"
         :key="player.id"
@@ -997,7 +1013,7 @@ function drawOrPass(): void {
         <small v-if="props.players.find((roomPlayer) => roomPlayer.id === player.id)?.online === false">
           離線
         </small>
-        <small v-else>{{ player.hasOpened ? '已登錄' : '未登錄' }}</small>
+        <small v-else>{{ player.hasOpened ? '已可自由出牌' : '尚未滿30分' }}</small>
       </div>
     </section>
 
@@ -1325,11 +1341,10 @@ function drawOrPass(): void {
 
       <div v-if="isEditing && visibleJokers.length > 0" class="rummikub-joker-settings">
         <div>
-          <p class="rummikub-kicker">WILD TILE</p>
-          <h4>Joker 代表牌</h4>
+          <p class="rummikub-kicker">Joker 萬能牌</p>
         </div>
         <label v-for="joker in visibleJokers" :key="joker.id" class="rummikub-joker-control">
-          <span>{{ getJokerName(joker.id) }} · {{ COLOR_NAMES[joker.representedAs.color] }}{{ joker.representedAs.value }}</span>
+          <span>{{ getJokerName(joker.id) }}</span>
           <select
             :value="joker.representedAs.color"
             :disabled="!props.canInteract || (!ownGamePlayer?.hasOpened && originalTableTileIds.has(joker.id))"
@@ -1479,7 +1494,12 @@ function drawOrPass(): void {
                   name="rummikub-hand-theme"
                   :value="theme.id"
                 />
-                <span class="rummikub-theme-preview" :class="`theme-${theme.id}`" aria-hidden="true">
+                <span
+                  class="rummikub-theme-preview"
+                  :class="`theme-${theme.id}`"
+                  :style="handThemeCardStyle(theme.id)"
+                  aria-hidden="true"
+                >
                   <span class="rummikub-theme-preview-tile tile-red">3</span>
                   <span class="rummikub-theme-preview-tile tile-blue">8</span>
                   <span class="rummikub-theme-preview-tile tile-yellow">12</span>
@@ -2213,100 +2233,58 @@ function drawOrPass(): void {
   background: #f8faf4;
 }
 
-.rummikub-game.hand-theme-sage .rummikub-hand {
-  border-color: #dce4d6;
-  background: #f5f8f1;
+.rummikub-game.hand-theme-arcane .rummikub-hand {
+  border-color: #ded7ee;
+  background: #f8f6fc;
 }
 
-.rummikub-game.hand-theme-sage .rummikub-tile {
+.rummikub-game.hand-theme-royal .rummikub-hand-panel {
+  border-color: #e1d8bf;
+  background: #fffdf7;
+}
+
+.rummikub-game.hand-theme-royal .rummikub-hand-panel.is-editing {
+  border-color: #d9c99f;
+  background: #fffdf6;
+}
+
+.rummikub-game.hand-theme-royal .rummikub-hand {
+  border-color: #e5d9b8;
+  background: linear-gradient(135deg, #faf7ee, #fffdf7);
+}
+
+.rummikub-game.hand-theme-arcane .rummikub-tile,
+.rummikub-game.hand-theme-royal .rummikub-tile {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border-color: #ded7c5;
-  background:
-    radial-gradient(circle at 4px 4px, rgb(160 126 66 / 34%) 0 1px, transparent 1.5px),
-    radial-gradient(circle at calc(100% - 4px) 4px, rgb(160 126 66 / 34%) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 4px calc(100% - 4px), rgb(160 126 66 / 34%) 0 1px, transparent 1.5px),
-    radial-gradient(circle at calc(100% - 4px) calc(100% - 4px), rgb(160 126 66 / 34%) 0 1px, transparent 1.5px),
-    linear-gradient(155deg, #fffefa, #f8f5eb);
+  min-height: 54px;
+  border: 0;
+  background: var(--rummikub-card-image) center / 100% 100% no-repeat;
+  box-shadow: none;
 }
 
-.rummikub-game.hand-theme-sage .rummikub-tile::before {
-  position: absolute;
-  inset: 3px;
-  border: 1px solid rgb(160 126 66 / 24%);
-  border-radius: 4px;
-  content: '';
-  pointer-events: none;
+.rummikub-game.hand-theme-arcane .rummikub-tile > span:first-child,
+.rummikub-game.hand-theme-royal .rummikub-tile > span:first-child {
+  transform: translateY(2px);
 }
 
-.rummikub-game.hand-theme-sage .rummikub-tile.is-joker {
-  border-color: #e3d9a9;
-  background:
-    radial-gradient(circle at 4px 4px, rgb(160 126 66 / 36%) 0 1px, transparent 1.5px),
-    radial-gradient(circle at calc(100% - 4px) 4px, rgb(160 126 66 / 36%) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 4px calc(100% - 4px), rgb(160 126 66 / 36%) 0 1px, transparent 1.5px),
-    radial-gradient(circle at calc(100% - 4px) calc(100% - 4px), rgb(160 126 66 / 36%) 0 1px, transparent 1.5px),
-    linear-gradient(150deg, #fffef6, #f7f1d8);
+.rummikub-game.hand-theme-arcane .rummikub-tile.is-selected {
+  box-shadow: 0 0 0 2px rgb(142 121 199 / 28%), 0 5px 11px rgb(50 49 42 / 12%);
 }
 
-.rummikub-game.hand-theme-sage .rummikub-tile.is-selected {
-  border-color: #779e6d;
-  box-shadow: 0 0 0 2px rgb(119 158 109 / 23%), 0 5px 11px rgb(50 49 42 / 12%);
+.rummikub-game.hand-theme-royal .rummikub-tile.is-selected {
+  box-shadow: 0 0 0 2px rgb(177 143 54 / 30%), 0 5px 11px rgb(50 49 42 / 12%);
 }
 
-.rummikub-game.hand-theme-mist .rummikub-hand-panel {
-  border-color: #e1e5ed;
-  background: #fbfcff;
+.rummikub-game.hand-theme-arcane .rummikub-hand-panel.is-my-turn {
+  border-color: #9a88c5;
+  box-shadow: 0 0 0 3px rgb(154 136 197 / 18%), 0 8px 24px rgb(64 57 37 / 9%);
 }
 
-.rummikub-game.hand-theme-mist .rummikub-hand-panel.is-editing {
-  border-color: #d7deeb;
-  background: #f9fbff;
-}
-
-.rummikub-game.hand-theme-mist .rummikub-hand {
-  border-color: #d8dfec;
-  background: linear-gradient(135deg, #f2f5fa, #f7f8fc);
-}
-
-.rummikub-game.hand-theme-mist .rummikub-tile {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  border: 2px double #d4ddeb;
-  background:
-    radial-gradient(circle at 50% 4px, rgb(118 140 176 / 30%) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 50% calc(100% - 4px), rgb(118 140 176 / 30%) 0 1px, transparent 1.5px),
-    linear-gradient(155deg, #fff, #f3f6fb);
-}
-
-.rummikub-game.hand-theme-mist .rummikub-tile::before {
-  position: absolute;
-  inset: 3px;
-  border: 1px dashed rgb(118 140 176 / 24%);
-  border-radius: 4px;
-  content: '';
-  pointer-events: none;
-}
-
-.rummikub-game.hand-theme-mist .rummikub-tile.is-joker {
-  border-color: #ded8c0;
-  background:
-    radial-gradient(circle at 50% 4px, rgb(118 140 176 / 34%) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 50% calc(100% - 4px), rgb(118 140 176 / 34%) 0 1px, transparent 1.5px),
-    linear-gradient(155deg, #fffef8, #f2f0e7);
-}
-
-.rummikub-game.hand-theme-mist .rummikub-tile.is-selected {
-  border-color: #8799bb;
-  box-shadow: 0 0 0 2px rgb(135 153 187 / 22%), 0 5px 11px rgb(50 49 42 / 12%);
-}
-
-.rummikub-game.hand-theme-sage .rummikub-hand-panel.is-my-turn,
-.rummikub-game.hand-theme-mist .rummikub-hand-panel.is-my-turn {
-  border-color: #7f9f73;
-  box-shadow: 0 0 0 3px rgb(127 159 115 / 18%), 0 8px 24px rgb(64 57 37 / 9%);
+.rummikub-game.hand-theme-royal .rummikub-hand-panel.is-my-turn {
+  border-color: #b89b50;
+  box-shadow: 0 0 0 3px rgb(184 155 80 / 18%), 0 8px 24px rgb(64 57 37 / 9%);
 }
 
 .rummikub-settings-dialog {
@@ -2434,16 +2412,16 @@ function drawOrPass(): void {
   cursor: pointer;
 }
 
-.rummikub-theme-option.is-selected.theme-sage {
-  border-color: #cbd8c4;
-  background: #fcfdfb;
-  box-shadow: 0 0 0 2px rgb(137 160 125 / 12%);
+.rummikub-theme-option.is-selected.theme-arcane {
+  border-color: #d2c8e7;
+  background: #fcfaff;
+  box-shadow: 0 0 0 2px rgb(142 121 199 / 12%);
 }
 
-.rummikub-theme-option.is-selected.theme-mist {
-  border-color: #cbd5e4;
-  background: #fcfcff;
-  box-shadow: 0 0 0 2px rgb(135 153 187 / 12%);
+.rummikub-theme-option.is-selected.theme-royal {
+  border-color: #e0d1a5;
+  background: #fffdf7;
+  box-shadow: 0 0 0 2px rgb(177 143 54 / 12%);
 }
 
 .rummikub-theme-option:focus-within {
@@ -2458,8 +2436,8 @@ function drawOrPass(): void {
   accent-color: #778d6c;
 }
 
-.rummikub-theme-option.theme-mist input {
-  accent-color: #8394b3;
+.rummikub-theme-option.theme-royal input {
+  accent-color: #a88736;
 }
 
 .rummikub-theme-preview {
@@ -2474,60 +2452,27 @@ function drawOrPass(): void {
   border-radius: 9px;
 }
 
-.rummikub-theme-preview.theme-sage {
-  border-color: #dce4d6;
-  background: #f3f6ef;
+.rummikub-theme-preview.theme-arcane {
+  border-color: #ded7ee;
+  background: #f8f6fc;
 }
 
-.rummikub-theme-preview.theme-mist {
-  border-color: #d8dfec;
-  background: #f0f3f8;
+.rummikub-theme-preview.theme-royal {
+  border-color: #e5d9b8;
+  background: #faf7ee;
 }
 
 .rummikub-theme-preview-tile {
-  position: relative;
-  isolation: isolate;
   overflow: hidden;
   display: grid;
-  width: 17px;
-  height: 28px;
+  width: 18px;
+  height: 26px;
   place-items: center;
-  border: 1px solid;
-  border-radius: 4px;
-  box-shadow: 0 1px 2px rgb(50 49 42 / 9%);
-  font-size: 9px;
+  border-radius: 3px;
+  background: var(--rummikub-card-image) center / 100% 100% no-repeat;
+  font-size: 8px;
   font-weight: 900;
-}
-
-.rummikub-theme-preview.theme-sage .rummikub-theme-preview-tile {
-  border-color: #ded7c5;
-  background:
-    radial-gradient(circle at 3px 3px, rgb(160 126 66 / 38%) 0 0.8px, transparent 1.2px),
-    radial-gradient(circle at calc(100% - 3px) calc(100% - 3px), rgb(160 126 66 / 38%) 0 0.8px, transparent 1.2px),
-    linear-gradient(155deg, #fffefa, #f8f5eb);
-}
-
-.rummikub-theme-preview.theme-sage .rummikub-theme-preview-tile::before {
-  position: absolute;
-  inset: 2px;
-  border: 1px solid rgb(160 126 66 / 28%);
-  border-radius: 2px;
-  content: '';
-}
-
-.rummikub-theme-preview.theme-mist .rummikub-theme-preview-tile {
-  border: 2px double #d4ddeb;
-  background:
-    radial-gradient(circle at 50% 3px, rgb(118 140 176 / 32%) 0 0.8px, transparent 1.2px),
-    linear-gradient(155deg, #fff, #f3f6fb);
-}
-
-.rummikub-theme-preview.theme-mist .rummikub-theme-preview-tile::before {
-  position: absolute;
-  inset: 2px;
-  border: 1px dashed rgb(118 140 176 / 30%);
-  border-radius: 2px;
-  content: '';
+  line-height: 1;
 }
 
 .rummikub-theme-preview-tile.tile-red {

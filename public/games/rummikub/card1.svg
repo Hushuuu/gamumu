@@ -1,0 +1,305 @@
+
+<svg xmlns="http://www.w3.org/2000/svg"
+  width="60"
+  height="86"
+  viewBox="0 0 160 230"
+  style="color:#6757c8">
+
+  <defs>
+
+```
+<!-- 淡色卡面 -->
+<linearGradient id="arcaneBgLight" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0%" stop-color="#ffffff"/>
+  <stop offset="45%" stop-color="#f5f6fb"/>
+  <stop offset="100%" stop-color="#e4e6f0"/>
+</linearGradient>
+
+<!-- 淡金紫邊框 -->
+<linearGradient id="arcaneBorderLight" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0%" stop-color="#b39b48"/>
+  <stop offset="25%" stop-color="#eadb91"/>
+  <stop offset="50%" stop-color="#a995d8"/>
+  <stop offset="75%" stop-color="#e2d48a"/>
+  <stop offset="100%" stop-color="#9c8540"/>
+</linearGradient>
+
+<!-- 淡紫藍寶石 -->
+<radialGradient id="arcaneGemLight">
+  <stop offset="0%" stop-color="#ffffff"/>
+  <stop offset="35%" stop-color="#d9f6ff"/>
+  <stop offset="70%" stop-color="#a9b8ed"/>
+  <stop offset="100%" stop-color="#766bb5"/>
+</radialGradient>
+
+<!-- 數字 -->
+<linearGradient id="numberLight" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0%" stop-color="#ffffff"/>
+  <stop offset="45%" stop-color="currentColor"/>
+  <stop offset="100%" stop-color="currentColor"/>
+</linearGradient>
+
+<!-- 柔和陰影 -->
+<filter id="lightShadow"
+        x="-30%" y="-30%"
+        width="160%" height="160%">
+  <feDropShadow
+    dx="0"
+    dy="4"
+    stdDeviation="4"
+    flood-color="#7c8190"
+    flood-opacity=".20"/>
+</filter>
+
+<!-- 柔和發光 -->
+<filter id="softGlow"
+        x="-100%" y="-100%"
+        width="300%" height="300%">
+  <feGaussianBlur
+    stdDeviation="1.8"
+    result="blur"/>
+
+  <feMerge>
+    <feMergeNode in="blur"/>
+    <feMergeNode in="SourceGraphic"/>
+  </feMerge>
+</filter>
+```
+
+  </defs>
+
+  <!-- ==================== -->
+
+  <!-- 卡片 -->
+
+  <!-- ==================== -->
+
+<rect
+ x="5"
+ y="5"
+ width="150"
+ height="220"
+ rx="18"
+ fill="url(#arcaneBgLight)"
+ stroke="#6d7180"
+ stroke-width="3"
+ filter="url(#lightShadow)"/>
+
+  <!-- ==================== -->
+
+  <!-- 外層魔法金框 -->
+
+  <!-- ==================== -->
+
+<rect
+ x="10"
+ y="10"
+ width="140"
+ height="210"
+ rx="14"
+ fill="none"
+ stroke="url(#arcaneBorderLight)"
+ stroke-width="3"/>
+
+  <!-- 第二層細框 -->
+
+<rect
+ x="16"
+ y="16"
+ width="128"
+ height="198"
+ rx="10"
+ fill="none"
+ stroke="#aaaed0"
+ stroke-width="1"
+ opacity=".65"/>
+
+  <!-- ==================== -->
+
+  <!-- 四角秘術符號 -->
+
+  <!-- ==================== -->
+
+<g
+ fill="none"
+ stroke="url(#arcaneBorderLight)"
+ stroke-width="2">
+
+```
+<path d="M28 44 V28 H44"/>
+<path d="M116 28 H132 V44"/>
+
+<path d="M28 186 V202 H44"/>
+<path d="M116 202 H132 V186"/>
+```
+
+  </g>
+
+  <!-- 四角小圓點 -->
+
+<g
+ fill="#aaa1d7"
+ opacity=".8">
+
+```
+<circle cx="28" cy="28" r="2"/>
+<circle cx="132" cy="28" r="2"/>
+<circle cx="28" cy="202" r="2"/>
+<circle cx="132" cy="202" r="2"/>
+```
+
+  </g>
+
+  <!-- ==================== -->
+
+  <!-- 上方魔法寶石 -->
+
+  <!-- ==================== -->
+
+<path
+ d="M80 19
+    L88 28
+    L80 39
+    L72 28
+    Z"
+ fill="url(#arcaneGemLight)"
+ stroke="#a594d2"
+ stroke-width="1.5"
+ filter="url(#softGlow)"/>
+
+<circle
+ cx="80"
+ cy="29"
+ r="2.5"
+ fill="#ffffff"/>
+
+  <!-- 左右能量線 -->
+
+<path
+ d="M56 29 H68
+    M92 29 H104"
+ stroke="#b3a8d9"
+ stroke-width="1.5"
+ stroke-linecap="round"/>
+
+  <!-- ==================== -->
+
+  <!-- 中央淡色魔法陣 -->
+
+  <!-- ==================== -->
+
+<g
+ fill="none"
+ stroke="#9695c5"
+ opacity=".28">
+
+```
+<circle
+  cx="80"
+  cy="112"
+  r="52"
+  stroke-width="1"/>
+
+<circle
+  cx="80"
+  cy="112"
+  r="46"
+  stroke-width="1"
+  stroke-dasharray="2 5"/>
+
+<circle
+  cx="80"
+  cy="112"
+  r="38"
+  stroke-width=".8"
+  stroke-dasharray="8 4"/>
+
+
+<!-- 六芒星 -->
+
+<path
+  d="M80 68
+     L119 135
+     H41
+     Z
+
+     M80 156
+     L41 89
+     H119
+     Z"
+  stroke-width="1"/>
+```
+
+  </g>
+
+  <!-- ==================== -->
+
+  <!-- 魔法節點 -->
+
+  <!-- ==================== -->
+
+<g
+ fill="#aaa4d8"
+ opacity=".7">
+
+```
+<circle cx="80" cy="60" r="2"/>
+<circle cx="125" cy="112" r="2"/>
+<circle cx="80" cy="164" r="2"/>
+<circle cx="35" cy="112" r="2"/>
+```
+
+  </g>
+
+  <!-- ==================== -->
+
+  <!-- ==================== -->
+
+  <!-- 下方魔法符文 -->
+
+  <!-- ==================== -->
+
+<path
+ d="M52 192
+    Q65 178 80 178
+    Q95 178 108 192"
+ fill="none"
+ stroke="url(#arcaneBorderLight)"
+ stroke-width="2"/>
+
+  <!-- 中央魔法核心 -->
+
+<circle
+ cx="80"
+ cy="190"
+ r="7"
+ fill="none"
+ stroke="#aaa0d4"
+ stroke-width="1"
+ opacity=".8"/>
+
+<circle
+ cx="80"
+ cy="190"
+ r="4"
+ fill="url(#arcaneGemLight)"
+ stroke="#9184c8"
+ stroke-width="1"/>
+
+  <!-- 小符文 -->
+
+<path
+d="M62 190
+L68 184
+L73 190
+
+```
+   M87 190
+   L92 184
+   L98 190"
+fill="none"
+stroke="#aaa0d4"
+stroke-width="1.5"/>
+```
+
+</svg>
