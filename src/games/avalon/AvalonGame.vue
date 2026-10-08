@@ -51,6 +51,7 @@ type AvalonHistoryTab = 'missions' | 'votes'
 const privateState = ref<AvalonPrivateState | null>(null)
 const hasAnimatedRoleCard = ref(false)
 const animateRoleCard = ref(false)
+const roleCardRevealed = ref(false)
 const selectedHistoryTab = ref<AvalonHistoryTab>('missions')
 const missionHistoryTabButton = ref<HTMLButtonElement | null>(null)
 const voteHistoryTabButton = ref<HTMLButtonElement | null>(null)
@@ -59,6 +60,68 @@ const selectedLakeTargetId = ref('')
 const selectedAssassinationTargetId = ref('')
 const selectedGuessRole = ref<AvalonRoleId | null>(null)
 const roleGuesses = ref<Partial<Record<string, AvalonRoleId>>>({})
+let roleRevealPointerId: number | null = null
+let roleRevealKeyDown = false
+let suppressRoleRevealClick = false
+
+function resetRoleCardReveal(): void {
+  roleRevealPointerId = null
+  roleRevealKeyDown = false
+  roleCardRevealed.value = false
+}
+
+function startRoleCardReveal(event: PointerEvent): void {
+  if (event.button !== 0 || roleRevealPointerId !== null) {
+    return
+  }
+
+  event.preventDefault()
+  roleRevealPointerId = event.pointerId
+  roleCardRevealed.value = true
+  if (event.currentTarget instanceof HTMLButtonElement) {
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+}
+
+function endRoleCardReveal(event: PointerEvent): void {
+  if (roleRevealPointerId !== event.pointerId) {
+    return
+  }
+
+  resetRoleCardReveal()
+}
+
+function handleRoleRevealKeydown(event: KeyboardEvent): void {
+  if (event.key !== ' ' && event.key !== 'Enter') {
+    return
+  }
+
+  event.preventDefault()
+  roleRevealKeyDown = true
+  roleCardRevealed.value = true
+}
+
+function handleRoleRevealKeyup(event: KeyboardEvent): void {
+  if (event.key !== ' ' && event.key !== 'Enter') {
+    return
+  }
+
+  event.preventDefault()
+  roleRevealKeyDown = false
+  roleCardRevealed.value = false
+  suppressRoleRevealClick = true
+  window.setTimeout(() => {
+    suppressRoleRevealClick = false
+  }, 0)
+}
+
+function handleRoleRevealClick(event: MouseEvent): void {
+  if (event.detail !== 0 || roleRevealKeyDown || suppressRoleRevealClick) {
+    return
+  }
+
+  roleCardRevealed.value = !roleCardRevealed.value
+}
 
 function playerInfoOf(playerId: string) {
   const player = props.players.find((candidate) => candidate.id === playerId)
@@ -272,6 +335,8 @@ watch(
   },
 )
 
+watch(() => view.value?.phase, resetRoleCardReveal)
+
 watch(
   [() => view.value?.phase, () => view.value?.stateVersion],
   ([phase, stateVersion], [previousPhase, previousStateVersion]) => {
@@ -283,6 +348,7 @@ watch(
         stateVersion < previousStateVersion
       )
     ) {
+      resetRoleCardReveal()
       privateState.value = null
       hasAnimatedRoleCard.value = false
       animateRoleCard.value = false
@@ -461,43 +527,71 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
     <section
       v-if="roleInfo"
       class="avalon-role-card"
-      :class="[`is-${roleInfo.camp}`, { 'is-revealing': animateRoleCard }]"
+      :class="[
+        `is-${roleCardRevealed ? roleInfo.camp : 'masked'}`,
+        { 'is-revealing': animateRoleCard },
+      ]"
     >
-      <div class="avalon-role-card-topline">
-        <span class="avalon-camp-badge" :class="`is-${roleInfo.camp}`">
-          <img :src="avalonCampIconUrl(roleInfo.camp)" alt="" />
-          {{ campLabel }}
-        </span>
-        <span v-if="view.lakeHolderId === playerId" class="avalon-lake-badge">
-          <img :src="avalonPhaseIconUrl('lake-check')" alt="" />
-          湖中女神標記
-        </span>
-      </div>
-      <div class="avalon-role-card-intro">
-        <img class="avalon-role-icon" :src="avalonRoleIconUrl(roleInfo.id)" alt="" />
-        <div>
-          <h3>{{ roleInfo.name }}</h3>
-          <p>{{ roleInfo.description }}</p>
+      <div
+        v-show="roleCardRevealed"
+        class="avalon-role-card-content"
+        :aria-hidden="!roleCardRevealed"
+      >
+        <div class="avalon-role-card-topline">
+          <span class="avalon-camp-badge" :class="`is-${roleInfo.camp}`">
+            <img :src="avalonCampIconUrl(roleInfo.camp)" alt="" />
+            {{ campLabel }}
+          </span>
+          <span v-if="view.lakeHolderId === playerId" class="avalon-lake-badge">
+            <img :src="avalonPhaseIconUrl('lake-check')" alt="" />
+            湖中女神標記
+          </span>
+        </div>
+        <div class="avalon-role-card-intro">
+          <img class="avalon-role-icon" :src="avalonRoleIconUrl(roleInfo.id)" alt="" />
+          <div>
+            <h3>{{ roleInfo.name }}</h3>
+            <p>{{ roleInfo.description }}</p>
+          </div>
+        </div>
+        <div v-if="knownPlayerRows.length" class="avalon-known-players">
+          <strong>已獲得資訊</strong>
+          <ul>
+            <li v-for="knownPlayer in knownPlayerRows" :key="knownPlayer.playerId">
+              <AvalonPlayerIdentity :player="knownPlayer" compact />
+              <small>{{ knowledgeLabel(knownPlayer.knowledge) }}</small>
+            </li>
+          </ul>
+        </div>
+        <div v-if="displayPrivateState?.lakeResults.length" class="avalon-known-players">
+          <strong>查驗資訊</strong>
+          <ul>
+            <li v-for="result in displayPrivateState.lakeResults" :key="`${result.missionNumber}-${result.targetId}`">
+              <AvalonPlayerIdentity :player="playerInfoOf(result.targetId)" compact />
+              <small>{{ result.camp === 'good' ? '好人' : '邪惡' }} · 第 {{ result.missionNumber }} 個任務後</small>
+            </li>
+          </ul>
         </div>
       </div>
-      <div v-if="knownPlayerRows.length" class="avalon-known-players">
-        <strong>已獲得資訊</strong>
-        <ul>
-          <li v-for="knownPlayer in knownPlayerRows" :key="knownPlayer.playerId">
-            <AvalonPlayerIdentity :player="knownPlayer" compact />
-            <small>{{ knowledgeLabel(knownPlayer.knowledge) }}</small>
-          </li>
-        </ul>
-      </div>
-      <div v-if="displayPrivateState?.lakeResults.length" class="avalon-known-players">
-        <strong>查驗資訊</strong>
-        <ul>
-          <li v-for="result in displayPrivateState.lakeResults" :key="`${result.missionNumber}-${result.targetId}`">
-            <AvalonPlayerIdentity :player="playerInfoOf(result.targetId)" compact />
-            <small>{{ result.camp === 'good' ? '好人' : '邪惡' }} · 第 {{ result.missionNumber }} 個任務後</small>
-          </li>
-        </ul>
-      </div>
+      <button
+        class="avalon-role-card-hold"
+        :class="{ 'is-revealed': roleCardRevealed }"
+        type="button"
+        :aria-label="roleCardRevealed
+          ? '身分已顯示，放開或再次啟用以隱藏'
+          : '按住或啟用以查看身分'"
+        :aria-pressed="roleCardRevealed"
+        @pointerdown="startRoleCardReveal"
+        @pointerup="endRoleCardReveal"
+        @pointercancel="endRoleCardReveal"
+        @lostpointercapture="endRoleCardReveal"
+        @keydown="handleRoleRevealKeydown"
+        @keyup="handleRoleRevealKeyup"
+        @blur="resetRoleCardReveal"
+        @click="handleRoleRevealClick"
+      >
+        <span v-show="!roleCardRevealed">按住查看身分</span>
+      </button>
     </section>
     <section v-else class="avalon-role-card avalon-role-loading" aria-live="polite">
       正在接收資訊……
@@ -554,19 +648,9 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
       <template v-if="view.phase === 'role-reveal'">
         <h3>確認你的身分</h3>
         <p>角色與提示只會顯示給你。請在查看完畢後確認，所有玩家完成確認才會開始第一個任務。</p>
-        <ul class="avalon-player-list">
-          <li v-for="player in playerRows" :key="player.id">
-            <AvalonPlayerIdentity
-              :player="player"
-              compact
-              :is-leader="player.id === view.leaderId"
-              :is-lake-holder="player.id === view.lakeHolderId"
-            />
-            <strong :class="{ 'is-ready': view.readyIds.includes(player.id) }">
-              {{ view.readyIds.includes(player.id) ? '已確認' : '查看中' }}
-            </strong>
-          </li>
-        </ul>
+        <p class="avalon-role-ready-count">
+          已確認 <strong>{{ view.readyIds.length }} / {{ view.seatIds.length }}</strong> 位玩家
+        </p>
         <button
           class="button button-primary avalon-action-button"
           type="button"
@@ -1258,8 +1342,15 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 }
 
 .avalon-role-card {
+  position: relative;
   border-color: #c9dccd;
   background: linear-gradient(135deg, #fffdf7, #e3f0e7);
+}
+
+.avalon-role-card.is-masked {
+  min-height: 72px;
+  border-color: #e4dccb;
+  background: var(--avalon-paper);
 }
 
 .avalon-role-card.is-revealing {
@@ -1269,6 +1360,49 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 .avalon-role-card.is-evil {
   border-color: #e3c5c3;
   background: linear-gradient(135deg, #fffdf7, #f5e5e3);
+}
+
+.avalon-role-card-hold {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--avalon-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  touch-action: none;
+  user-select: none;
+}
+
+.avalon-role-card-hold > span {
+  padding: 6px 10px;
+  border: 1px solid rgb(48 45 61 / 14%);
+  border-radius: 999px;
+  background: rgb(255 253 247 / 94%);
+}
+
+.avalon-role-card-hold.is-revealed {
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
+.avalon-role-card-hold.is-revealed > span {
+  border-color: transparent;
+  background: rgb(48 45 61 / 78%);
+  color: #fffdf7;
+}
+
+.avalon-role-card-hold:focus-visible {
+  outline: 3px solid var(--avalon-gold);
+  outline-offset: 2px;
 }
 
 .avalon-role-card-topline {
@@ -1358,7 +1492,6 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 }
 
 .avalon-known-players ul,
-.avalon-player-list,
 .avalon-team-list,
 .avalon-vote-list,
 .avalon-mission-results {
@@ -1370,7 +1503,6 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 }
 
 .avalon-known-players li,
-.avalon-player-list li,
 .avalon-vote-list li {
   display: flex;
   align-items: center;
@@ -1383,14 +1515,9 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
 }
 
 .avalon-known-players small,
-.avalon-player-list strong,
 .avalon-vote-list strong {
   color: #88839b;
   font-size: 9px;
-}
-
-.avalon-player-list strong.is-ready {
-  color: var(--avalon-good);
 }
 
 .avalon-role-guess-heading {
@@ -1592,6 +1719,20 @@ function knowledgeLabel(knowledge: AvalonKnowledge): string {
   color: #514e5b;
   font-size: 10px;
   line-height: 1.55;
+}
+
+.avalon-role-ready-count {
+  width: fit-content;
+  padding: 5px 9px;
+  border: 1px solid #c9dccd;
+  border-radius: 999px;
+  background: #e3f0e7;
+  color: var(--avalon-good);
+  font-weight: 700;
+}
+
+.avalon-role-ready-count strong {
+  font-variant-numeric: tabular-nums;
 }
 
 .avalon-role-guess-card > .avalon-guess-status {
