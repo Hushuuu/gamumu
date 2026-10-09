@@ -82,6 +82,7 @@ export interface ExplodingKittensPending {
   namedType: ExplodingKittensCardType | null
   nopeCount: number
   nopedBy: string[]
+  nopeRespondedBy: string[]
 }
 
 export interface ExplodingKittensView {
@@ -212,7 +213,11 @@ function isExplodingKittensPending(value: unknown, isPlayer: PlayerIdCheck): val
     (value.namedType === null || isExplodingKittensCardType(value.namedType)) &&
     isCount(value.nopeCount, EXPLODING_KITTENS_MAX_CARDS) &&
     Array.isArray(value.nopedBy) &&
-    value.nopedBy.every(isPlayer)
+    value.nopedBy.every(isPlayer) &&
+    Array.isArray(value.nopeRespondedBy) &&
+    value.nopeRespondedBy.length <= EXPLODING_KITTENS_MAX_PLAYERS &&
+    value.nopeRespondedBy.every(isPlayer) &&
+    new Set(value.nopeRespondedBy).size === value.nopeRespondedBy.length
   )
 }
 

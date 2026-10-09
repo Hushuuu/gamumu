@@ -36,4 +36,9 @@ export const GAME_COMPONENTS: Record<GameId, GameComponents> = {
     playing: defineAsyncComponent(() => import('./avalon/AvalonGame.vue')),
     finished: defineAsyncComponent(() => import('./avalon/AvalonResults.vue')),
   },
+  'exploding-kittens': {
+    setup: defineAsyncComponent(() => import('./exploding-kittens/ExplodingKittensSetup.vue')),
+    playing: defineAsyncComponent(() => import('./exploding-kittens/ExplodingKittensGame.vue')),
+    finished: defineAsyncComponent(() => import('./exploding-kittens/ExplodingKittensResults.vue')),
+  },
 }

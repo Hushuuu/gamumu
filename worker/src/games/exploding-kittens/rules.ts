@@ -163,11 +163,22 @@ function finishIfOver(game: StoredExplodingKittens): boolean {
   return true
 }
 
-function isNopeEligible(pending: StoredExplodingKittensPending, playerId: string): boolean {
-  if (playerId === pending.actorId) {
-    return pending.nopedBy.some((id) => id !== pending.actorId)
+export function getNopeRespondedBy(pending: StoredExplodingKittensPending): string[] {
+  if (Array.isArray(pending.nopeRespondedBy)) {
+    return pending.nopeRespondedBy
   }
-  return !pending.nopedBy.includes(playerId)
+  const lastNopeActorId = pending.nopedBy[pending.nopedBy.length - 1]
+  return [lastNopeActorId ?? pending.actorId]
+}
+
+function haveAllPlayersResponded(
+  game: StoredExplodingKittens,
+  pending: StoredExplodingKittensPending,
+): boolean {
+  const respondedBy = new Set(getNopeRespondedBy(pending))
+  return game.seats
+    .filter((seat) => seat.status === 'alive')
+    .every((seat) => respondedBy.has(seat.id))
 }
 
 export function canPlayerNope(game: StoredExplodingKittens, playerId: string): boolean {
@@ -175,8 +186,11 @@ export function canPlayerNope(game: StoredExplodingKittens, playerId: string): b
   if (game.phase !== 'nope' || !pending || !isAlive(game, playerId)) {
     return false
   }
+  if (getNopeRespondedBy(pending).includes(playerId)) {
+    return false
+  }
   const seat = requireSeat(game, playerId)
-  return seat.hand.some((card) => card.type === 'nope') && isNopeEligible(pending, playerId)
+  return seat.hand.some((card) => card.type === 'nope')
 }
 
 function requireCurrentTurn(game: StoredExplodingKittens, actorId: string): GameActionResult | null {
@@ -304,10 +318,10 @@ function playCards(
   let namedType: ExplodingKittensCardType | null = null
   if (kind === 'triple' || kind === 'five') {
     const requested = payload.namedType
-    if (!isExplodingKittensCardType(requested) || !isExplodingKittensComboType(requested)) {
-      return fail('INVALID_NAMED_TYPE', '請指定一種可以被組合取得的牌。')
+    if (!isExplodingKittensCardType(requested)) {
+      return fail('INVALID_NAMED_TYPE', '請指定有效的牌名。')
     }
-    if (kind === 'five' && !game.discard.includes(requested)) {
+    if (kind === 'five' && !game.discard.includes(requested) && !types.includes(requested)) {
       return fail('NAMED_CARD_MISSING', '棄牌區沒有指定的牌，無法使用五彩繽紛。')
     }
     namedType = requested
@@ -326,6 +340,7 @@ function playCards(
     namedType,
     nopeCount: 0,
     nopedBy: [],
+    nopeRespondedBy: [actorId],
     kitten: null,
   }
   game.phase = 'nope'
@@ -348,6 +363,10 @@ function playNope(
     return fail('NOT_IN_GAME', '你已不在這局遊戲中。')
   }
 
+  if (getNopeRespondedBy(pending).includes(actorId)) {
+    return fail('NOPE_ALREADY_RESPONDED', '你已經回應過這次休想判定。')
+  }
+
   const actor = requireSeat(game, actorId)
   const card = actor.hand.find(
     (candidate) =>
@@ -356,22 +375,42 @@ function playNope(
   if (!card) {
     return fail('NO_NOPE_CARD', '你沒有可以使用的休想卡。')
   }
-  if (!isNopeEligible(pending, actorId)) {
-    return fail(
-      'NOPE_NOT_ALLOWED',
-      actorId === pending.actorId
-        ? '需要等其他玩家先使用休想卡，你才能反制。'
-        : '你已經在這個效果中使用過休想卡了。',
-    )
-  }
 
   actor.hand = actor.hand.filter((candidate) => candidate.id !== card.id)
   game.discard.push('nope')
   pending.nopeCount += 1
   pending.nopedBy.push(actorId)
+  pending.nopeRespondedBy = [actorId]
   game.turnPlays.push({ playerId: actorId, kind: 'nope', cardTypes: ['nope'], targetId: null })
   game.phaseEndsAt = now + nopeWindowMs(game)
-  announce(game, `${actor.name} 打出休想卡反制`)
+  const previousNopeActorId = pending.nopedBy[pending.nopedBy.length - 2]
+  announce(
+    game,
+    previousNopeActorId
+      ? `${actor.name} 反制了 ${nameOf(game, previousNopeActorId)} 的休想卡`
+      : `${actor.name} 對 ${nameOf(game, pending.actorId)} 使用休想卡`,
+  )
+  return succeed()
+}
+
+function passNope(game: StoredExplodingKittens, actorId: string, now: number): GameActionResult {
+  const pending = game.pending
+  if (game.phase !== 'nope' || !pending) {
+    return fail('NOPE_NOT_OPEN', '目前沒有等待回應的休想判定。')
+  }
+  if (!isAlive(game, actorId)) {
+    return fail('NOT_IN_GAME', '你已不在這局遊戲中。')
+  }
+
+  const respondedBy = getNopeRespondedBy(pending)
+  if (respondedBy.includes(actorId)) {
+    return fail('NOPE_ALREADY_RESPONDED', '你已經回應過這次休想判定。')
+  }
+
+  pending.nopeRespondedBy = [...respondedBy, actorId]
+  if (haveAllPlayersResponded(game, pending)) {
+    resolveNopeWindow(game, now)
+  }
   return succeed()
 }
 
@@ -428,6 +467,7 @@ function drawCard(game: StoredExplodingKittens, actorId: string, now: number, ti
     namedType: null,
     nopeCount: 0,
     nopedBy: [],
+    nopeRespondedBy: [],
     kitten: top,
   }
   game.phase = 'defuse'
@@ -539,6 +579,7 @@ function resolveFavor(game: StoredExplodingKittens, pending: StoredExplodingKitt
       namedType: null,
       nopeCount: 0,
       nopedBy: [],
+      nopeRespondedBy: [],
       kitten: null,
     }
     game.phaseEndsAt = now + turnDurationMs(game)
@@ -583,16 +624,13 @@ function resolveTriple(game: StoredExplodingKittens, pending: StoredExplodingKit
 function resolveFive(game: StoredExplodingKittens, pending: StoredExplodingKittensPending, now: number): void {
   const actor = requireSeat(game, pending.actorId)
   const named = pending.namedType
-  if (named) {
-    const ownCopies = pending.cardTypes.includes(named) ? 1 : 0
-    const available = game.discard.filter((type) => type === named).length - ownCopies
-    if (available > 0) {
-      game.discard.splice(game.discard.indexOf(named), 1)
-      actor.hand.push(mintCard(game, named))
-      announce(game, `${actor.name} 從棄牌區取回一張${label(named)}`)
-      resumeTurn(game, now)
-      return
-    }
+  const discardIndex = named ? game.discard.indexOf(named) : -1
+  if (named && discardIndex !== -1) {
+    game.discard.splice(discardIndex, 1)
+    actor.hand.push(mintCard(game, named))
+    announce(game, `${actor.name} 從棄牌區取回一張${label(named)}`)
+    resumeTurn(game, now)
+    return
   }
 
   announce(game, '棄牌區沒有指定的牌，五彩繽紛無效')
@@ -729,6 +767,8 @@ export function applyExplodingKittensAction(
       return drawAction(game, playerId, now)
     case 'nope':
       return playNope(game, playerId, payload, now)
+    case 'nope-pass':
+      return passNope(game, playerId, now)
     case 'give':
       return giveCard(game, playerId, payload, now)
     case 'defuse':
@@ -764,7 +804,15 @@ export function leaveExplodingKittens(game: StoredExplodingKittens, playerId: st
   if (game.phase === 'favor' && pending?.targetId === playerId) {
     resumeTurn(game, now)
   }
-  finishIfOver(game)
+  const finished = finishIfOver(game)
+  if (
+    !finished &&
+    game.phase === 'nope' &&
+    pending?.kind === 'nope' &&
+    haveAllPlayersResponded(game, pending)
+  ) {
+    resolveNopeWindow(game, now)
+  }
   return true
 }
 

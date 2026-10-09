@@ -41,6 +41,7 @@ const GAME_RULE_IMAGES: Record<GameId, RuleImage[]> = {
   avalon: [
     { src: "games/avalon/avalon_rules2.webp", alt: '規則圖' },
   ],
+  'exploding-kittens': [],
 }
 
 const props = defineProps<{
@@ -122,6 +123,43 @@ const content = computed<RulesContent>(() => {
         images,
       }
     }
+    case 'exploding-kittens':
+      return {
+        title: `${gameName.value}規則`,
+        description: '避開爆炸貓、適時使用拆除牌，成為最後存活的玩家。',
+        sections: [
+          {
+            title: '開局與勝利',
+            items: [
+              '每位玩家取得 7 張手牌及 1 張拆除牌；牌堆加入比玩家數少 1 張的爆炸貓。',
+              '2–5 人使用一副牌；6–9 人使用兩副牌。最後存活的玩家獲勝。',
+            ],
+          },
+          {
+            title: '回合與卡牌',
+            items: [
+              '輪到你時可出任意張可用的手牌；結束回合時抽一張牌。',
+              '攻擊讓下一位玩家連續進行兩回合；跳過結束一回合，受到攻擊時每張跳過只抵一回合。',
+              '恩惠由目標選擇交出的手牌；洗混會重新洗牌堆；預見未來私下查看牌堆頂三張。',
+              '出牌者不需回覆；其餘存活玩家無論有無休想卡都會收到彈窗。有休想卡可打出或跳過，無卡者確認即可；全員回覆後立即結算，逾時亦會結算。休想可反制另一張休想，每次反制都會重新倒數；奇數張取消原效果、偶數張仍生效。爆炸貓與拆除不受休想影響。',
+            ],
+          },
+          {
+            title: '爆炸貓與特殊連擊',
+            items: [
+              '抽到爆炸貓時必須使用拆除牌，並將爆炸貓放回牌堆指定位置或隨機位置；沒有拆除牌便會淘汰。',
+              '兩張相同可隨機偷一張手牌；三張相同可指定牌名索取；五張不同可從棄牌區取回一張指定牌。',
+            ],
+          },
+          {
+            title: '計時',
+            items: [
+              `每回合限時 ${settingNumber('turnTimeSeconds', 20)} 秒；休想判定時間為 ${settingNumber('nopeWindowSeconds', 5)} 秒。逾時會由系統自動處理。`,
+            ],
+          },
+        ],
+        images,
+      }
     case 'rummikub':
       return {
         title: `${gameName.value}規則`,

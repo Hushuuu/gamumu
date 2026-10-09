@@ -52,6 +52,12 @@ const GAME_PROMOS: Record<GameId, GamePromo> = {
     description: '正義陣營尋找邪惡勢力並保護梅林；每一次組隊與投票都可能改變亞瑟王國的命運。',
     stamp: 'TRUST NO ONE',
   },
+  'exploding-kittens': {
+    category: '策略與運氣',
+    headline: '下一張牌，可能讓局勢瞬間翻盤。',
+    description: '運用各種卡牌、讀懂牌堆風險，在爆炸貓面前活到最後。',
+    stamp: 'DRAW WITH CARE',
+  },
 }
 
 const props = defineProps<{

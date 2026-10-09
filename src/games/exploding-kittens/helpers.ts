@@ -21,8 +21,6 @@ export interface PlayAnalysis {
   message: string
 }
 
-const COMBO_CARD_TYPES = EXPLODING_KITTENS_CARD_TYPES.filter(isExplodingKittensComboType)
-
 export function cardName(type: ExplodingKittensCardType): string {
   return EXPLODING_KITTENS_CARD_NAMES[type]
 }
@@ -98,10 +96,10 @@ export function namedOptionsFor(
   discard: ExplodingKittensCardType[],
 ): ExplodingKittensCardType[] {
   if (kind === 'triple') {
-    return [...COMBO_CARD_TYPES]
+    return [...EXPLODING_KITTENS_CARD_TYPES]
   }
   if (kind === 'five') {
-    return COMBO_CARD_TYPES.filter((type) => discard.includes(type))
+    return EXPLODING_KITTENS_CARD_TYPES.filter((type) => discard.includes(type))
   }
   return []
 }

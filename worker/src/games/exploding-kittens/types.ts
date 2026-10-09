@@ -35,6 +35,7 @@ export interface StoredExplodingKittensPending {
   namedType: ExplodingKittensCardType | null
   nopeCount: number
   nopedBy: string[]
+  nopeRespondedBy: string[]
   kitten: StoredExplodingKittensCard | null
 }
 
@@ -54,7 +55,6 @@ export interface StoredExplodingKittens {
   peek: ExplodingKittensCardType[] | null
   announcements: string[]
   phaseEndsAt: number | null
-  turnEndsAt: number | null
   settings: ExplodingKittensSettings
   eliminationOrder: string[]
   winnerId: string | null
