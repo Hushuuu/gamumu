@@ -22,7 +22,7 @@ import {
   sortHand,
   targetCandidates,
 } from './helpers'
-import { explodingKittensCardBackUrl, explodingKittensCardFaceUrl } from './visualAssets'
+import { explodingKittensCardFaceUrl } from './visualAssets'
 
 const props = defineProps<{
   game: GameView
@@ -59,6 +59,23 @@ const game = computed<ExplodingKittensView | null>(() => {
   return props.game.gameId === 'exploding-kittens' ? props.game : null
 })
 const remaining = computed(() => remainingSeconds(game.value?.phaseEndsAt ?? 0, now.value))
+const phaseDurationSeconds = computed(() => {
+  const currentGame = game.value
+  if (!currentGame) {
+    return 0
+  }
+  return currentGame.phase === 'nope'
+    ? currentGame.settings.nopeWindowSeconds
+    : currentGame.settings.turnTimeSeconds
+})
+const phaseProgress = computed(() => {
+  const deadline = game.value?.phaseEndsAt
+  const durationMs = phaseDurationSeconds.value * 1_000
+  if (deadline === null || deadline === undefined || durationMs === 0) {
+    return 0
+  }
+  return Math.max(0, Math.min(100, ((deadline - now.value) / durationMs) * 100))
+})
 const currentPlayer = computed(() => {
   return game.value?.seats.find((seat) => seat.id === game.value?.currentPlayerId) ?? null
 })
@@ -344,21 +361,7 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
       </article>
     </section>
 
-    <section class="ek-board" aria-label="牌桌">
-      <div class="ek-draw-pile">
-        <button
-          class="ek-pile-card"
-          type="button"
-          :disabled="!canTakeTurn"
-          :aria-label="`抽牌，牌堆剩 ${game.drawPileCount} 張`"
-          @click="drawCard"
-        >
-          <img :src="explodingKittensCardBackUrl()" alt="" />
-          <span>抽一張</span>
-        </button>
-        <strong>牌堆 {{ game.drawPileCount }} 張</strong>
-      </div>
-
+    <section class="ek-board" aria-label="棄牌區">
       <div class="ek-discard-area">
         <div class="ek-discard-heading">
           <strong>棄牌區</strong>
@@ -431,7 +434,24 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
       </div>
     </section>
 
-    <section class="ek-hand-panel" aria-labelledby="ek-hand-heading">
+    <section
+      class="ek-hand-panel"
+      :class="{ 'is-my-turn': canTakeTurn }"
+      aria-labelledby="ek-hand-heading"
+    >
+      <div
+        v-if="game.phaseEndsAt !== null && game.phase !== 'finished'"
+        class="ek-turn-progress"
+        :class="{ 'is-low': remaining <= 5 }"
+        role="progressbar"
+        :aria-label="`${PHASE_LABELS[game.phase]}倒數`"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-valuenow="Math.round(phaseProgress)"
+        :aria-valuetext="`剩餘 ${remaining} 秒`"
+      >
+        <span :style="{ transform: `scaleX(${phaseProgress / 100})` }"></span>
+      </div>
       <div class="ek-section-heading">
         <div>
           <p class="eyebrow">私人手牌</p>
@@ -484,9 +504,14 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
             </option>
           </select>
         </div>
-        <button class="button button-primary" type="button" :disabled="!canPlaySelected" @click="submitPlay">
-          打出所選牌
-        </button>
+        <div class="ek-action-buttons">
+          <button class="button button-primary" type="button" :disabled="!canPlaySelected" @click="submitPlay">
+            打出所選牌
+          </button>
+          <button class="button button-secondary" type="button" :disabled="!canTakeTurn" @click="drawCard">
+            抽牌並結束回合（牌堆 {{ game.drawPileCount }} 張）
+          </button>
+        </div>
       </div>
     </section>
 
@@ -703,48 +728,14 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
 }
 
 .ek-board {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: minmax(0, 0.25fr) minmax(0, 1fr);
-  gap: 16px;
-  align-items: stretch;
-}
-
-.ek-draw-pile {
-  display: grid;
-  align-content: start;
-  justify-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.ek-pile-card {
-  display: grid;
-  width: min(100%, 96px);
-  gap: 5px;
-  padding: 5px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #fff;
-  color: var(--ink);
-}
-
-.ek-pile-card img {
   display: block;
-  width: 100%;
-  border-radius: 8px;
-}
-
-.ek-pile-card:disabled {
-  cursor: not-allowed;
-  opacity: 0.65;
+  min-width: 0;
 }
 
 .ek-discard-area {
   display: grid;
   min-width: 0;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto;
   align-content: start;
   gap: 8px;
 }
@@ -862,6 +853,52 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
   margin-bottom: 12px;
 }
 
+.ek-hand-panel {
+  position: relative;
+}
+
+.ek-turn-progress {
+  position: absolute;
+  z-index: 1;
+  top: -1px;
+  right: 0;
+  left: 0;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 16px 16px 0 0;
+  background: rgb(105 87 232 / 12%);
+  pointer-events: none;
+}
+
+.ek-turn-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  transition: transform 180ms linear;
+  background: var(--purple);
+}
+
+.ek-turn-progress.is-low span {
+  background: #c64f48;
+}
+
+.ek-hand-panel.is-my-turn {
+  animation: ek-hand-panel-breathe 2s ease-in-out infinite;
+}
+
+@keyframes ek-hand-panel-breathe {
+  0%, 100% {
+    border-color: var(--line);
+    box-shadow: 0 0 0 0 rgb(105 87 232 / 0%);
+  }
+
+  50% {
+    border-color: var(--purple);
+    box-shadow: 0 0 0 5px rgb(105 87 232 / 13%);
+  }
+}
+
 .ek-section-heading h3 {
   font-size: 16px;
 }
@@ -877,20 +914,19 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
 }
 
 .ek-hand {
-  display: flex;
+  display: grid;
   width: 100%;
   min-width: 0;
   max-width: 100%;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 104px), 1fr));
   gap: 8px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
   padding: 4px 2px 10px;
 }
 
 .ek-hand-card {
   display: grid;
-  width: 104px;
-  min-width: 104px;
+  width: 100%;
+  min-width: 0;
   gap: 6px;
   padding: 5px;
   border: 2px solid transparent;
@@ -937,6 +973,23 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
+}
+
+.ek-action-buttons {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ek-action-buttons .button {
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 12px;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .ek-play-message {
@@ -1097,27 +1150,6 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
     padding: 9px;
   }
 
-  .ek-board {
-    grid-template-columns: minmax(62px, 80px) minmax(0, 1fr);
-    gap: 9px;
-    padding: 12px;
-  }
-
-  .ek-pile-card {
-    width: min(100%, 76px);
-  }
-
-  .ek-hand-card {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .ek-hand {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 84px), 1fr));
-    overflow: visible;
-  }
-
   .ek-pending-panel,
   .ek-choice-panel {
     align-items: flex-start;
@@ -1152,16 +1184,6 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
     font-size: clamp(20px, 7vw, 26px);
   }
 
-  .ek-board {
-    grid-template-columns: minmax(62px, 80px) minmax(0, 1fr);
-    gap: 8px;
-    padding: 10px;
-  }
-
-  .ek-pile-card {
-    max-width: 68px;
-  }
-
   .ek-discard-types {
     gap: 5px;
   }
@@ -1172,14 +1194,20 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
     font-size: 10px;
   }
 
-  .ek-hand-card {
-    width: 100%;
-    min-width: 0;
-  }
-
   .ek-peek-panel figure {
     width: 72px;
   }
+}
 
+@media (prefers-reduced-motion: reduce) {
+  .ek-hand-panel.is-my-turn {
+    animation: none;
+    border-color: var(--purple);
+    box-shadow: 0 0 0 3px rgb(105 87 232 / 13%);
+  }
+
+  .ek-turn-progress span {
+    transition: none;
+  }
 }
 </style>
