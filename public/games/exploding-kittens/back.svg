@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 336">
+  <rect x="3" y="3" width="234" height="330" rx="18" fill="#5C538B" stroke="#302D3D" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="19" y="19" width="202" height="298" rx="10" fill="#FFFDF7" stroke="#302D3D" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M36 44h.01M64 44h.01M92 44h.01M120 44h.01M148 44h.01M176 44h.01M204 44h.01M50 72h.01M78 72h.01M106 72h.01M134 72h.01M162 72h.01M190 72h.01M36 100h.01M64 100h.01M92 100h.01M120 100h.01M148 100h.01M176 100h.01M204 100h.01M50 128h.01M78 128h.01M106 128h.01M134 128h.01M162 128h.01M190 128h.01M36 156h.01M64 156h.01M92 156h.01M120 156h.01M148 156h.01M176 156h.01M204 156h.01M50 184h.01M78 184h.01M106 184h.01M134 184h.01M162 184h.01M190 184h.01M36 212h.01M64 212h.01M92 212h.01M120 212h.01M148 212h.01M176 212h.01M204 212h.01M50 240h.01M78 240h.01M106 240h.01M134 240h.01M162 240h.01M190 240h.01M36 268h.01M64 268h.01M92 268h.01M120 268h.01M148 268h.01M176 268h.01M204 268h.01M50 296h.01M78 296h.01M106 296h.01M134 296h.01M162 296h.01M190 296h.01" fill="none" stroke="#EEEBFF" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="120" cy="168" r="44" fill="#F2C86E" stroke="#302D3D" stroke-width="5"/>
+  <g transform="translate(113 169) scale(1.25)" fill="#302D3D" stroke="#302D3D" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M-9-12L-10-24L-1-16ZM9-12L10-24L1-16Z"/>
+    <circle cx="0" cy="-8" r="10"/>
+    <path d="M-8-2Q-12 14-15 22H15Q12 14 8-2Z"/>
+    <path d="M14 18Q28 16 24 2" fill="none" stroke-width="4"/>
+  </g>
+</svg>

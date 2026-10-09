@@ -4,6 +4,7 @@ import type { DrawGuessView } from './draw-guess'
 import type { WerewolfView } from './werewolf'
 import type { WordGuessView } from './word-guess'
 import type { RummikubView } from './rummikub'
+import type { ExplodingKittensView } from './exploding-kittens'
 
 export type GameView =
   | WordGuessView
@@ -12,3 +13,4 @@ export type GameView =
   | RummikubView
   | WerewolfView
   | AvalonView
+  | ExplodingKittensView

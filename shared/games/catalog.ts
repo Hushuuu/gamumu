@@ -54,6 +54,15 @@ const ALL_GAME_OPTIONS = [
     minPlayers: 5,
     maxPlayers: 10,
   },
+  {
+    id: 'exploding-kittens',
+    name: '爆炸貓',
+    description: '抽到爆炸貓就出局，最後存活者獲勝',
+    icon: 'games/icons/exploding-kittens.svg',
+    enabled: true,
+    minPlayers: 2,
+    maxPlayers: 9,
+  },
 ] as const
 
 export type GameId = (typeof ALL_GAME_OPTIONS)[number]['id']

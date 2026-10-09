@@ -3,6 +3,7 @@ import { getAvalonPlayerRange, isAvalonView } from './avalon'
 import { getGameOption, isGameId } from './catalog'
 import type { GameId } from './catalog'
 import { isDrawGuessView } from './draw-guess'
+import { isExplodingKittensView } from './exploding-kittens'
 import { getWerewolfPlayerRange, isWerewolfView } from './werewolf'
 import { isWordGuessView } from './word-guess'
 import { isRummikubView } from './rummikub'
@@ -43,6 +44,35 @@ export type {
   AvalonVoteResult,
 } from './avalon'
 export { isDrawGuessSettings, isDrawGuessView } from './draw-guess'
+export {
+  canPlayExplodingKittensAlone,
+  DEFAULT_EXPLODING_KITTENS_SETTINGS,
+  EXPLODING_KITTENS_ANNOUNCEMENT_LIMIT,
+  EXPLODING_KITTENS_CARD_NAMES,
+  EXPLODING_KITTENS_CARD_TYPES,
+  EXPLODING_KITTENS_MAX_CARDS,
+  EXPLODING_KITTENS_MAX_PLAYERS,
+  EXPLODING_KITTENS_PRIVATE_EVENT,
+  isExplodingKittensCardType,
+  isExplodingKittensComboType,
+  isExplodingKittensPrivateState,
+  isExplodingKittensSettings,
+  isExplodingKittensView,
+} from './exploding-kittens'
+export type {
+  ExplodingKittensCardType,
+  ExplodingKittensHandCard,
+  ExplodingKittensPending,
+  ExplodingKittensPendingKind,
+  ExplodingKittensPhase,
+  ExplodingKittensPlay,
+  ExplodingKittensPlayKind,
+  ExplodingKittensPrivateState,
+  ExplodingKittensSeat,
+  ExplodingKittensSeatStatus,
+  ExplodingKittensSettings,
+  ExplodingKittensView,
+} from './exploding-kittens'
 export {
   DEFAULT_WEREWOLF_SETTINGS,
   WEREWOLF_PRIVATE_EVENT,
@@ -135,6 +165,7 @@ const GAME_VIEW_VALIDATORS: Record<GameId, (value: unknown) => boolean> = {
   rummikub: isRummikubView,
   werewolf: isWerewolfView,
   avalon: isAvalonView,
+  'exploding-kittens': isExplodingKittensView,
 }
 
 export function getPlayerRange(

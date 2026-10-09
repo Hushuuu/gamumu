@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 336">
+  <rect x="3" y="3" width="234" height="330" rx="18" fill="#FFFDF7" stroke="#302D3D" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M58 146L66 84L112 124Z" fill="#F2C86E" stroke="#302D3D" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M182 146L174 84L128 124Z" fill="#F2C86E" stroke="#302D3D" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M70 128L74 102L98 120Z" fill="#F28B7F"/>
+  <path d="M170 128L166 102L142 120Z" fill="#F28B7F"/>
+  <ellipse cx="120" cy="174" rx="68" ry="56" fill="#F2C86E" stroke="#302D3D" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+  <g fill="#302D3D" stroke="#302D3D" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M56 146C58 106 88 94 120 94C152 94 182 106 184 146Q120 118 56 146Z"/>
+    <ellipse cx="88" cy="140" rx="8" ry="12"/>
+    <ellipse cx="152" cy="140" rx="8" ry="12"/>
+  </g>
+  <g fill="#D5AA58">
+    <path d="M56 146C58 106 88 94 120 94C152 94 182 106 184 146Q120 118 56 146Z"/>
+    <ellipse cx="88" cy="140" rx="8" ry="12"/>
+    <ellipse cx="152" cy="140" rx="8" ry="12"/>
+  </g>
+  <path d="M74 126Q88 110 108 106" fill="none" stroke="#FFFDF7" stroke-width="4" stroke-linecap="round"/>
+  <ellipse cx="80" cy="190" rx="10" ry="6" fill="#F28B7F" opacity="0.6"/>
+  <ellipse cx="160" cy="190" rx="10" ry="6" fill="#F28B7F" opacity="0.6"/>
+  <circle cx="96" cy="170" r="8" fill="#302D3D"/>
+  <circle cx="98.5" cy="167.5" r="2.6" fill="#FFFDF7"/>
+  <circle cx="144" cy="170" r="8" fill="#302D3D"/>
+  <circle cx="146.5" cy="167.5" r="2.6" fill="#FFFDF7"/>
+  <ellipse cx="120" cy="198" rx="30" ry="18" fill="#FFFDF7" stroke="#302D3D" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M114 186H126L120 192Z" fill="#F28B7F" stroke="#302D3D" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M120 192V197M120 197Q113 204 107 198M120 197Q127 204 133 198" fill="none" stroke="#302D3D" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

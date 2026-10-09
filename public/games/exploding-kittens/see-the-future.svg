@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 336">
+  <rect x="3" y="3" width="234" height="330" rx="18" fill="#FFFDF7" stroke="#302D3D" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M42 124Q120 20 198 124Q120 228 42 124Z" fill="#5C538B" stroke="#302D3D" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M56 124Q120 40 184 124Q120 208 56 124Z" fill="#FFFDF7" stroke="#302D3D" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="120" cy="124" r="26" fill="#4C68B1" stroke="#302D3D" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="120" cy="124" r="11" fill="#302D3D"/>
+  <circle cx="116" cy="118" r="3.5" fill="#FFFDF7"/>
+  <rect x="96" y="192" width="48" height="66" rx="7" fill="#FFFDF7" stroke="#302D3D" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-20 120 258)"/>
+  <rect x="96" y="192" width="48" height="66" rx="7" fill="#FFFDF7" stroke="#302D3D" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" transform="rotate(20 120 258)"/>
+  <rect x="96" y="192" width="48" height="66" rx="7" fill="#FFFDF7" stroke="#302D3D" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M120 214Q122 224 132 226Q122 228 120 238Q118 228 108 226Q118 224 120 214Z" fill="#5C538B"/>
+</svg>
