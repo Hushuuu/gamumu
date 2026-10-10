@@ -74,6 +74,20 @@ const priv = computed(() => {
 const phase = computed(() => view.value?.phase ?? 'finished')
 const canAct = computed(() => Boolean(props.canInteract && priv.value?.alive))
 const aliveSet = computed(() => new Set(view.value?.aliveIds ?? []))
+const canEndAnnouncement = computed(() => {
+  const current = view.value
+  if (!current) {
+    return false
+  }
+  if (current.phase === 'dawn' || current.phase === 'vote-result') {
+    return true
+  }
+  return (
+    current.phase === 'hunter-shot' &&
+    current.hunterShot !== null &&
+    current.shooterId === current.hunterShot.shooterId
+  )
+})
 const remainingSeconds = computed(() => {
   const deadline = view.value?.phaseEndsAt
   return deadline ? Math.max(0, Math.ceil((deadline - now.value) / 1_000)) : 0
@@ -93,6 +107,12 @@ const phaseDurationMs = computed(() => {
     case 'vote-result':
       return current.settings.announcementSeconds * 1_000
     case 'hunter-shot':
+      if (
+        current.hunterShot !== null &&
+        current.shooterId === current.hunterShot.shooterId
+      ) {
+        return current.settings.announcementSeconds * 1_000
+      }
       return WEREWOLF_HUNTER_SHOT_MS
     case 'day-discussion':
       return (
@@ -503,6 +523,12 @@ function endDiscussion(): void {
     emit('game-action', 'end_discussion', {})
   }
 }
+
+function endAnnouncement(): void {
+  if (props.canInteract && props.isHost) {
+    emit('game-action', 'end_announcement', {})
+  }
+}
 </script>
 
 <template>
@@ -633,6 +659,15 @@ function endDiscussion(): void {
         <WerewolfPhaseIllustration phase="dawn" />
         <h3>天亮了</h3>
         <p>{{ deathText }}</p>
+        <button
+          v-if="isHost"
+          class="button button-secondary ww-inline-button"
+          type="button"
+          :disabled="!props.canInteract"
+          @click="endAnnouncement"
+        >
+          提早結束公告
+        </button>
       </section>
 
       <section v-else-if="phase === 'hunter-shot'" class="ww-panel ww-phase-panel" aria-live="polite">
@@ -666,6 +701,15 @@ function endDiscussion(): void {
           </h3>
           <p>{{ hunterText }}</p>
         </template>
+        <button
+          v-if="isHost && canEndAnnouncement"
+          class="button button-secondary ww-inline-button"
+          type="button"
+          :disabled="!props.canInteract"
+          @click="endAnnouncement"
+        >
+          提早結束公告
+        </button>
       </section>
 
       <section v-else-if="phase === 'pk-discussion'" class="ww-panel ww-phase-panel" aria-live="polite">
@@ -814,6 +858,15 @@ function endDiscussion(): void {
           </li>
         </ul>
         <p v-if="view.hunterShot" class="ww-hint">{{ hunterText }}</p>
+        <button
+          v-if="isHost"
+          class="button button-secondary ww-inline-button"
+          type="button"
+          :disabled="!props.canInteract"
+          @click="endAnnouncement"
+        >
+          提早結束公告
+        </button>
       </section>
 
       <PlayerPicker

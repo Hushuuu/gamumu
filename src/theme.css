@@ -35,7 +35,8 @@
   color: var(--ink);
 }
 
-:root[data-theme='dark'] .ek-announcements ol {
+:root[data-theme='dark'] .ek-announcements ol,
+:root[data-theme='dark'] .ek-announcements ul {
   color: var(--ink-soft);
 }
 

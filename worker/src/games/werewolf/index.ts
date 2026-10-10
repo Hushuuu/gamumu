@@ -675,6 +675,30 @@ function dispatchAction(
       enterVote(room, game, now)
       return { ok: true, changed: true }
     }
+    case 'end_announcement': {
+      if (playerId !== room.hostId) {
+        return failure('HOST_ONLY', '只有房主可以提早結束結果公告。')
+      }
+
+      switch (game.phase) {
+        case 'dawn':
+          proceedAfterDeaths(room, game, now, 'day-discussion')
+          break
+        case 'vote-result':
+          proceedAfterDeaths(room, game, now, 'night')
+          break
+        case 'hunter-shot':
+          if (game.pendingShooterId !== null) {
+            return failure('INVALID_PHASE', '獵人尚未完成開槍。')
+          }
+          proceedAfterDeaths(room, game, now, game.afterHunter)
+          break
+        default:
+          return failure('INVALID_PHASE', '現在不是結果公告階段。')
+      }
+
+      return { ok: true, changed: true }
+    }
     case 'select_vote':
     case 'cast_vote': {
       const isPkVote = game.phase === 'pk-vote'
