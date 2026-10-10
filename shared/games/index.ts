@@ -54,7 +54,6 @@ export {
 export {
   canPlayExplodingKittensAlone,
   DEFAULT_EXPLODING_KITTENS_SETTINGS,
-  EXPLODING_KITTENS_ANNOUNCEMENT_LIMIT,
   EXPLODING_KITTENS_CARD_COPIES_PER_DECK,
   EXPLODING_KITTENS_CARD_NAMES,
   EXPLODING_KITTENS_CARD_TYPES,
@@ -71,6 +70,7 @@ export {
 export type {
   ExplodingKittensCardType,
   ExplodingKittensCardTypeCount,
+  ExplodingKittensFinalHand,
   ExplodingKittensHandCard,
   ExplodingKittensPending,
   ExplodingKittensPendingKind,

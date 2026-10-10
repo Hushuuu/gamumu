@@ -17,6 +17,7 @@ export interface StoredExplodingKittensSeat {
   name: string
   status: ExplodingKittensSeatStatus
   hand: StoredExplodingKittensCard[]
+  finalHand: ExplodingKittensCardType[] | null
 }
 
 export interface StoredExplodingKittensPlay {

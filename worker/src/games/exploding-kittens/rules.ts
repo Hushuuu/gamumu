@@ -1,6 +1,5 @@
 import {
   canPlayExplodingKittensAlone,
-  EXPLODING_KITTENS_ANNOUNCEMENT_LIMIT,
   EXPLODING_KITTENS_CARD_COPIES_PER_DECK,
   EXPLODING_KITTENS_CARD_NAMES,
   EXPLODING_KITTENS_CARD_TYPES,
@@ -54,9 +53,6 @@ function mintCard(game: StoredExplodingKittens, type: ExplodingKittensCardType):
 
 function announce(game: StoredExplodingKittens, message: string): void {
   game.announcements.push(message)
-  if (game.announcements.length > EXPLODING_KITTENS_ANNOUNCEMENT_LIMIT) {
-    game.announcements.splice(0, game.announcements.length - EXPLODING_KITTENS_ANNOUNCEMENT_LIMIT)
-  }
 }
 
 function findSeat(game: StoredExplodingKittens, playerId: string): StoredExplodingKittensSeat | undefined {
@@ -137,6 +133,11 @@ function finishIfOver(game: StoredExplodingKittens): boolean {
   }
 
   const winner = alive.length === 1 ? alive[0] : undefined
+  for (const seat of game.seats) {
+    if (seat.finalHand == null) {
+      seat.finalHand = seat.hand.map((card) => card.type)
+    }
+  }
   game.phase = 'finished'
   game.currentPlayerId = null
   game.turnsLeft = 0
@@ -411,6 +412,7 @@ function eliminate(
   kitten: StoredExplodingKittensCard,
   now: number,
 ): void {
+  actor.finalHand = actor.hand.map((card) => card.type)
   actor.status = 'eliminated'
   game.discard.push(...actor.hand.map((card) => card.type), kitten.type)
   actor.hand = []
@@ -775,6 +777,7 @@ export function leaveExplodingKittens(game: StoredExplodingKittens, playerId: st
     return false
   }
 
+  seat.finalHand = seat.hand.map((card) => card.type)
   seat.status = 'left'
   game.discard.push(...seat.hand.map((card) => card.type))
   seat.hand = []
@@ -828,6 +831,7 @@ export function createExplodingKittensGame(
         name: player.name,
         status: 'alive',
         hand: [],
+        finalHand: null,
       }),
     ),
     currentPlayerId: null,

@@ -198,7 +198,7 @@ const content = computed<RulesContent>(() => {
           {
             title: '計時',
             items: [
-              `每回合限時 ${settingNumber('turnTimeSeconds', 20)} 秒；休想判定時間為 ${settingNumber('nopeWindowSeconds', 5)} 秒。逾時會由系統自動處理。`,
+              `每回合限時 ${settingNumber('turnTimeSeconds', 20)} 秒；休想判定時間為 ${settingNumber('nopeWindowSeconds', 5)} 秒；回合通知顯示 ${settingNumber('turnNoticeSeconds', 5)} 秒。逾時會由系統自動處理。`,
             ],
           },
         ],

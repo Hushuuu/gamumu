@@ -41,6 +41,12 @@ const emit = defineEmits<{
   'game-action': [action: string, payload: Record<string, unknown>]
 }>()
 
+interface ExplodingKittensNotice {
+  kind: 'turn' | 'explosion' | 'elimination'
+  title: string
+  message: string
+}
+
 const EMPTY_PRIVATE_STATE: ExplodingKittensPrivateState = {
   hand: [],
   peek: null,
@@ -64,8 +70,11 @@ const targetId = ref('')
 const namedType = ref<ExplodingKittensCardType | ''>('')
 const giveCardId = ref('')
 const defusePosition = ref<number | 'random'>(1)
+const playDecisionOpen = ref(false)
+const noticeQueue = ref<ExplodingKittensNotice[]>([])
 const now = ref(Date.now())
 let clockTimer: number | undefined
+let noticeDismissTimer: number | undefined
 
 const game = computed<ExplodingKittensView | null>(() => {
   return props.game.gameId === 'exploding-kittens' ? props.game : null
@@ -161,6 +170,18 @@ const canPlaySelected = computed(() => {
   }
   return true
 })
+const needsPlayDecision = computed(() => {
+  return playAnalysis.value.needsTarget || playAnalysis.value.needsNamedType
+})
+const canOpenPlayDecision = computed(() => {
+  const analysis = playAnalysis.value
+  return Boolean(
+    canTakeTurn.value &&
+    analysis.kind &&
+    (!analysis.needsTarget || possibleTargets.value.length > 0) &&
+    (!analysis.needsNamedType || namedOptions.value.length > 0),
+  )
+})
 const nopeDialog = computed(() => {
   const currentGame = game.value
   const pending = currentGame?.pending
@@ -174,21 +195,49 @@ const nopeDialog = computed(() => {
   }
 
   const isCounter = pending.nopeCount > 0
-  let message: string
+  const actor = playerName(pending.actorId)
+  const target = pending.targetId ? playerName(pending.targetId) : ''
+  let effect = `${actor} 打出${formatCardList(pending.cardTypes)}`
+  if (pending.playKind === 'pair' && target) {
+    effect = `${actor} 對 ${target} 使用連擊；若效果生效，受影響玩家是 ${target}`
+  } else if (pending.playKind === 'triple' && target) {
+    effect = `${actor} 對 ${target} 使用三條，指定${pending.namedType ? cardName(pending.namedType) : '牌名'}；若效果生效，受影響玩家是 ${target}`
+  } else if (pending.playKind === 'five') {
+    effect = `${actor} 使用五彩繽紛，指定從棄牌區取回${pending.namedType ? cardName(pending.namedType) : '牌'}`
+  } else if (pending.cardTypes[0] === 'attack') {
+    const nextPlayer = nextAliveSeatAfter(pending.actorId)
+    effect = `${actor} 打出攻擊卡；若效果生效，下一位 ${nextPlayer?.name ?? '玩家'} 需連續行動兩回合`
+  } else if (pending.cardTypes[0] === 'favor' && target) {
+    effect = `${actor} 對 ${target} 使用恩惠；若效果生效，${target} 需交出一張手牌`
+  }
+
+  let message = `${effect}。`
   if (!isCounter) {
-    message = `${playerName(pending.actorId)} 打出${formatCardList(pending.cardTypes)}，是否要使用休想卡？`
+    message += '是否要使用休想卡？'
   } else {
     const lastNopeId = pending.nopedBy[pending.nopedBy.length - 1]
     if (!lastNopeId) {
       return null
     }
     const previousNopeId = pending.nopedBy[pending.nopedBy.length - 2]
-    message = previousNopeId
+    const counter = previousNopeId
       ? `${playerName(lastNopeId)}：休想 ${playerName(previousNopeId)} 的休想卡`
-      : `${playerName(lastNopeId)} 對 ${playerName(pending.actorId)} 使用休想卡`
+      : `${playerName(lastNopeId)} 對 ${actor} 使用休想卡`
+    message = `${counter}。目前待判定效果：${effect}。`
   }
 
   return { isCounter, message }
+})
+const activeNotice = computed(() => {
+  if (
+    nopeDialog.value ||
+    playDecisionOpen.value ||
+    (game.value?.phase === 'favor' && privateState.value.choice === 'give') ||
+    (game.value?.phase === 'defuse' && privateState.value.choice === 'defuse')
+  ) {
+    return null
+  }
+  return noticeQueue.value[0] ?? null
 })
 const nopeDialogPreview = computed(() => {
   const pending = game.value?.pending
@@ -286,11 +335,109 @@ watch(() => props.gameEvent, (event) => {
   }
 }, { immediate: true })
 
+let previousAnnouncements: string[] | null = null
+watch(() => game.value?.announcements, (announcements) => {
+  if (!announcements) {
+    return
+  }
+
+  if (previousAnnouncements === null) {
+    previousAnnouncements = [...announcements]
+    return
+  }
+  const stillSameHistory = previousAnnouncements.length <= announcements.length &&
+    previousAnnouncements.every((announcement, index) => announcements[index] === announcement)
+  if (!stillSameHistory) {
+    previousAnnouncements = [...announcements]
+    return
+  }
+
+  const newAnnouncements = announcements.slice(previousAnnouncements.length)
+  previousAnnouncements = [...announcements]
+  const myName = playerName(props.playerId)
+  for (const announcement of newAnnouncements) {
+    const explosionMarker = ' 抽到了爆炸貓！'
+    const explosionIndex = announcement.indexOf(explosionMarker)
+    if (explosionIndex >= 0) {
+      const actorName = announcement.slice(0, explosionIndex)
+      if (actorName !== myName) {
+        noticeQueue.value.push({
+          kind: 'explosion',
+          title: '有人抽到爆炸貓！',
+          message: `${actorName} 抽到了爆炸貓。`,
+        })
+      }
+    }
+
+    const eliminationMarker = ' 被淘汰了'
+    if (announcement.endsWith(eliminationMarker)) {
+      const actorName = announcement.slice(0, -eliminationMarker.length)
+      noticeQueue.value.push({
+        kind: 'elimination',
+        title: '玩家出局',
+        message: `${actorName} 被淘汰了。`,
+      })
+    }
+  }
+}, { immediate: true, deep: true })
+
+watch(() => JSON.stringify([game.value?.currentPlayerId ?? null, game.value?.turnsLeft ?? null]), () => {
+  if (!game.value || game.value.phase !== 'turn' || !game.value.currentPlayerId) {
+    return
+  }
+
+  const currentId = game.value.currentPlayerId
+  const turnsLeft = game.value.turnsLeft
+  const attackSource = turnsLeft > 1 ? attackSourceFor(currentId) : null
+  const attackCause = attackSource ? `（${attackSource} 的攻擊卡生效）` : ''
+  const message = currentId === props.playerId
+    ? turnsLeft > 1
+      ? `輪到你了，需要連續行動 ${turnsLeft} 回合${attackCause}。`
+      : '輪到你了，請出牌或抽牌。'
+    : turnsLeft > 1
+      ? `目前輪到 ${playerName(currentId)}，需要連續行動 ${turnsLeft} 回合${attackCause}。`
+      : `目前輪到 ${playerName(currentId)} 的回合。`
+  noticeQueue.value = noticeQueue.value.filter((notice) => notice.kind !== 'turn')
+  noticeQueue.value.push({
+    kind: 'turn',
+    title: currentId === props.playerId ? '輪到你了' : '回合提醒',
+    message,
+  })
+}, { immediate: true })
+
+watch(() => game.value?.phase, (phase) => {
+  if (phase !== 'turn') {
+    noticeQueue.value = noticeQueue.value.filter((notice) => notice.kind !== 'turn')
+  }
+})
+
+watch(
+  () => [activeNotice.value, game.value?.settings.turnNoticeSeconds] as const,
+  ([notice, durationSeconds]) => {
+    if (noticeDismissTimer !== undefined) {
+      window.clearTimeout(noticeDismissTimer)
+      noticeDismissTimer = undefined
+    }
+    if (!notice || notice.kind !== 'turn') {
+      return
+    }
+
+    noticeDismissTimer = window.setTimeout(() => {
+      if (noticeQueue.value[0] === notice) {
+        dismissNotice()
+      }
+      noticeDismissTimer = undefined
+    }, (durationSeconds ?? 5) * 1_000)
+  },
+  { immediate: true },
+)
+
 watch(() => [game.value?.phase, game.value?.currentPlayerId], () => {
   selectedCardIds.value = []
   targetId.value = ''
   namedType.value = ''
   giveCardId.value = ''
+  playDecisionOpen.value = false
 })
 
 watch(() => privateState.value.hand.map((card) => card.id).join(','), () => {
@@ -317,6 +464,9 @@ onUnmounted(() => {
   if (clockTimer !== undefined) {
     window.clearInterval(clockTimer)
   }
+  if (noticeDismissTimer !== undefined) {
+    window.clearTimeout(noticeDismissTimer)
+  }
 })
 
 function playerName(id: string): string {
@@ -339,6 +489,17 @@ function nextAliveSeatAfter(playerId: string) {
     }
   }
   return null
+}
+
+function attackSourceFor(playerId: string): string | null {
+  const attack = [...(game.value?.lastTurnPlays ?? [])]
+    .reverse()
+    .find((play) => play.kind === 'card' && play.cardTypes[0] === 'attack' && nextAliveSeatAfter(play.playerId)?.id === playerId)
+  return attack ? playerName(attack.playerId) : null
+}
+
+function dismissNotice(): void {
+  noticeQueue.value.shift()
 }
 
 function toggleCard(cardId: string): void {
@@ -372,13 +533,25 @@ function submitPlay(): void {
     payload.namedType = namedType.value
   }
   emit('game-action', 'play', payload)
+  playDecisionOpen.value = false
   selectedCardIds.value = []
   targetId.value = ''
   namedType.value = ''
 }
 
+function playOrChoose(): void {
+  if (needsPlayDecision.value) {
+    if (canOpenPlayDecision.value) {
+      playDecisionOpen.value = true
+    }
+    return
+  }
+  submitPlay()
+}
+
 function drawCard(): void {
   if (canTakeTurn.value) {
+    playDecisionOpen.value = false
     selectedCardIds.value = []
     targetId.value = ''
     namedType.value = ''
@@ -401,7 +574,6 @@ function passNope(): void {
 function giveCard(): void {
   if (canGiveCard.value && giveCardId.value) {
     emit('game-action', 'give', { cardId: giveCardId.value })
-    giveCardId.value = ''
   }
 }
 
@@ -482,46 +654,6 @@ function placeDefuse(): void {
       </div>
     </section>
 
-    <section v-if="game.phase === 'favor' && privateState.choice === 'give'" class="ek-choice-panel">
-      <div>
-        <strong>恩惠：選擇一張手牌交出</strong>
-        <p>對方會收到你選擇的牌。</p>
-      </div>
-      <button
-        class="button button-primary"
-        type="button"
-        :disabled="!canGiveCard || !giveCardId"
-        @click="giveCard"
-      >
-        交出所選手牌
-      </button>
-    </section>
-
-    <section v-if="game.phase === 'defuse' && privateState.choice === 'defuse'" class="ek-choice-panel">
-      <div>
-        <strong>拆除成功，選擇爆炸貓放回的位置</strong>
-        <p>放在第 1 張最靠近牌堆頂端，或交由系統隨機放置。</p>
-      </div>
-      <div class="ek-defuse-controls">
-        <label>
-          <span class="sr-only">放回位置</span>
-          <select v-model="defusePosition" :disabled="!canPlaceDefuse">
-            <option
-              v-for="position in privateState.maxPosition ?? 0"
-              :key="position"
-              :value="position"
-            >
-              第 {{ position }} 張
-            </option>
-            <option value="random">隨機放置</option>
-          </select>
-        </label>
-        <button class="button button-primary" type="button" :disabled="!canPlaceDefuse" @click="placeDefuse">
-          放回牌堆
-        </button>
-      </div>
-    </section>
-
     <section v-if="privateState.peek?.length" class="ek-peek-panel">
       <strong>你預見的牌堆頂端</strong>
       <div>
@@ -584,27 +716,14 @@ function placeDefuse(): void {
         <p class="ek-play-message" :class="{ 'is-invalid': selectedCardIds.length > 0 && !playAnalysis.kind }">
           {{ playAnalysis.message }}
         </p>
-        <div v-if="playAnalysis.needsTarget" class="ek-inline-field">
-          <label for="ek-target">指定玩家</label>
-          <select id="ek-target" v-model="targetId" :disabled="possibleTargets.length === 0">
-            <option value="" disabled>選擇目標</option>
-            <option v-for="seat in possibleTargets" :key="seat.id" :value="seat.id">
-              {{ seat.name }}（{{ seat.handCount }} 張）
-            </option>
-          </select>
-        </div>
-        <div v-if="playAnalysis.needsNamedType" class="ek-inline-field">
-          <label for="ek-named-type">指定牌名</label>
-          <select id="ek-named-type" v-model="namedType">
-            <option value="" disabled>選擇牌名</option>
-            <option v-for="type in namedOptions" :key="type" :value="type">
-              {{ cardName(type) }}
-            </option>
-          </select>
-        </div>
         <div class="ek-action-buttons">
-          <button class="button button-primary" type="button" :disabled="!canPlaySelected" @click="submitPlay">
-            打出所選牌
+          <button
+            class="button button-primary"
+            type="button"
+            :disabled="needsPlayDecision ? !canOpenPlayDecision : !canPlaySelected"
+            @click="playOrChoose"
+          >
+            {{ needsPlayDecision ? '選擇對象與效果' : '打出所選牌' }}
           </button>
           <button class="button button-secondary" type="button" :disabled="!canTakeTurn" @click="drawCard">
             抽牌並結束回合
@@ -613,6 +732,15 @@ function placeDefuse(): void {
       </div>
     </section>
 
+    <section class="ek-announcements" aria-label="完整遊戲紀錄">
+      <h3>出牌紀錄</h3>
+      <ul>
+        <li v-for="(announcement, index) in [...game.announcements].reverse()" :key="`${index}-${announcement}`">
+          {{ announcement }}
+        </li>
+      </ul>
+    </section>  
+    
     <section class="ek-card-counts-panel" aria-labelledby="ek-card-counts-heading">
       <div class="ek-section-heading">
         <div>
@@ -628,15 +756,6 @@ function placeDefuse(): void {
         </span>
       </div>
       <p v-else class="ek-empty-copy">目前沒有牌組資訊。</p>
-    </section>
-
-    <section class="ek-announcements" aria-label="遊戲近況">
-      <h3>最近出牌</h3>
-      <ol>
-        <li v-for="(announcement, index) in [...game.announcements].reverse()" :key="`${index}-${announcement}`">
-          {{ announcement }}
-        </li>
-      </ol>
     </section>
 
     <Teleport to="body">
@@ -685,8 +804,143 @@ function placeDefuse(): void {
               :disabled="!canRespondNope"
               @click="passNope"
             >
-              {{ privateState.canNope ? '略過' : '確定' }}
+              {{ privateState.canNope ? '略過' : '略過' }}
             </button>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div v-if="playDecisionOpen && canTakeTurn" class="ek-modal-backdrop">
+        <section
+          class="ek-modal-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ek-play-decision-title"
+        >
+          <p class="eyebrow">出牌決定</p>
+          <h2 id="ek-play-decision-title">選擇出牌對象與效果</h2>
+          <p class="ek-nope-dialog-message">{{ playAnalysis.message }}</p>
+          <div v-if="playAnalysis.needsTarget" class="ek-modal-field">
+            <label for="ek-target">指定玩家</label>
+            <select id="ek-target" v-model="targetId">
+              <option value="" disabled>選擇目標</option>
+              <option v-for="seat in possibleTargets" :key="seat.id" :value="seat.id">
+                {{ seat.name }}（{{ seat.handCount }} 張手牌）
+              </option>
+            </select>
+          </div>
+          <div v-if="playAnalysis.needsNamedType" class="ek-modal-field">
+            <label for="ek-named-type">指定牌名</label>
+            <select id="ek-named-type" v-model="namedType">
+              <option value="" disabled>選擇牌名</option>
+              <option v-for="type in namedOptions" :key="type" :value="type">
+                {{ cardName(type) }}
+              </option>
+            </select>
+          </div>
+          <div class="ek-nope-dialog-actions">
+            <button class="button button-secondary" type="button" @click="playDecisionOpen = false">
+              返回
+            </button>
+            <button class="button button-primary" type="button" :disabled="!canPlaySelected" @click="submitPlay">
+              確認出牌
+            </button>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="game.phase === 'favor' && privateState.choice === 'give'"
+        class="ek-modal-backdrop"
+      >
+        <section
+          class="ek-modal-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ek-favor-dialog-title"
+        >
+          <p class="eyebrow">恩惠決定</p>
+          <h2 id="ek-favor-dialog-title">{{ playerName(game.pending?.actorId ?? '') }} 對你使用恩惠</h2>
+          <p class="ek-nope-dialog-message">請選一張手牌交給 {{ playerName(game.pending?.actorId ?? '') }}。</p>
+          <div v-if="sortedHand.length" class="ek-give-options">
+            <button
+              v-for="card in sortedHand"
+              :key="card.id"
+              class="ek-give-option"
+              :class="{ 'is-selected': giveCardId === card.id }"
+              type="button"
+              :disabled="!canGiveCard"
+              :aria-pressed="giveCardId === card.id"
+              @click="toggleCard(card.id)"
+            >
+              <img :src="explodingKittensCardFaceUrl(card.type)" :alt="cardName(card.type)" />
+              <span>{{ cardName(card.type) }}</span>
+            </button>
+          </div>
+          <p v-else class="ek-empty-copy">目前沒有可以交出的手牌。</p>
+          <div class="ek-nope-dialog-actions">
+            <button class="button button-primary" type="button" :disabled="!canGiveCard || !giveCardId" @click="giveCard">
+              確認交出
+            </button>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="game.phase === 'defuse' && privateState.choice === 'defuse'"
+        class="ek-modal-backdrop"
+      >
+        <section
+          class="ek-modal-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ek-defuse-dialog-title"
+        >
+          <p class="eyebrow">拆除成功</p>
+          <h2 id="ek-defuse-dialog-title">選擇爆炸貓放回的位置</h2>
+          <p class="ek-nope-dialog-message">第 1 張最靠近牌堆頂端，也可以交由系統隨機放置。</p>
+          <div class="ek-modal-field">
+            <label for="ek-defuse-position">放回位置</label>
+            <select id="ek-defuse-position" v-model="defusePosition" :disabled="!canPlaceDefuse">
+              <option
+                v-for="position in privateState.maxPosition ?? 0"
+                :key="position"
+                :value="position"
+              >
+                第 {{ position }} 張
+              </option>
+              <option value="random">隨機放置</option>
+            </select>
+          </div>
+          <div class="ek-nope-dialog-actions">
+            <button class="button button-primary" type="button" :disabled="!canPlaceDefuse" @click="placeDefuse">
+              確認放回
+            </button>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div v-if="activeNotice" class="ek-modal-backdrop ek-notice-backdrop">
+        <section
+          class="ek-modal-dialog ek-notice-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ek-notice-title"
+          aria-describedby="ek-notice-message"
+        >
+          <p class="eyebrow">{{ activeNotice.kind === 'turn' ? '回合通知' : '牌局事件' }}</p>
+          <h2 id="ek-notice-title">{{ activeNotice.title }}</h2>
+          <p id="ek-notice-message" class="ek-nope-dialog-message">{{ activeNotice.message }}</p>
+          <div class="ek-nope-dialog-actions">
+            <button class="button button-primary" type="button" @click="dismissNotice">知道了</button>
           </div>
         </section>
       </div>
@@ -1164,11 +1418,20 @@ function placeDefuse(): void {
   font-weight: 700;
 }
 
-.ek-announcements ol {
+.ek-announcements {
+  box-sizing: border-box;
+  max-height: 280px;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
+.ek-announcements ul {
   display: grid;
   gap: 6px;
   margin: 0;
-  padding-left: 20px;
+  padding: 0;
+  list-style: none;
   color: #5c5875;
   font-size: 11px;
 }
@@ -1179,7 +1442,6 @@ function placeDefuse(): void {
 }
 
 .ek-announcements li {
-  padding-left: 2px;
   overflow-wrap: anywhere;
 }
 
@@ -1187,7 +1449,8 @@ function placeDefuse(): void {
   overflow-wrap: anywhere;
 }
 
-.ek-nope-backdrop {
+.ek-nope-backdrop,
+.ek-modal-backdrop {
   position: fixed;
   z-index: 12000;
   inset: 0;
@@ -1197,7 +1460,12 @@ function placeDefuse(): void {
   background: rgb(25 22 39 / 68%);
 }
 
-.ek-nope-dialog {
+.ek-notice-backdrop {
+  z-index: 11990;
+}
+
+.ek-nope-dialog,
+.ek-modal-dialog {
   display: grid;
   width: min(100%, 500px);
   max-height: min(88vh, 660px);
@@ -1211,7 +1479,12 @@ function placeDefuse(): void {
   color: var(--ink);
 }
 
-.ek-nope-dialog h2 {
+.ek-modal-dialog {
+  width: min(100%, 540px);
+}
+
+.ek-nope-dialog h2,
+.ek-modal-dialog h2 {
   margin: 0;
   font-size: clamp(20px, 5vw, 25px);
   line-height: 1.3;
@@ -1281,6 +1554,75 @@ function placeDefuse(): void {
 .ek-nope-dialog-actions .button {
   min-height: 44px;
   flex: 1 1 140px;
+}
+
+.ek-modal-field {
+  display: grid;
+  gap: 5px;
+}
+
+.ek-modal-field label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ek-modal-field select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.ek-give-options {
+  display: grid;
+  max-height: min(42vh, 320px);
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+  overflow-y: auto;
+  padding: 3px;
+}
+
+.ek-give-option {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  padding: 5px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: #f8f7fc;
+  color: var(--ink);
+  text-align: center;
+}
+
+.ek-give-option.is-selected {
+  border-color: var(--purple);
+  background: var(--purple-light);
+}
+
+.ek-give-option:disabled {
+  cursor: default;
+}
+
+.ek-give-option img {
+  display: block;
+  width: 100%;
+  max-height: 120px;
+  aspect-ratio: 5 / 6;
+  box-sizing: border-box;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fffdf7;
+  object-fit: contain;
+}
+
+.ek-give-option span {
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .sr-only {

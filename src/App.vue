@@ -1345,7 +1345,12 @@ function connectionLabel(): string {
           </div>
 
           <div v-else class="finished-state">
-            <component :is="gameComponents.finished" :players="sortedPlayers" :game="snapshot.game" />
+            <component
+              :is="gameComponents.finished"
+              :players="sortedPlayers"
+              :game="snapshot.game"
+              :player-id="snapshot.game?.gameId === 'exploding-kittens' ? playerId : undefined"
+            />
             <button
               v-if="isHost"
               class="button button-primary start-button"

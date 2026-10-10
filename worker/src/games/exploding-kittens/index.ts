@@ -21,9 +21,13 @@ function failure(code: string, message: string, changed = false): GameActionResu
 }
 
 function currentSettings(room: GameRoomContext) {
-  return isExplodingKittensSettings(room.gameSettings)
+  const settings = isExplodingKittensSettings(room.gameSettings)
     ? { ...room.gameSettings }
     : { ...DEFAULT_EXPLODING_KITTENS_SETTINGS }
+  return {
+    ...settings,
+    turnNoticeSeconds: settings.turnNoticeSeconds ?? DEFAULT_EXPLODING_KITTENS_SETTINGS.turnNoticeSeconds,
+  }
 }
 
 function activeGame(room: GameRoomContext): StoredExplodingKittens | null {
@@ -48,13 +52,14 @@ export const explodingKittensGame: GameModule = {
       return failure('NOT_HOST', '只有房主可以調整本局設定。')
     }
     if (!isExplodingKittensSettings(settings)) {
-      return failure('INVALID_GAME_SETTINGS', '每回合需為 5–100 秒，休想判定需為 3–10 秒。')
+      return failure('INVALID_GAME_SETTINGS', '每回合需為 5–100 秒，休想判定需為 3–10 秒，回合通知需為 5–20 秒。')
     }
 
     const current = currentSettings(room)
     if (
       current.turnTimeSeconds === settings.turnTimeSeconds &&
-      current.nopeWindowSeconds === settings.nopeWindowSeconds
+      current.nopeWindowSeconds === settings.nopeWindowSeconds &&
+      current.turnNoticeSeconds === (settings.turnNoticeSeconds ?? DEFAULT_EXPLODING_KITTENS_SETTINGS.turnNoticeSeconds)
     ) {
       return { ok: true, changed: false }
     }
@@ -168,6 +173,12 @@ export const explodingKittensGame: GameModule = {
       turnsLeft: game.turnsLeft,
       drawPileCount: game.drawPile.length,
       discard: [...game.discard],
+      finalHands: game.phase === 'finished'
+        ? game.seats.map((seat) => ({
+            playerId: seat.id,
+            cards: [...(seat.finalHand ?? seat.hand.map((card) => card.type))],
+          }))
+        : null,
       turnPlays: game.turnPlays.map((play) => ({ ...play, cardTypes: [...play.cardTypes] })),
       lastTurnPlays: game.lastTurnPlays.map((play) => ({ ...play, cardTypes: [...play.cardTypes] })),
       pending: game.pending
@@ -185,7 +196,10 @@ export const explodingKittensGame: GameModule = {
         : null,
       announcements: [...game.announcements],
       phaseEndsAt: game.phaseEndsAt,
-      settings: { ...game.settings },
+      settings: {
+        ...game.settings,
+        turnNoticeSeconds: game.settings.turnNoticeSeconds ?? DEFAULT_EXPLODING_KITTENS_SETTINGS.turnNoticeSeconds,
+      },
       eliminationOrder: [...game.eliminationOrder],
       winnerId: game.winnerId,
     }

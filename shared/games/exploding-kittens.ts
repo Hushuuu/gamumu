@@ -1,7 +1,6 @@
 export const EXPLODING_KITTENS_PRIVATE_EVENT = 'exploding-kittens-private-state'
 export const EXPLODING_KITTENS_MAX_PLAYERS = 9
 export const EXPLODING_KITTENS_MAX_CARDS = 112
-export const EXPLODING_KITTENS_ANNOUNCEMENT_LIMIT = 12
 
 export const EXPLODING_KITTENS_CARD_TYPES = [
   'exploding-kitten',
@@ -93,11 +92,13 @@ export type ExplodingKittensPendingKind = (typeof EXPLODING_KITTENS_PENDING_KIND
 export interface ExplodingKittensSettings {
   turnTimeSeconds: number
   nopeWindowSeconds: number
+  turnNoticeSeconds: number
 }
 
 export const DEFAULT_EXPLODING_KITTENS_SETTINGS: ExplodingKittensSettings = {
   turnTimeSeconds: 20,
   nopeWindowSeconds: 5,
+  turnNoticeSeconds: 5,
 }
 
 export interface ExplodingKittensSeat {
@@ -105,6 +106,11 @@ export interface ExplodingKittensSeat {
   name: string
   status: ExplodingKittensSeatStatus
   handCount: number
+}
+
+export interface ExplodingKittensFinalHand {
+  playerId: string
+  cards: ExplodingKittensCardType[]
 }
 
 export interface ExplodingKittensPlay {
@@ -135,6 +141,7 @@ export interface ExplodingKittensView {
   turnsLeft: number
   drawPileCount: number
   discard: ExplodingKittensCardType[]
+  finalHands?: ExplodingKittensFinalHand[] | null
   turnPlays: ExplodingKittensPlay[]
   lastTurnPlays: ExplodingKittensPlay[]
   pending: ExplodingKittensPending | null
@@ -184,12 +191,8 @@ function isCardTypeList(value: unknown, max: number): value is ExplodingKittensC
   return Array.isArray(value) && value.length <= max && value.every(isExplodingKittensCardType)
 }
 
-function isStringList(value: unknown, max: number): value is string[] {
-  return (
-    Array.isArray(value) &&
-    value.length <= max &&
-    value.every((item) => typeof item === 'string')
-  )
+function isStringList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
 }
 
 export function isExplodingKittensCardType(value: unknown): value is ExplodingKittensCardType {
@@ -218,7 +221,10 @@ export function isExplodingKittensSettings(value: unknown): value is ExplodingKi
     Number(value.turnTimeSeconds) <= 100 &&
     Number.isInteger(value.nopeWindowSeconds) &&
     Number(value.nopeWindowSeconds) >= 3 &&
-    Number(value.nopeWindowSeconds) <= 10
+    Number(value.nopeWindowSeconds) <= 10 &&
+    Number.isInteger(value.turnNoticeSeconds ?? 5) &&
+    Number(value.turnNoticeSeconds ?? 5) >= 5 &&
+    Number(value.turnNoticeSeconds ?? 5) <= 20
   )
 }
 
@@ -240,6 +246,14 @@ function isExplodingKittensPlay(value: unknown, isPlayer: PlayerIdCheck): value 
     isCardTypeList(value.cardTypes, 5) &&
     value.cardTypes.length >= 1 &&
     (value.targetId === null || isPlayer(value.targetId))
+  )
+}
+
+function isExplodingKittensFinalHand(value: unknown, isPlayer: PlayerIdCheck): value is ExplodingKittensFinalHand {
+  return (
+    isRecord(value) &&
+    isPlayer(value.playerId) &&
+    isCardTypeList(value.cards, EXPLODING_KITTENS_MAX_CARDS)
   )
 }
 
@@ -285,19 +299,26 @@ export function isExplodingKittensView(value: unknown): value is ExplodingKitten
 
   const isSeat: PlayerIdCheck = (id) => typeof id === 'string' && seatIds.has(id)
   const isOptionalSeat = (id: unknown): boolean => id === null || isSeat(id)
+  const finalHandsValid = value.finalHands === undefined || (value.phase === 'finished'
+    ? Array.isArray(value.finalHands) &&
+      value.finalHands.length === seats.length &&
+      value.finalHands.every((hand) => isExplodingKittensFinalHand(hand, isSeat)) &&
+      new Set(value.finalHands.map((hand) => (hand as ExplodingKittensFinalHand).playerId)).size === seats.length
+    : value.finalHands === null)
 
   return (
     isOptionalSeat(value.currentPlayerId) &&
     isOptionalSeat(value.winnerId) &&
     isCount(value.turnsLeft, 2) &&
     isCount(value.drawPileCount, EXPLODING_KITTENS_MAX_CARDS) &&
+    finalHandsValid &&
     isCardTypeList(value.discard, EXPLODING_KITTENS_MAX_CARDS) &&
     Array.isArray(value.turnPlays) &&
     value.turnPlays.every((play) => isExplodingKittensPlay(play, isSeat)) &&
     Array.isArray(value.lastTurnPlays) &&
     value.lastTurnPlays.every((play) => isExplodingKittensPlay(play, isSeat)) &&
     (value.pending === null || isExplodingKittensPending(value.pending, isSeat)) &&
-    isStringList(value.announcements, EXPLODING_KITTENS_ANNOUNCEMENT_LIMIT) &&
+    isStringList(value.announcements) &&
     (
       value.phaseEndsAt === null ||
       (Number.isSafeInteger(value.phaseEndsAt) && Number(value.phaseEndsAt) >= 0)

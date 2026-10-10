@@ -15,21 +15,26 @@ const emit = defineEmits<{
 
 const turnTimeSeconds = ref(20)
 const nopeWindowSeconds = ref(5)
+const turnNoticeSeconds = ref(5)
 
 const isValid = computed(() => {
   return (
     Number.isInteger(turnTimeSeconds.value) &&
     turnTimeSeconds.value >= 5 &&
-    turnTimeSeconds.value <= 100 &&
+    turnTimeSeconds.value <= 120 &&
     Number.isInteger(nopeWindowSeconds.value) &&
     nopeWindowSeconds.value >= 3 &&
-    nopeWindowSeconds.value <= 10
+    nopeWindowSeconds.value <= 25 &&
+    Number.isInteger(turnNoticeSeconds.value) &&
+    turnNoticeSeconds.value >= 5 &&
+    turnNoticeSeconds.value <= 20
   )
 })
 
 watch(() => props.settings, (settings) => {
-  turnTimeSeconds.value = settingNumber(settings.turnTimeSeconds, 20)
-  nopeWindowSeconds.value = settingNumber(settings.nopeWindowSeconds, 5)
+  turnTimeSeconds.value = settingNumber(settings.turnTimeSeconds, 30)
+  nopeWindowSeconds.value = settingNumber(settings.nopeWindowSeconds, 15)
+  turnNoticeSeconds.value = settingNumber(settings.turnNoticeSeconds, 8)
 }, { deep: true, immediate: true })
 
 function settingNumber(value: unknown, fallback: number): number {
@@ -44,6 +49,7 @@ function applySettings(): void {
   emit('configure-game', {
     turnTimeSeconds: turnTimeSeconds.value,
     nopeWindowSeconds: nopeWindowSeconds.value,
+    turnNoticeSeconds: turnNoticeSeconds.value,
   })
 }
 </script>
@@ -67,11 +73,11 @@ function applySettings(): void {
             v-model.number="turnTimeSeconds"
             type="number"
             min="5"
-            max="100"
+            max="120"
             step="1"
             :disabled="!isHost || !canConfigure"
           />
-          <small>秒（5–100）</small>
+          <small>秒（5–120）</small>
         </div>
       </label>
       <label>
@@ -81,11 +87,25 @@ function applySettings(): void {
             v-model.number="nopeWindowSeconds"
             type="number"
             min="3"
-            max="10"
+            max="25"
             step="1"
             :disabled="!isHost || !canConfigure"
           />
-          <small>秒（3–10）</small>
+          <small>秒（3–25）</small>
+        </div>
+      </label>
+      <label>
+        <span>回合通知顯示時間</span>
+        <div class="ek-setting-input">
+          <input
+            v-model.number="turnNoticeSeconds"
+            type="number"
+            min="5"
+            max="20"
+            step="1"
+            :disabled="!isHost || !canConfigure"
+          />
+          <small>秒（5–20）</small>
         </div>
       </label>
     </form>
@@ -118,7 +138,7 @@ function applySettings(): void {
 
 .ek-settings-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
 }
 
@@ -138,7 +158,7 @@ function applySettings(): void {
 }
 
 .ek-setting-input input {
-  width: 78px;
+  width: 68px;
   min-width: 0;
   height: 40px;
   padding: 0 8px;

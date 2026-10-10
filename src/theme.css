@@ -791,6 +791,25 @@
   color: var(--ink-soft);
 }
 
+:root[data-theme='dark'] .ek-modal-dialog .ek-modal-field select,
+:root[data-theme='dark'] .ek-modal-dialog .ek-modal-field select option {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .ek-modal-dialog .ek-give-option {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .ek-modal-dialog .ek-give-option.is-selected {
+  border-color: var(--purple);
+  background: var(--purple-light);
+  color: var(--ink);
+}
+
 :root[data-theme='dark'] .ww-results-list li.is-winner {
   background: #20382d;
 }
