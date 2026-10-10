@@ -90,6 +90,7 @@ export interface DrawGuessSettings {
   guessTimeSeconds: number
   questionMode: DrawGuessQuestionMode
   questionCategory: DrawGuessQuestionCategory
+  showHints: boolean
 }
 
 export interface DrawGuessView {
@@ -129,7 +130,8 @@ export function isDrawGuessSettings(value: unknown): value is DrawGuessSettings 
     Number(value.guessTimeSeconds) >= 10 &&
     Number(value.guessTimeSeconds) <= 120 &&
     (value.questionMode === 'free' || value.questionMode === 'bank') &&
-    isDrawGuessQuestionCategory(value.questionCategory)
+    isDrawGuessQuestionCategory(value.questionCategory) &&
+    typeof value.showHints === 'boolean'
   )
 }
 

@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS: DrawGuessSettings = {
   guessTimeSeconds: 30,
   questionMode: 'free',
   questionCategory: 'all',
+  showHints: true,
 }
 
 type DrawTool = 'pen' | 'eraser'
@@ -60,6 +61,7 @@ function normalizeSettings(value: unknown): DrawGuessSettings {
     questionCategory: isDrawGuessQuestionCategory(source.questionCategory)
       ? source.questionCategory
       : 'all',
+    showHints: source.showHints !== false,
   }
 }
 
@@ -406,7 +408,8 @@ export const drawGuessGame: GameModule = {
       current.roundsPerPlayer === settings.roundsPerPlayer &&
       current.guessTimeSeconds === settings.guessTimeSeconds &&
       current.questionMode === settings.questionMode &&
-      current.questionCategory === settings.questionCategory
+      current.questionCategory === settings.questionCategory &&
+      current.showHints === settings.showHints
     ) {
       return { ok: true, changed: false }
     }
@@ -434,7 +437,7 @@ export const drawGuessGame: GameModule = {
       name: 'answer-prompt',
       payload: {
         answer: game.answer,
-        hint: game.hint ?? '',
+        hint: game.settings.showHints ? game.hint ?? '' : '',
         answerLength: game.answerLength ?? answerLength(game.answer),
       },
     }
@@ -522,7 +525,7 @@ export const drawGuessGame: GameModule = {
       phaseEndsAt: game.phaseEndsAt,
       answer: game.phase === 'reveal' ? game.answer : null,
       answerLength: game.phase === 'answering' ? null : game.answerLength,
-      hint: game.phase === 'answering' ? null : game.hint,
+      hint: !game.settings.showHints || game.phase === 'answering' ? null : game.hint,
       settings: game.settings,
       correctPlayerIds: [...game.correctPlayerIds],
     }

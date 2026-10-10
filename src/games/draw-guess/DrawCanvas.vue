@@ -17,8 +17,10 @@ const emit = defineEmits<{
 }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
+const colorPickerRoot = ref<HTMLDivElement | null>(null)
 const tool = ref<DrawTool>('pen')
 const penColor = ref<string>(DRAW_GUESS_PEN_COLORS[0].value)
+const isColorPickerOpen = ref(false)
 const remoteLastPoints = new Map<string, DrawPoint>()
 
 let resizeObserver: ResizeObserver | undefined
@@ -43,9 +45,14 @@ watch(() => props.canDraw, (canDraw) => {
   if (!canDraw && activePointerId !== null) {
     cancelStroke()
   }
+  if (!canDraw) {
+    isColorPickerOpen.value = false
+  }
 })
 
 onMounted(() => {
+  document.addEventListener('pointerdown', closeColorPickerOnOutsideClick)
+  document.addEventListener('keydown', closeColorPickerOnEscape)
   const element = canvas.value
   if (!element) {
     return
@@ -57,11 +64,30 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('pointerdown', closeColorPickerOnOutsideClick)
+  document.removeEventListener('keydown', closeColorPickerOnEscape)
   resizeObserver?.disconnect()
   if (flushTimer !== undefined) {
     window.clearInterval(flushTimer)
   }
 })
+
+function closeColorPickerOnOutsideClick(event: PointerEvent): void {
+  if (!colorPickerRoot.value?.contains(event.target as Node)) {
+    isColorPickerOpen.value = false
+  }
+}
+
+function closeColorPickerOnEscape(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    isColorPickerOpen.value = false
+  }
+}
+
+function selectColor(color: string): void {
+  penColor.value = color
+  isColorPickerOpen.value = false
+}
 
 function resizeCanvas(): void {
   const element = canvas.value
@@ -335,19 +361,37 @@ function isDrawPoint(value: unknown): value is DrawPoint {
           ▱ 橡皮擦
         </button>
       </div>
-      <div class="draw-color-palette" role="group" aria-label="畫筆顏色">
+      <div ref="colorPickerRoot" class="draw-color-picker">
         <button
-          v-for="color in DRAW_GUESS_PEN_COLORS"
-          :key="color.value"
-          class="draw-color-button"
-          :class="{ 'is-selected': penColor === color.value }"
+          class="draw-tool-button draw-color-trigger"
           type="button"
           :disabled="!canDraw"
-          :aria-label="`畫筆顏色：${color.label}`"
-          :aria-pressed="penColor === color.value"
-          :style="{ '--swatch-color': color.value }"
-          @click="penColor = color.value"
-        ></button>
+          :aria-expanded="isColorPickerOpen"
+          aria-haspopup="true"
+          aria-label="選擇畫筆顏色"
+          title="選擇畫筆顏色"
+          @click="isColorPickerOpen = !isColorPickerOpen"
+        >
+          <span class="draw-color-preview" :style="{ '--swatch-color': penColor }"></span>
+          顏色
+        </button>
+        <div v-if="isColorPickerOpen" class="draw-color-popover" role="group" aria-label="選擇畫筆顏色">
+          <span class="draw-color-popover-title">選擇畫筆顏色</span>
+          <div class="draw-color-options">
+            <button
+              v-for="color in DRAW_GUESS_PEN_COLORS"
+              :key="color.value"
+              class="draw-color-option"
+              :class="{ 'is-selected': penColor === color.value }"
+              type="button"
+              :aria-label="color.label"
+              :title="color.label"
+              :aria-pressed="penColor === color.value"
+              :style="{ '--swatch-color': color.value }"
+              @click="selectColor(color.value)"
+            ></button>
+          </div>
+        </div>
       </div>
       <span class="draw-board-hint">{{ canDraw ? '在畫布上繪圖' : '等待繪圖者' }}</span>
     </div>
@@ -383,15 +427,54 @@ function isDrawPoint(value: unknown): value is DrawPoint {
   gap: 6px;
 }
 
-.draw-color-palette {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+.draw-color-picker {
+  position: relative;
 }
 
-.draw-color-button {
-  width: 18px;
-  height: 18px;
+.draw-color-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.draw-color-preview {
+  width: 13px;
+  height: 13px;
+  border: 1px solid rgba(48, 45, 66, 0.18);
+  border-radius: 50%;
+  background: var(--swatch-color);
+}
+
+.draw-color-popover {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 150px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  box-shadow: 0 8px 24px rgba(32, 28, 55, 0.16);
+}
+
+.draw-color-popover-title {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--ink-soft);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.draw-color-options {
+  display: grid;
+  grid-template-columns: repeat(4, 26px);
+  gap: 8px;
+}
+
+.draw-color-option {
+  width: 25px;
+  height: 25px;
   padding: 0;
   border: 2px solid #fff;
   border-radius: 50%;
@@ -399,11 +482,11 @@ function isDrawPoint(value: unknown): value is DrawPoint {
   box-shadow: 0 0 0 1px #d9d6e4;
 }
 
-.draw-color-button.is-selected {
+.draw-color-option.is-selected {
   box-shadow: 0 0 0 2px #8f80e8;
 }
 
-.draw-color-button:disabled {
+.draw-color-option:disabled {
   cursor: default;
 }
 

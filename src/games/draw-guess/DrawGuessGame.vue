@@ -183,23 +183,25 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
               開始畫
             </button>
           </div>
-          <label class="field-label draw-hint-label" for="draw-hint-input">提示（選填，其他玩家看得到）</label>
-          <input
-            id="draw-hint-input"
-            v-model="hintInput"
-            class="text-input answer-input"
-            type="text"
-            autocomplete="off"
-            maxlength="100"
-            placeholder="例如：一種會在夜晚出現的動物"
-            :disabled="!canInteract"
-          />
+          <template v-if="game.settings.showHints">
+            <label class="field-label draw-hint-label" for="draw-hint-input">提示（選填，其他玩家看得到）</label>
+            <input
+              id="draw-hint-input"
+              v-model="hintInput"
+              class="text-input answer-input"
+              type="text"
+              autocomplete="off"
+              maxlength="100"
+              placeholder="例如：一種會在夜晚出現的動物"
+              :disabled="!canInteract"
+            />
+          </template>
           <button class="draw-skip-button" type="button" :disabled="!canInteract" @click="skipTurn">跳過這題</button>
         </form>
         <div v-else-if="isDrawer && game.settings.questionMode === 'bank'" class="draw-answer-form bank-prompt-card">
           <p class="field-label">題庫題目</p>
           <strong>{{ secretAnswer || '題目載入中…' }}</strong>
-          <p v-if="secretHint" class="bank-prompt-hint">提示：{{ secretHint }}</p>
+          <p v-if="game.settings.showHints && secretHint" class="bank-prompt-hint">提示：{{ secretHint }}</p>
           <button
             class="button button-primary answer-button"
             type="button"
@@ -226,7 +228,7 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
         <div v-if="game.phase !== 'reveal' && game.answerLength !== null" class="draw-answer-meta">
           答案共 <strong>{{ game.answerLength }}</strong> 個字
         </div>
-        <p v-if="game.phase !== 'reveal' && game.hint" class="draw-public-hint">
+        <p v-if="game.settings.showHints && game.phase !== 'reveal' && game.hint" class="draw-public-hint">
           提示：{{ game.hint }}
         </p>
 
@@ -249,7 +251,7 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
           </div>
           <p v-if="isDrawer && secretAnswer" class="draw-secret-answer">
             本題答案：<strong>{{ secretAnswer }}</strong>
-            <span v-if="secretHint"> · 提示：{{ secretHint }}</span>
+            <span v-if="game.settings.showHints && secretHint"> · 提示：{{ secretHint }}</span>
           </p>
         </div>
 

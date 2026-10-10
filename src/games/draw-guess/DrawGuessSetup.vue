@@ -23,6 +23,7 @@ const roundsPerPlayer = ref(1)
 const guessTimeSeconds = ref(30)
 const questionMode = ref<DrawGuessQuestionMode>('free')
 const questionCategory = ref<DrawGuessQuestionCategory>('all')
+const showHints = ref(true)
 
 const isValid = computed(() => {
   return (
@@ -36,7 +37,8 @@ const isValid = computed(() => {
     guessTimeSeconds.value >= 10 &&
     guessTimeSeconds.value <= 120 &&
     ['free', 'bank'].includes(questionMode.value) &&
-    DRAW_GUESS_QUESTION_CATEGORIES.some(({ id }) => id === questionCategory.value)
+    DRAW_GUESS_QUESTION_CATEGORIES.some(({ id }) => id === questionCategory.value) &&
+    typeof showHints.value === 'boolean'
   )
 })
 
@@ -48,6 +50,7 @@ watch(() => props.settings, (settings) => {
   questionCategory.value = DRAW_GUESS_QUESTION_CATEGORIES.some(({ id }) => id === settings.questionCategory)
     ? settings.questionCategory as DrawGuessQuestionCategory
     : 'all'
+  showHints.value = settings.showHints !== false
 }, { deep: true, immediate: true })
 
 function settingNumber(value: unknown, fallback: number): number {
@@ -65,6 +68,7 @@ function applySettings(): void {
     guessTimeSeconds: guessTimeSeconds.value,
     questionMode: questionMode.value,
     questionCategory: questionCategory.value,
+    showHints: showHints.value,
   })
 }
 </script>
@@ -100,6 +104,14 @@ function applySettings(): void {
           </option>
         </select>
         <small>每題會從分類中抽選，題目不會重複直到抽完</small>
+      </label>
+      <label>
+        <span>提示顯示</span>
+        <select v-model="showHints" :disabled="!isHost || !canConfigure">
+          <option :value="true">顯示提示</option>
+          <option :value="false">不顯示提示</option>
+        </select>
+        <small>不顯示提示時，答案字數仍會顯示</small>
       </label>
       <label>
         <span>繪畫時間（秒）</span>
