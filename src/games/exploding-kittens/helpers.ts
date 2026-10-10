@@ -165,14 +165,6 @@ export const PHASE_LABELS: Record<ExplodingKittensPhase, string> = {
   finished: '對局結束',
 }
 
-export const PLAY_KIND_LABELS: Record<ExplodingKittensPlayKind, string> = {
-  card: '單張',
-  pair: '成雙成對',
-  triple: '三條',
-  five: '五彩繽紛',
-  nope: '休想',
-}
-
 export const SEAT_STATUS_LABELS: Record<ExplodingKittensSeatStatus, string> = {
   alive: '存活',
   eliminated: '已淘汰',

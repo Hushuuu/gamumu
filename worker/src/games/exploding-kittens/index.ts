@@ -1,5 +1,6 @@
 import {
   DEFAULT_EXPLODING_KITTENS_SETTINGS,
+  EXPLODING_KITTENS_CARD_TYPES,
   EXPLODING_KITTENS_PRIVATE_EVENT,
   isExplodingKittensSettings,
   type ExplodingKittensPrivateState,
@@ -167,6 +168,12 @@ export const explodingKittensGame: GameModule = {
       currentPlayerId: game.currentPlayerId,
       turnsLeft: game.turnsLeft,
       drawPileCount: game.drawPile.length,
+      drawPileCounts: EXPLODING_KITTENS_CARD_TYPES
+        .map((type) => ({
+          type,
+          count: game.drawPile.filter((card) => card.type === type).length,
+        }))
+        .filter((entry) => entry.count > 0),
       discard: [...game.discard],
       turnPlays: game.turnPlays.map((play) => ({ ...play, cardTypes: [...play.cardTypes] })),
       lastTurnPlays: game.lastTurnPlays.map((play) => ({ ...play, cardTypes: [...play.cardTypes] })),

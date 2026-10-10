@@ -61,6 +61,7 @@ export {
 } from './exploding-kittens'
 export type {
   ExplodingKittensCardType,
+  ExplodingKittensCardTypeCount,
   ExplodingKittensHandCard,
   ExplodingKittensPending,
   ExplodingKittensPendingKind,

@@ -16,7 +16,6 @@ import {
   namedOptionsFor,
   nopeOutcomeLabel,
   PHASE_LABELS,
-  PLAY_KIND_LABELS,
   remainingSeconds,
   SEAT_STATUS_LABELS,
   sortHand,
@@ -313,11 +312,6 @@ function placeDefuse(): void {
     emit('game-action', 'defuse', { position: defusePosition.value })
   }
 }
-
-function playDescription(play: ExplodingKittensView['turnPlays'][number]): string {
-  const cards = play.cardTypes.map(cardName).join('、')
-  return `${playerName(play.playerId)}：${PLAY_KIND_LABELS[play.kind]}${cards ? `（${cards}）` : ''}`
-}
 </script>
 
 <template>
@@ -515,25 +509,20 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
       </div>
     </section>
 
-    <section class="ek-plays-panel">
+    <section class="ek-card-counts-panel" aria-labelledby="ek-card-counts-heading">
       <div class="ek-section-heading">
         <div>
-          <p class="eyebrow">本回合行動</p>
-          <h3>桌面公告</h3>
+          <p class="eyebrow">抽牌堆剩餘</p>
+          <h3 id="ek-card-counts-heading">牌種數量 <span>({{ game.drawPileCount }} 張)</span></h3>
         </div>
       </div>
-      <ol v-if="game.turnPlays.length" class="ek-play-list">
-        <li v-for="(play, index) in game.turnPlays" :key="`${play.playerId}-${index}`">
-          {{ playDescription(play) }}
-        </li>
-      </ol>
-      <p v-else class="ek-empty-copy">本回合尚未出牌。</p>
-      <div v-if="game.lastTurnPlays.length" class="ek-last-turn">
-        <strong>上一回合</strong>
-        <span v-for="(play, index) in game.lastTurnPlays" :key="`${play.playerId}-${index}`">
-          {{ playDescription(play) }}
+      <div v-if="game.drawPileCounts.length" class="ek-card-counts" aria-label="抽牌堆各牌種與數量">
+        <span v-for="entry in game.drawPileCounts" :key="entry.type" class="ek-card-count">
+          {{ cardName(entry.type) }}
+          <strong>× {{ entry.count }}</strong>
         </span>
       </div>
+      <p v-else class="ek-empty-copy">抽牌堆已空。</p>
     </section>
 
     <section class="ek-announcements" aria-label="遊戲近況">
@@ -654,7 +643,7 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
 .ek-choice-panel,
 .ek-peek-panel,
 .ek-hand-panel,
-.ek-plays-panel,
+.ek-card-counts-panel,
 .ek-announcements,
 .ek-board {
   padding: 16px;
@@ -749,7 +738,8 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
   font-size: 10px;
 }
 
-.ek-discard-types {
+.ek-discard-types,
+.ek-card-counts {
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
@@ -757,7 +747,8 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
   gap: 6px;
 }
 
-.ek-discard-type {
+.ek-discard-type,
+.ek-card-count {
   display: inline-flex;
   min-width: 0;
   max-width: 100%;
@@ -772,7 +763,8 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
   white-space: nowrap;
 }
 
-.ek-discard-type strong {
+.ek-discard-type strong,
+.ek-card-count strong {
   color: var(--purple-dark);
   font-variant-numeric: tabular-nums;
 }
@@ -1016,7 +1008,6 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
   font-weight: 700;
 }
 
-.ek-play-list,
 .ek-announcements ol {
   display: grid;
   gap: 6px;
@@ -1024,21 +1015,6 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
   padding-left: 20px;
   color: #5c5875;
   font-size: 11px;
-}
-
-.ek-last-turn {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 10px;
-}
-
-.ek-last-turn > span {
-  overflow-wrap: anywhere;
 }
 
 .ek-announcements h3 {
@@ -1051,8 +1027,7 @@ function playDescription(play: ExplodingKittensView['turnPlays'][number]): strin
   overflow-wrap: anywhere;
 }
 
-.ek-turn-banner strong,
-.ek-play-list li {
+.ek-turn-banner strong {
   overflow-wrap: anywhere;
 }
 

@@ -21,6 +21,11 @@ export const EXPLODING_KITTENS_CARD_TYPES = [
 
 export type ExplodingKittensCardType = (typeof EXPLODING_KITTENS_CARD_TYPES)[number]
 
+export interface ExplodingKittensCardTypeCount {
+  type: ExplodingKittensCardType
+  count: number
+}
+
 export const EXPLODING_KITTENS_CARD_NAMES: Record<ExplodingKittensCardType, string> = {
   'exploding-kitten': '爆炸貓',
   defuse: '拆除',
@@ -93,6 +98,7 @@ export interface ExplodingKittensView {
   currentPlayerId: string | null
   turnsLeft: number
   drawPileCount: number
+  drawPileCounts: ExplodingKittensCardTypeCount[]
   discard: ExplodingKittensCardType[]
   turnPlays: ExplodingKittensPlay[]
   lastTurnPlays: ExplodingKittensPlay[]
@@ -153,6 +159,41 @@ function isStringList(value: unknown, max: number): value is string[] {
 
 export function isExplodingKittensCardType(value: unknown): value is ExplodingKittensCardType {
   return isOneOf(EXPLODING_KITTENS_CARD_TYPES, value)
+}
+
+function isExplodingKittensCardTypeCount(
+  value: unknown,
+): value is ExplodingKittensCardTypeCount {
+  return (
+    isRecord(value) &&
+    isExplodingKittensCardType(value.type) &&
+    isCount(value.count, EXPLODING_KITTENS_MAX_CARDS) &&
+    Number(value.count) > 0
+  )
+}
+
+function isExplodingKittensCardTypeCountList(
+  value: unknown,
+  expectedTotal: unknown,
+): value is ExplodingKittensCardTypeCount[] {
+  if (
+    !Array.isArray(value) ||
+    value.length > EXPLODING_KITTENS_CARD_TYPES.length ||
+    !isCount(expectedTotal, EXPLODING_KITTENS_MAX_CARDS)
+  ) {
+    return false
+  }
+
+  const types = new Set<ExplodingKittensCardType>()
+  let total = 0
+  for (const entry of value) {
+    if (!isExplodingKittensCardTypeCount(entry) || types.has(entry.type)) {
+      return false
+    }
+    types.add(entry.type)
+    total += entry.count
+  }
+  return total === Number(expectedTotal)
 }
 
 export function canPlayExplodingKittensAlone(type: ExplodingKittensCardType): boolean {
@@ -249,7 +290,7 @@ export function isExplodingKittensView(value: unknown): value is ExplodingKitten
     isOptionalSeat(value.currentPlayerId) &&
     isOptionalSeat(value.winnerId) &&
     isCount(value.turnsLeft, 2) &&
-    isCount(value.drawPileCount, EXPLODING_KITTENS_MAX_CARDS) &&
+    isExplodingKittensCardTypeCountList(value.drawPileCounts, value.drawPileCount) &&
     isCardTypeList(value.discard, EXPLODING_KITTENS_MAX_CARDS) &&
     Array.isArray(value.turnPlays) &&
     value.turnPlays.every((play) => isExplodingKittensPlay(play, isSeat)) &&

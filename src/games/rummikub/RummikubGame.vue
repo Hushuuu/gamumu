@@ -2020,7 +2020,7 @@ function drawOrPass(): void {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
   gap: 8px;
-  max-height: 270px;
+  max-height: min(50dvh, 445px);
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -2592,7 +2592,7 @@ function drawOrPass(): void {
 }
 
 .rummikub-submit-actions {
-  justify-content: flex-end;
+  justify-content: center;
 }
 
 .rummikub-turn-actions {
