@@ -49,6 +49,15 @@ const EMPTY_PRIVATE_STATE: ExplodingKittensPrivateState = {
   canNope: false,
 }
 
+const CARD_EFFECT_SUMMARIES: Partial<Record<ExplodingKittensCardType, string>> = {
+  nope: '每張休想都反制上一張；奇數張取消原效果，偶數張則讓原效果生效。',
+  attack: '下一位玩家須連續行動兩回合。',
+  skip: '跳過你的回合。',
+  favor: '指定一位玩家，請對方交出一張手牌。',
+  shuffle: '重新洗混抽牌堆。',
+  'see-the-future': '私下查看抽牌堆頂端三張牌。',
+}
+
 const privateState = ref<ExplodingKittensPrivateState>({ ...EMPTY_PRIVATE_STATE })
 const selectedCardIds = ref<string[]>([])
 const targetId = ref('')
@@ -183,26 +192,29 @@ const nopeDialog = computed(() => {
 })
 const nopeDialogPreview = computed(() => {
   const pending = game.value?.pending
-  if (!pending || pending.playKind !== 'card') {
+  if (!pending) {
     return null
   }
 
-  const type = pending.cardTypes[0]
+  if (pending.nopeCount === 0 && pending.playKind !== 'card') {
+    return null
+  }
+
+  const type = pending.nopeCount > 0 ? 'nope' : pending.cardTypes[0]
   if (!type) {
     return null
   }
 
   const imageUrl = explodingKittensEffectIllustrationUrl(type)
-  if (!imageUrl) {
+  const description = CARD_EFFECT_SUMMARIES[type]
+  if (!imageUrl || !description) {
     return null
   }
 
   return {
     title: cardName(type),
     imageUrl,
-    description: type === 'see-the-future'
-      ? '私下查看抽牌堆頂端三張牌。'
-      : '',
+    description,
   }
 })
 const turnMessage = computed(() => {
@@ -874,7 +886,12 @@ function placeDefuse(): void {
 .ek-peek-panel img {
   display: block;
   width: 100%;
+  aspect-ratio: 5 / 6;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
   border-radius: 9px;
+  background: #fffdf7;
+  object-fit: contain;
 }
 
 .ek-peek-panel figcaption {
@@ -989,7 +1006,13 @@ function placeDefuse(): void {
 .ek-hand-card img {
   display: block;
   width: 100%;
+  aspect-ratio: 5 / 6;
+  box-sizing: border-box;
+  padding: 3px;
+  border: 1px solid var(--line);
   border-radius: 7px;
+  background: #fffdf7;
+  object-fit: contain;
 }
 
 .ek-hand-card span {
