@@ -87,6 +87,38 @@ const contactEmailHref = `mailto:${contactEmail}`
 const deferredInstallPrompt = ref<DeferredInstallPrompt | null>(null)
 const isAppInstalled = ref(false)
 const isIosDevice = ref(false)
+type ThemeMode = 'light' | 'dark'
+const THEME_STORAGE_KEY = 'gamumu-theme'
+
+function loadThemePreference(): ThemeMode {
+  try {
+    return window.localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light'
+  } catch {
+    return 'light'
+  }
+}
+
+const themeMode = ref<ThemeMode>(loadThemePreference())
+
+function applyTheme(mode: ThemeMode): void {
+  document.documentElement.dataset.theme = mode
+  document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+    ?.setAttribute('content', mode === 'dark' ? '#171522' : '#f7f6ff')
+}
+
+function toggleTheme(): void {
+  themeMode.value = themeMode.value === 'dark' ? 'light' : 'dark'
+}
+
+applyTheme(themeMode.value)
+watch(themeMode, (mode) => {
+  applyTheme(mode)
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, mode)
+  } catch {
+    // Keep the in-memory theme even when browser storage is unavailable.
+  }
+})
 
 let noticeTimer: number | undefined
 let betaExpiryTimer: number | undefined
@@ -829,9 +861,22 @@ function connectionLabel(): string {
         </span>
         <span class="brand-name">GAMUMU</span>
       </a>
-      <div class="header-status">
-        <span class="status-dot"></span>
-        <span>派對現在開始</span>
+      <div class="header-tools">
+        <button
+          class="theme-toggle"
+          type="button"
+          :aria-pressed="themeMode === 'dark'"
+          :aria-label="themeMode === 'dark' ? '切換為淺色主題' : '切換為暗色主題'"
+          :title="themeMode === 'dark' ? '切換為淺色主題' : '切換為暗色主題'"
+          @click="toggleTheme"
+        >
+          <span aria-hidden="true">{{ themeMode === 'dark' ? '☀' : '☾' }}</span>
+          <span>{{ themeMode === 'dark' ? '淺色' : '暗色' }}</span>
+        </button>
+        <div class="header-status">
+          <span class="status-dot"></span>
+          <span>派對現在開始</span>
+        </div>
       </div>
     </header>
 
@@ -1547,6 +1592,45 @@ function connectionLabel(): string {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid rgba(65, 56, 111, 0.08);
+}
+
+.header-tools {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.theme-toggle:hover {
+  transform: translateY(-1px);
+  border-color: var(--purple);
+  background: var(--purple-light);
+}
+
+.theme-toggle > span:first-child {
+  color: var(--purple);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.theme-toggle:focus-visible {
+  outline: 3px solid rgba(105, 87, 232, 0.45);
+  outline-offset: 3px;
 }
 
 .brand {
@@ -2843,6 +2927,26 @@ function connectionLabel(): string {
 
   .header-status {
     font-size: 10px;
+  }
+
+  .header-tools {
+    gap: 9px;
+  }
+
+  .theme-toggle {
+    min-height: 32px;
+    gap: 4px;
+    padding-inline: 8px;
+    font-size: 10px;
+  }
+
+  .theme-toggle > span:last-child {
+    display: none;
+  }
+
+  .theme-toggle {
+    width: 34px;
+    padding-inline: 0;
   }
 
   .room-main {

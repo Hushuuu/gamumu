@@ -1,7 +1,7 @@
 :root {
   font-family: 'Noto Sans TC', 'Segoe UI', system-ui, sans-serif;
   color: #292547;
-  background: #f7f6ff;
+  background: var(--page);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -9,13 +9,21 @@
   font-optical-sizing: auto;
   font-weight: 400;
 
+  color-scheme: light;
+  --page: #f7f6ff;
+  --page-glow: rgba(218, 211, 255, 0.42);
   --ink: #292547;
+  --ink-soft: #5c5875;
   --muted: #79768f;
   --purple: #6957e8;
   --purple-dark: #5847d4;
   --purple-light: #eeebff;
+  --purple-soft: #efedff;
   --line: #e8e6f1;
   --surface: #fff;
+  --surface-soft: #fbfaff;
+  --surface-muted: #f5f4f9;
+  --surface-raised: #fff;
   --mint: #bff2df;
   --coral: #ff897f;
   --yellow: #ffdb75;
@@ -30,8 +38,8 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(ellipse at 84% 6%, rgba(218, 211, 255, 0.42), transparent 30rem),
-    #f7f6ff;
+    radial-gradient(ellipse at 84% 6%, var(--page-glow), transparent 30rem),
+    var(--page);
 }
 
 button, input {
@@ -67,7 +75,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .field-label {
   display: block;
   margin-bottom: 8px;
-  color: #5c5875;
+  color: var(--ink-soft);
   font-size: 12px;
   font-weight: 700;
 }
@@ -79,7 +87,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   padding: 0 14px;
   border: 1px solid var(--line);
   border-radius: 13px;
-  background: #fbfaff;
+  background: var(--surface-soft);
   color: var(--ink);
   font-size: 14px;
   transition: border-color 150ms ease, box-shadow 150ms ease;
@@ -96,7 +104,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 }
 
 .text-input:disabled {
-  background: #f5f4f9;
+  background: var(--surface-muted);
   color: #9895a9;
 }
 
@@ -132,7 +140,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 }
 
 .button-secondary {
-  background: #efedff;
+  background: var(--purple-soft);
   color: var(--purple-dark);
 }
 
@@ -278,7 +286,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   padding: 13px;
   border: 1px solid #eae8f2;
   border-radius: 14px;
-  background: #fcfbff;
+  background: var(--surface-soft);
   text-align: left;
 }
 
@@ -322,7 +330,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .draw-settings-form label {
   display: grid;
   gap: 5px;
-  color: #5c5875;
+  color: var(--ink-soft);
   font-size: 9px;
   font-weight: 700;
 }
@@ -334,7 +342,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   padding: 0 9px;
   border: 1px solid #e7e4f0;
   border-radius: 9px;
-  background: #fff;
+  background: var(--surface-raised);
   color: var(--ink);
   font: inherit;
 }

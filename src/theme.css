@@ -1,0 +1,702 @@
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  color: #f3f0ff;
+  background: #171522;
+
+  --page: #171522;
+  --page-glow: rgba(132, 115, 224, 0.12);
+  --ink: #f3f0ff;
+  --ink-soft: #d0cbe0;
+  --muted: #aaa5bd;
+  --purple: #9587ff;
+  --purple-dark: #b5aaff;
+  --purple-light: #39334f;
+  --purple-soft: #342f49;
+  --line: #403a54;
+  --surface: #211e30;
+  --surface-soft: #292539;
+  --surface-muted: #333045;
+  --surface-raised: #2d293c;
+}
+
+:root[data-theme='dark'] body {
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .field-label,
+:root[data-theme='dark'] .draw-settings-form label {
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .text-input,
+:root[data-theme='dark'] .draw-settings-form input,
+:root[data-theme='dark'] .draw-settings-form select,
+:root[data-theme='dark'] .dev-role-selection select {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .text-input::placeholder {
+  color: #928da7;
+}
+
+:root[data-theme='dark'] .text-input:disabled,
+:root[data-theme='dark'] .draw-settings-form input:disabled {
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .button-secondary,
+:root[data-theme='dark'] .join-button {
+  background: var(--purple-soft);
+  color: var(--purple-dark);
+}
+
+:root[data-theme='dark'] .button-secondary:not(:disabled):hover,
+:root[data-theme='dark'] .join-button:not(:disabled):hover {
+  background: #423b5d;
+}
+
+:root[data-theme='dark'] .timer-badge,
+:root[data-theme='dark'] .draw-settings-icon,
+:root[data-theme='dark'] .ww-tag {
+  background: var(--purple-light);
+  color: var(--purple-dark);
+}
+
+:root[data-theme='dark'] .draw-settings-panel,
+:root[data-theme='dark'] .ww-role-guess-card,
+:root[data-theme='dark'] .ww-history-dialog,
+:root[data-theme='dark'] .ww-history-day li,
+:root[data-theme='dark'] .ww-seat,
+:root[data-theme='dark'] .ww-role-card:not(.is-wolf),
+:root[data-theme='dark'] .ek-turn-banner,
+:root[data-theme='dark'] .ek-pending-panel,
+:root[data-theme='dark'] .ek-choice-panel,
+:root[data-theme='dark'] .ek-peek-panel,
+:root[data-theme='dark'] .ek-hand-panel,
+:root[data-theme='dark'] .ek-card-counts-panel,
+:root[data-theme='dark'] .ek-announcements,
+:root[data-theme='dark'] .ek-board,
+:root[data-theme='dark'] .ek-seat,
+:root[data-theme='dark'] .ek-discard-type,
+:root[data-theme='dark'] .ek-card-count,
+:root[data-theme='dark'] .ek-results-list li,
+:root[data-theme='dark'] .draw-skip-button,
+:root[data-theme='dark'] .draw-reveal-card,
+:root[data-theme='dark'] .reveal-card,
+:root[data-theme='dark'] .hint-card,
+:root[data-theme='dark'] .game-rules-dialog,
+:root[data-theme='dark'] .game-selection-trigger,
+:root[data-theme='dark'] .game-rules-images img {
+  border-color: var(--line);
+  background-color: var(--surface);
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .ww-state:not(.is-night) .ww-panel:not(.ww-panel-night),
+:root[data-theme='dark'] .ww-role-guess-card,
+:root[data-theme='dark'] .ww-history-day li,
+:root[data-theme='dark'] .ww-seat,
+:root[data-theme='dark'] .ww-role-card:not(.is-wolf),
+:root[data-theme='dark'] .ek-seat,
+:root[data-theme='dark'] .ek-discard-type,
+:root[data-theme='dark'] .ek-card-count,
+:root[data-theme='dark'] .ek-results-list li,
+:root[data-theme='dark'] .draw-skip-button,
+:root[data-theme='dark'] .hint-card,
+:root[data-theme='dark'] .game-selection-trigger,
+:root[data-theme='dark'] .game-rules-images img {
+  background: var(--surface-soft);
+}
+
+:root[data-theme='dark'] .draw-turn-banner,
+:root[data-theme='dark'] .draw-reveal-card,
+:root[data-theme='dark'] .reveal-card,
+:root[data-theme='dark'] .ek-turn-banner,
+:root[data-theme='dark'] .ek-seat.is-me,
+:root[data-theme='dark'] .ek-results-list li.is-winner,
+:root[data-theme='dark'] .game-selection-trigger-arrow {
+  border-color: #51486d;
+  background: var(--purple-light);
+}
+
+:root[data-theme='dark'] .game-rules-header {
+  border-bottom-color: var(--line);
+}
+
+:root[data-theme='dark'] .game-rules-images img {
+  background: linear-gradient(145deg, #292539, #333045);
+}
+
+:root[data-theme='dark'] .game-rules-description,
+:root[data-theme='dark'] .game-rules-section ul,
+:root[data-theme='dark'] .draw-turn-banner,
+:root[data-theme='dark'] .draw-skip-button,
+:root[data-theme='dark'] .draw-secret-answer,
+:root[data-theme='dark'] .draw-wait-message,
+:root[data-theme='dark'] .draw-reveal-card p,
+:root[data-theme='dark'] .reveal-card p,
+:root[data-theme='dark'] .hint-card p,
+:root[data-theme='dark'] .ek-results-list li {
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .draw-settings-heading p:last-child,
+:root[data-theme='dark'] .draw-settings-form small,
+:root[data-theme='dark'] .draw-settings-note,
+:root[data-theme='dark'] .ww-hint,
+:root[data-theme='dark'] .ww-role-guess-heading p,
+:root[data-theme='dark'] .ww-history-empty,
+:root[data-theme='dark'] .ww-history-day small,
+:root[data-theme='dark'] .ek-turn-banner span,
+:root[data-theme='dark'] .ek-selection-help,
+:root[data-theme='dark'] .ek-empty-copy,
+:root[data-theme='dark'] .ek-empty-hand,
+:root[data-theme='dark'] .ek-seat-meta,
+:root[data-theme='dark'] .ek-seat-turn,
+:root[data-theme='dark'] .ek-discard-heading span,
+:root[data-theme='dark'] .ek-results-list .ek-result-status,
+:root[data-theme='dark'] .answer-progress,
+:root[data-theme='dark'] .answer-progress strong {
+  color: var(--muted);
+}
+
+/* Main lobby and shared room surfaces */
+:root[data-theme='dark'] .site-header,
+:root[data-theme='dark'] .site-footer {
+  border-color: var(--line);
+}
+
+:root[data-theme='dark'] .theme-toggle,
+:root[data-theme='dark'] .connection-pill {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .theme-toggle:hover {
+  background: var(--purple-light);
+}
+
+:root[data-theme='dark'] .hero-tags span,
+:root[data-theme='dark'] .beta-gate,
+:root[data-theme='dark'] .beta-checking,
+:root[data-theme='dark'] .game-choice-wait,
+:root[data-theme='dark'] .dev-role-selection,
+:root[data-theme='dark'] .avatar-choice,
+:root[data-theme='dark'] .invite-row,
+:root[data-theme='dark'] .room-notice,
+:root[data-theme='dark'] .waiting-circle,
+:root[data-theme='dark'] .game-choice-wait-icon {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .beta-session-banner {
+  border-color: #315643;
+  background: #20382d;
+  color: #a8dfc3;
+}
+
+:root[data-theme='dark'] .separator::before,
+:root[data-theme='dark'] .separator::after {
+  background: var(--line);
+}
+
+:root[data-theme='dark'] .entry-number {
+  color: #51496c;
+}
+
+:root[data-theme='dark'] .hero-tags span,
+:root[data-theme='dark'] .beta-checking,
+:root[data-theme='dark'] .game-choice-heading,
+:root[data-theme='dark'] .game-choice-wait strong,
+:root[data-theme='dark'] .avatar-choice,
+:root[data-theme='dark'] .back-button,
+:root[data-theme='dark'] .invite-copy,
+:root[data-theme='dark'] .player-subtitle,
+:root[data-theme='dark'] .player-count,
+:root[data-theme='dark'] .capacity-pill,
+:root[data-theme='dark'] .room-capacity-note,
+:root[data-theme='dark'] .waiting-state > p,
+:root[data-theme='dark'] .finished-state > p:not(.eyebrow),
+:root[data-theme='dark'] .privacy-note,
+:root[data-theme='dark'] .how-it-works,
+:root[data-theme='dark'] .game-choice-intro > p:last-child,
+:root[data-theme='dark'] .game-choice-wait small {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .avatar-choice.is-selected {
+  border-color: var(--purple);
+  background: var(--purple-light);
+  color: var(--purple-dark);
+}
+
+:root[data-theme='dark'] .site-info-dialog,
+:root[data-theme='dark'] .invite-join-dialog,
+:root[data-theme='dark'] .loading-panel,
+:root[data-theme='dark'] .room-notice {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .room-error {
+  border-color: #643a45;
+  background: #39242c;
+  color: #f2a4a7;
+}
+
+:root[data-theme='dark'] .error-message,
+:root[data-theme='dark'] .room-error {
+  color: #f2a4a7;
+}
+
+:root[data-theme='dark'] .notice-message,
+:root[data-theme='dark'] .room-notice {
+  color: #8bd4b4;
+}
+
+:root[data-theme='dark'] .privacy-note,
+:root[data-theme='dark'] .player-row {
+  border-color: var(--line);
+}
+
+:root[data-theme='dark'] .copy-button,
+:root[data-theme='dark'] .waiting-circle,
+:root[data-theme='dark'] .ready-tag,
+:root[data-theme='dark'] .ww-notice-dead {
+  background: var(--purple-light);
+  color: var(--purple-dark);
+}
+
+:root[data-theme='dark'] .player-row,
+:root[data-theme='dark'] .player-name-row,
+:root[data-theme='dark'] .player-score {
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .player-name-row strong {
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .player-avatar,
+:root[data-theme='dark'] .capacity-pill {
+  background: var(--purple-light);
+  color: var(--purple-dark);
+}
+
+:root[data-theme='dark'] .host-tag,
+:root[data-theme='dark'] .you-tag,
+:root[data-theme='dark'] .correct-tag {
+  background: #39334f;
+  color: #d0c7ff;
+}
+
+:root[data-theme='dark'] .you-tag {
+  background: #393322;
+  color: #f0d38b;
+}
+
+:root[data-theme='dark'] .correct-tag {
+  background: #20382d;
+  color: #a8dfc3;
+}
+
+/* Game picker stays expressive while its controls follow the active theme. */
+:root[data-theme='dark'] .game-selection-trigger {
+  background: linear-gradient(110deg, #292539, #302b43);
+}
+
+:root[data-theme='dark'] .game-selection-trigger-copy small,
+:root[data-theme='dark'] .game-selection-trigger-copy > span {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .game-selection-trigger-copy strong {
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .game-selection-trigger-arrow {
+  color: var(--purple-dark);
+}
+
+/* Avalon keeps its faction colors while shifting parchment and paper surfaces. */
+:root[data-theme='dark'] .avalon-game,
+:root[data-theme='dark'] .avalon-results,
+:root[data-theme='dark'] .avalon-setup {
+  --avalon-parchment: #211e2a;
+  --avalon-paper: #2b2737;
+  --avalon-ink: #f0ecdf;
+  --avalon-good: #7ec99b;
+  --avalon-good-soft: #253d31;
+  --avalon-evil: #e1929d;
+  --avalon-evil-soft: #472a34;
+  --avalon-gold: #e6c575;
+  --avalon-lake: #75c2c6;
+  --avalon-lake-soft: #244044;
+}
+
+:root[data-theme='dark'] .avalon-game-heading,
+:root[data-theme='dark'] .avalon-public-marker,
+:root[data-theme='dark'] .avalon-history-tablist,
+:root[data-theme='dark'] .avalon-history-panel,
+:root[data-theme='dark'] .avalon-known-players li,
+:root[data-theme='dark'] .avalon-team-list li,
+:root[data-theme='dark'] .avalon-vote-list li,
+:root[data-theme='dark'] .avalon-vote-history > li,
+:root[data-theme='dark'] .avalon-mission-results li,
+:root[data-theme='dark'] .avalon-player-button,
+:root[data-theme='dark'] .avalon-role-guess-target,
+:root[data-theme='dark'] .avalon-results-list li {
+  border-color: #4a4455;
+  background-color: var(--avalon-paper);
+  color: var(--avalon-ink);
+}
+
+:root[data-theme='dark'] .avalon-current-phase {
+  border-color: #65573a;
+  background: #393220;
+  color: #f0d38b;
+}
+
+:root[data-theme='dark'] .avalon-phase-summary,
+:root[data-theme='dark'] .avalon-result-explanation,
+:root[data-theme='dark'] .avalon-result-players,
+:root[data-theme='dark'] .avalon-results-section ol small,
+:root[data-theme='dark'] .avalon-results-list small,
+:root[data-theme='dark'] .avalon-history-empty,
+:root[data-theme='dark'] .avalon-results-section > p {
+  color: #c5c0cf;
+}
+
+:root[data-theme='dark'] .avalon-stage,
+:root[data-theme='dark'] .avalon-role-card,
+:root[data-theme='dark'] .avalon-history-card {
+  border-color: #4a4455;
+  background: var(--surface);
+  color: var(--avalon-ink);
+}
+
+:root[data-theme='dark'] .avalon-player-button.is-selected,
+:root[data-theme='dark'] .avalon-history-tab.is-active,
+:root[data-theme='dark'] .avalon-role-guess-option.is-selected {
+  border-color: #9384e8;
+  background: #39334f;
+}
+
+:root[data-theme='dark'] .avalon-role-guess-option,
+:root[data-theme='dark'] .avalon-role-guess-player {
+  border-color: #4a4455;
+  background: #292539;
+  color: var(--avalon-ink);
+}
+
+:root[data-theme='dark'] .avalon-history-tab {
+  color: #c5c0cf;
+}
+
+:root[data-theme='dark'] .avalon-history-tab-count {
+  background: #39334f;
+  color: #d0c7ff;
+}
+
+:root[data-theme='dark'] .avalon-role-guess-option.is-good {
+  border-color: #477457;
+  background: #253d31;
+}
+
+:root[data-theme='dark'] .avalon-role-guess-option.is-evil {
+  border-color: #76414d;
+  background: #472a34;
+}
+
+:root[data-theme='dark'] .avalon-warning {
+  border-color: #684d35;
+  background: #3c3024;
+  color: #edc285;
+}
+
+:root[data-theme='dark'] .avalon-result-hero.is-good {
+  background-image: linear-gradient(180deg, rgb(33 30 42 / 94%), rgb(33 30 42 / 72%)),
+    radial-gradient(circle at 75% 20%, #274331, #211e2a 68%);
+}
+
+:root[data-theme='dark'] .avalon-result-hero.is-evil {
+  background-image: linear-gradient(180deg, rgb(33 30 42 / 94%), rgb(33 30 42 / 72%)),
+    radial-gradient(circle at 75% 20%, #4b2c35, #211e2a 68%);
+}
+
+:root[data-theme='dark'] .avalon-result-hero.is-neutral {
+  background-image: radial-gradient(circle at 75% 20%, #393443, #211e2a 68%);
+}
+
+:root[data-theme='dark'] .avalon-ending-dialog {
+  --avalon-ink: #f0ecdf;
+  border-color: #4a4455;
+  background: var(--surface);
+  color: var(--avalon-ink);
+}
+
+:root[data-theme='dark'] .avalon-ending-description,
+:root[data-theme='dark'] .avalon-ending-dismiss-note {
+  color: #c5c0cf;
+}
+
+/* Werewolf night scenes and game art retain their original contrast and meaning. */
+:root[data-theme='dark'] .ww-panel:not(.ww-panel-night),
+:root[data-theme='dark'] .ww-role-guess-card,
+:root[data-theme='dark'] .ww-role-card:not(.is-wolf),
+:root[data-theme='dark'] .ww-tally li,
+:root[data-theme='dark'] .ww-speech-order li,
+:root[data-theme='dark'] .ww-history-dialog,
+:root[data-theme='dark'] .ww-history-day li,
+:root[data-theme='dark'] .ww-seat,
+:root[data-theme='dark'] .ww-role-card.is-revealed:not(.is-wolf) {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .ww-state:not(.is-night) .round-heading h2,
+:root[data-theme='dark'] .ww-panel h3,
+:root[data-theme='dark'] .ww-role-guess-card strong,
+:root[data-theme='dark'] .ww-seat-name,
+:root[data-theme='dark'] .ww-history-header h2,
+:root[data-theme='dark'] .ww-history-day h3 {
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .ww-history-header {
+  border-bottom-color: var(--line);
+}
+
+:root[data-theme='dark'] .ww-history-day h3 {
+  background: var(--surface-soft);
+  color: var(--purple-dark);
+}
+
+:root[data-theme='dark'] .ww-history-index {
+  background: var(--purple-light);
+  color: var(--purple-dark);
+}
+
+:root[data-theme='dark'] .ww-seat-placeholder {
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .ww-role-guess,
+:root[data-theme='dark'] .ww-guess-remove {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--purple-dark);
+}
+
+:root[data-theme='dark'] .ww-role-guess-card.is-selected,
+:root[data-theme='dark'] .ww-seat.is-selected {
+  border-color: var(--purple);
+  background: var(--purple-light);
+}
+
+:root[data-theme='dark'] .ww-role-card.is-revealed:not(.is-wolf) {
+  border-color: #315643;
+  background: #20382d;
+}
+
+:root[data-theme='dark'] .ww-role-card.is-wolf {
+  border-color: #76414d;
+  background: #472a34;
+  color: #f2b3a4;
+}
+
+:root[data-theme='dark'] .ww-results-list li,
+:root[data-theme='dark'] .draw-results-list li,
+:root[data-theme='dark'] .ek-setting-input input {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .ek-settings-fields label {
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .ww-results-list li.is-winner {
+  background: #20382d;
+}
+
+/* Exploding Kittens cards stay graphic; player and status panels use dark surfaces. */
+:root[data-theme='dark'] .ek-turn-banner,
+:root[data-theme='dark'] .ek-seat.is-me,
+:root[data-theme='dark'] .ek-results-list li.is-winner {
+  color: var(--purple-dark);
+}
+
+:root[data-theme='dark'] .ek-phase-timer.is-low {
+  background: #472a34;
+  color: #f19a8d;
+}
+
+/* Rummikub tiles remain readable as physical tiles; surrounding felt and panels dim. */
+:root[data-theme='dark'] .rummikub-status-panel,
+:root[data-theme='dark'] .rummikub-panel,
+:root[data-theme='dark'] .rummikub-settings-content,
+:root[data-theme='dark'] .rummikub-settings-block,
+:root[data-theme='dark'] .rummikub-score-row {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .rummikub-status-panel {
+  background: radial-gradient(ellipse at 100% 0%, rgb(96 136 96 / 14%), transparent 55%),
+    var(--surface);
+}
+
+:root[data-theme='dark'] .rummikub-meld,
+:root[data-theme='dark'] .rummikub-settings-block,
+:root[data-theme='dark'] .rummikub-theme-option,
+:root[data-theme='dark'] .rummikub-sort-button {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .rummikub-status-panel h2,
+:root[data-theme='dark'] .rummikub-panel-heading h3,
+:root[data-theme='dark'] .rummikub-joker-settings h4,
+:root[data-theme='dark'] .rummikub-settings-header h2,
+:root[data-theme='dark'] .rummikub-score-name strong {
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .rummikub-kicker,
+:root[data-theme='dark'] .rummikub-status-panel p:not(.rummikub-kicker),
+:root[data-theme='dark'] .rummikub-results .eyebrow,
+:root[data-theme='dark'] .rummikub-result-copy,
+:root[data-theme='dark'] .rummikub-score-name small,
+:root[data-theme='dark'] .rummikub-round-score {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .rummikub-settings-dialog {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .rummikub-player-chip,
+:root[data-theme='dark'] .rummikub-sort-button,
+:root[data-theme='dark'] .rummikub-joker-control,
+:root[data-theme='dark'] .rummikub-theme-option {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .rummikub-turn-countdown {
+  background: #393322;
+  color: #f0d38b;
+}
+
+:root[data-theme='dark'] .rummikub-turn-countdown.is-expiring {
+  background: #472a34;
+  color: #f19a8d;
+}
+
+:root[data-theme='dark'] .rummikub-pile-count {
+  background: #253d31;
+  color: #a8dfc3;
+}
+
+:root[data-theme='dark'] .rummikub-player-chip strong {
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .rummikub-settings-block-heading,
+:root[data-theme='dark'] .rummikub-theme-copy strong {
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .rummikub-settings-close,
+:root[data-theme='dark'] .rummikub-meld-target {
+  border-color: var(--line);
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .rummikub-settings-block-heading label,
+:root[data-theme='dark'] .rummikub-settings-block-heading h3,
+:root[data-theme='dark'] .rummikub-settings-header h2,
+:root[data-theme='dark'] .rummikub-meld-heading strong {
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .rummikub-settings-block-heading output {
+  color: #a8dfc3;
+}
+
+:root[data-theme='dark'] .rummikub-meld-heading {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .rummikub-meld.is-changed {
+  border-color: #52617f;
+  background: #252d3a;
+}
+
+:root[data-theme='dark'] .rummikub-meld.is-invalid {
+  border-color: #765543;
+  background: #382a24;
+}
+
+:root[data-theme='dark'] .rummikub-settings-block-heading span,
+:root[data-theme='dark'] .rummikub-theme-copy small,
+:root[data-theme='dark'] .rummikub-settings-volume-labels,
+:root[data-theme='dark'] .rummikub-settings-footer > span {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .rummikub-settings-header {
+  border-bottom-color: var(--line);
+}
+
+:root[data-theme='dark'] .rummikub-theme-option.is-selected {
+  border-color: var(--purple);
+  background: var(--purple-light);
+}
+
+:root[data-theme='dark'] .rummikub-turn-countdown,
+:root[data-theme='dark'] .rummikub-pile-count {
+  color: var(--ink-soft);
+}
+
+:root[data-theme='dark'] .rummikub-result-icon {
+  background: #303a30;
+}
+
+:root[data-theme='dark'] .rummikub-round-score.is-positive {
+  color: #8dd19a;
+}
+
+:root[data-theme='dark'] .rummikub-round-score.is-negative {
+  color: #f08f87;
+}
+
+/* Canvas paper is intentionally kept white for drawing and image readability. */
+:root[data-theme='dark'] .hint-card p,
+:root[data-theme='dark'] .draw-secret-answer strong,
+:root[data-theme='dark'] .draw-reveal-card strong,
+:root[data-theme='dark'] .reveal-card strong {
+  color: var(--purple-dark);
+}
+
+:root[data-theme='dark'] .progress-track,
+:root[data-theme='dark'] .ww-phase-progress {
+  background: #403a54;
+}
