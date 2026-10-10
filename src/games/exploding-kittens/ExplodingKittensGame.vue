@@ -22,7 +22,10 @@ import {
   sortHand,
   targetCandidates,
 } from './helpers'
-import { explodingKittensCardFaceUrl } from './visualAssets'
+import {
+  explodingKittensCardFaceUrl,
+  explodingKittensEffectIllustrationUrl,
+} from './visualAssets'
 
 const props = defineProps<{
   game: GameView
@@ -177,6 +180,30 @@ const nopeDialog = computed(() => {
   }
 
   return { isCounter, message }
+})
+const nopeDialogPreview = computed(() => {
+  const pending = game.value?.pending
+  if (!pending || pending.playKind !== 'card') {
+    return null
+  }
+
+  const type = pending.cardTypes[0]
+  if (!type) {
+    return null
+  }
+
+  const imageUrl = explodingKittensEffectIllustrationUrl(type)
+  if (!imageUrl) {
+    return null
+  }
+
+  return {
+    title: cardName(type),
+    imageUrl,
+    description: type === 'see-the-future'
+      ? '私下查看抽牌堆頂端三張牌。'
+      : '',
+  }
 })
 const turnMessage = computed(() => {
   const current = currentPlayer.value?.name ?? '玩家'
@@ -561,6 +588,14 @@ function placeDefuse(): void {
           <p id="ek-nope-dialog-message" class="ek-nope-dialog-message">
             {{ nopeDialog.message }}
           </p>
+          <div v-if="nopeDialogPreview" class="ek-nope-dialog-preview">
+            <img :src="nopeDialogPreview.imageUrl" :alt="`${nopeDialogPreview.title}效果插畫`" />
+            <div class="ek-nope-dialog-preview-copy">
+              <span class="eyebrow">本次出牌效果</span>
+              <strong>{{ nopeDialogPreview.title }}</strong>
+              <p>{{ nopeDialogPreview.description }}</p>
+            </div>
+          </div>
           <p class="ek-nope-dialog-timer" role="timer">
             判定倒數 {{ remaining }} 秒 · {{ nopeOutcomeLabel(game.pending?.nopeCount ?? 0) }}
           </p>
@@ -1051,8 +1086,8 @@ function placeDefuse(): void {
 
 .ek-nope-dialog {
   display: grid;
-  width: min(100%, 430px);
-  max-height: min(88vh, 560px);
+  width: min(100%, 500px);
+  max-height: min(88vh, 660px);
   gap: 10px;
   overflow: auto;
   padding: clamp(20px, 6vw, 28px);
@@ -1074,6 +1109,46 @@ function placeDefuse(): void {
   font-size: 15px;
   font-weight: 800;
   overflow-wrap: anywhere;
+}
+
+.ek-nope-dialog-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 132px) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px dashed #ded9ff;
+  border-radius: 15px;
+  background: #f7f5ff;
+}
+
+.ek-nope-dialog-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.ek-nope-dialog-preview-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.ek-nope-dialog-preview-copy .eyebrow {
+  margin: 0;
+  color: var(--purple-dark);
+}
+
+.ek-nope-dialog-preview-copy strong {
+  font-size: 16px;
+}
+
+.ek-nope-dialog-preview-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .ek-nope-dialog-timer {
@@ -1159,6 +1234,12 @@ function placeDefuse(): void {
 
   .ek-selection-help {
     text-align: left;
+  }
+
+  .ek-nope-dialog-preview {
+    grid-template-columns: minmax(0, 96px) minmax(0, 1fr);
+    gap: 10px;
+    padding: 8px;
   }
 }
 
