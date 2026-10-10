@@ -31,6 +31,7 @@ const isDrawer = computed(() => game.value?.drawerId === props.playerId)
 const drawer = computed(() => props.players.find((player) => player.id === game.value?.drawerId) ?? null)
 const drawerOnline = computed(() => drawer.value?.online ?? false)
 const alreadyGuessed = computed(() => game.value?.correctPlayerIds.includes(props.playerId) ?? false)
+const alreadyPassed = computed(() => game.value?.passedPlayerIds.includes(props.playerId) ?? false)
 const remainingSeconds = computed(() => {
   const deadline = game.value?.phaseEndsAt
   return deadline ? Math.max(0, Math.ceil((deadline - now.value) / 1_000)) : 0
@@ -44,9 +45,17 @@ const canGuess = computed(() => {
     (game.value?.phase === 'drawing' || game.value?.phase === 'guessing') &&
     !isDrawer.value &&
     !alreadyGuessed.value &&
+    !alreadyPassed.value &&
     guessInput.value.trim(),
   )
 })
+const canPassGuess = computed(() => Boolean(
+  props.canInteract &&
+  (game.value?.phase === 'drawing' || game.value?.phase === 'guessing') &&
+  !isDrawer.value &&
+  !alreadyGuessed.value &&
+  !alreadyPassed.value,
+))
 const correctPlayers = computed(() => {
   const correctIds = game.value?.correctPlayerIds ?? []
   return correctIds
@@ -63,20 +72,32 @@ watch(() => game.value?.turnNumber, () => {
   guessFeedback.value = ''
 })
 
-watch(() => props.gameEvent, (event) => {
-  if (event?.gameId !== 'draw-guess') {
-    return
-  }
-
-  if (event.event === 'answer-prompt') {
+watch(
+  () => [props.gameEvent, game.value?.turnNumber, game.value?.phaseEndsAt] as const,
+  ([event, turnNumber, phaseEndsAt]) => {
+    if (event?.gameId !== 'draw-guess' || event.event !== 'answer-prompt') {
+      return
+    }
+    if (
+      typeof event.payload.turnNumber !== 'number' ||
+      event.payload.turnNumber !== turnNumber ||
+      typeof event.payload.phaseEndsAt !== 'number' ||
+      event.payload.phaseEndsAt !== phaseEndsAt
+    ) {
+      return
+    }
     if (typeof event.payload.answer === 'string') {
       secretAnswer.value = event.payload.answer
     }
     if (typeof event.payload.hint === 'string') {
       secretHint.value = event.payload.hint
     }
-  }
-  if (event.event === 'guess-result' && typeof event.payload.correct === 'boolean') {
+  },
+  { immediate: true },
+)
+
+watch(() => props.gameEvent, (event) => {
+  if (event?.gameId === 'draw-guess' && event.event === 'guess-result' && typeof event.payload.correct === 'boolean') {
     guessFeedback.value = event.payload.correct
       ? '猜中了！你和繪圖者各得 50 分。'
       : '還沒猜中，再試一次。'
@@ -118,6 +139,12 @@ function skipTurn(): void {
   }
 }
 
+function finishReveal(): void {
+  if (props.isHost && props.canInteract && game.value?.phase === 'reveal') {
+    emit('game-action', 'finish_reveal', {})
+  }
+}
+
 function submitGuess(): void {
   const answer = guessInput.value.trim()
   if (!canGuess.value || !answer) {
@@ -126,6 +153,12 @@ function submitGuess(): void {
 
   emit('game-action', 'submit_guess', { answer })
   guessInput.value = ''
+}
+
+function passGuess(): void {
+  if (canPassGuess.value) {
+    emit('game-action', 'pass_guess', {})
+  }
 }
 
 function sendGameAction(action: string, payload: Record<string, unknown>): void {
@@ -256,7 +289,7 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
         </div>
 
         <template v-if="game.phase === 'drawing' || game.phase === 'guessing'">
-          <form v-if="!isDrawer && !alreadyGuessed" class="draw-guess-form" @submit.prevent="submitGuess">
+          <form v-if="!isDrawer && !alreadyGuessed && !alreadyPassed" class="draw-guess-form" @submit.prevent="submitGuess">
             <label class="field-label" for="draw-guess-input">你猜答案是？</label>
             <div class="answer-form">
               <input
@@ -273,12 +306,21 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
                 猜答案
               </button>
             </div>
+            <button class="button button-secondary draw-pass-button" type="button" :disabled="!canPassGuess" @click="passGuess">
+              放棄猜題
+            </button>
             <p v-if="guessFeedback" class="guess-feedback" role="status">{{ guessFeedback }}</p>
             <p v-else-if="game.phase === 'drawing'" class="guess-helper">可以邊看繪圖邊猜；猜中立即得分，等繪圖完成後公布結果。</p>
             <p v-else class="guess-helper">答錯可以繼續猜；每位猜中的玩家都得 50 分。</p>
           </form>
           <p v-else class="draw-wait-message">
-            {{ isDrawer ? '等待其他玩家猜答案。' : '你已猜中並取得分數，等待本題繪圖完成。' }}
+            {{ isDrawer
+              ? '等待其他玩家猜答案。'
+              : alreadyPassed
+                ? '你已放棄猜題，等待本題公布結果。'
+                : game.phase === 'drawing'
+                  ? '你已猜中並取得分數，等待繪圖完成。'
+                  : '你已猜中並取得分數，等待本題公布。' }}
           </p>
         </template>
 
@@ -287,6 +329,15 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
           <strong>{{ game.answer }}</strong>
           <p v-if="correctPlayers.length">猜中：{{ correctPlayers.join('、') }}</p>
           <p v-else>這題沒有人猜中。</p>
+          <button
+            v-if="isHost"
+            class="button button-secondary draw-reveal-end-button"
+            type="button"
+            :disabled="!canInteract"
+            @click="finishReveal"
+          >
+            提前結束公布
+          </button>
         </div>
       </template>
     </template>
@@ -322,6 +373,13 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
 
 .draw-answer-form, .draw-guess-form {
   margin-top: 13px;
+}
+
+.draw-pass-button {
+  min-height: 32px;
+  margin-top: 8px;
+  padding-inline: 10px;
+  font-size: 9px;
 }
 
 .draw-hint-label {
@@ -443,5 +501,11 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
   margin: 6px 0 0;
   color: #85809d;
   font-size: 9px;
+}
+
+.draw-reveal-end-button {
+  margin-top: 10px;
+  padding: 7px 12px;
+  font-size: 10px;
 }
 </style>

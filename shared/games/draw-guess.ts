@@ -88,6 +88,7 @@ export interface DrawGuessSettings {
   drawTimeSeconds: number
   roundsPerPlayer: number
   guessTimeSeconds: number
+  revealTimeSeconds: number
   questionMode: DrawGuessQuestionMode
   questionCategory: DrawGuessQuestionCategory
   showHints: boolean
@@ -107,6 +108,7 @@ export interface DrawGuessView {
   hint: string | null
   settings: DrawGuessSettings
   correctPlayerIds: string[]
+  passedPlayerIds: string[]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -129,6 +131,9 @@ export function isDrawGuessSettings(value: unknown): value is DrawGuessSettings 
     Number.isInteger(value.guessTimeSeconds) &&
     Number(value.guessTimeSeconds) >= 10 &&
     Number(value.guessTimeSeconds) <= 120 &&
+    Number.isInteger(value.revealTimeSeconds) &&
+    Number(value.revealTimeSeconds) >= 10 &&
+    Number(value.revealTimeSeconds) <= 180 &&
     (value.questionMode === 'free' || value.questionMode === 'bank') &&
     isDrawGuessQuestionCategory(value.questionCategory) &&
     typeof value.showHints === 'boolean'
@@ -151,6 +156,8 @@ export function isDrawGuessView(value: unknown): value is DrawGuessView {
     (value.hint === null || typeof value.hint === 'string') &&
     isDrawGuessSettings(value.settings) &&
     Array.isArray(value.correctPlayerIds) &&
-    value.correctPlayerIds.every((playerId) => typeof playerId === 'string')
+    value.correctPlayerIds.every((playerId) => typeof playerId === 'string') &&
+    Array.isArray(value.passedPlayerIds) &&
+    value.passedPlayerIds.every((playerId) => typeof playerId === 'string')
   )
 }

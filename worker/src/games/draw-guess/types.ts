@@ -14,5 +14,6 @@ export interface StoredDrawGuess {
   hint: string | null
   usedPromptIds: string[]
   correctPlayerIds: string[]
+  passedPlayerIds: string[]
   drawerScored: boolean
 }

@@ -21,6 +21,7 @@ const emit = defineEmits<{
 const drawTimeSeconds = ref(60)
 const roundsPerPlayer = ref(1)
 const guessTimeSeconds = ref(30)
+const revealTimeSeconds = ref(10)
 const questionMode = ref<DrawGuessQuestionMode>('free')
 const questionCategory = ref<DrawGuessQuestionCategory>('all')
 const showHints = ref(true)
@@ -36,6 +37,9 @@ const isValid = computed(() => {
     Number.isInteger(guessTimeSeconds.value) &&
     guessTimeSeconds.value >= 10 &&
     guessTimeSeconds.value <= 120 &&
+    Number.isInteger(revealTimeSeconds.value) &&
+    revealTimeSeconds.value >= 10 &&
+    revealTimeSeconds.value <= 180 &&
     ['free', 'bank'].includes(questionMode.value) &&
     DRAW_GUESS_QUESTION_CATEGORIES.some(({ id }) => id === questionCategory.value) &&
     typeof showHints.value === 'boolean'
@@ -46,6 +50,7 @@ watch(() => props.settings, (settings) => {
   drawTimeSeconds.value = settingNumber(settings.drawTimeSeconds, 60)
   roundsPerPlayer.value = settingNumber(settings.roundsPerPlayer, 1)
   guessTimeSeconds.value = settingNumber(settings.guessTimeSeconds, 30)
+  revealTimeSeconds.value = settingNumber(settings.revealTimeSeconds, 10)
   questionMode.value = settings.questionMode === 'bank' ? 'bank' : 'free'
   questionCategory.value = DRAW_GUESS_QUESTION_CATEGORIES.some(({ id }) => id === settings.questionCategory)
     ? settings.questionCategory as DrawGuessQuestionCategory
@@ -66,6 +71,7 @@ function applySettings(): void {
     drawTimeSeconds: drawTimeSeconds.value,
     roundsPerPlayer: roundsPerPlayer.value,
     guessTimeSeconds: guessTimeSeconds.value,
+    revealTimeSeconds: revealTimeSeconds.value,
     questionMode: questionMode.value,
     questionCategory: questionCategory.value,
     showHints: showHints.value,
@@ -127,6 +133,11 @@ function applySettings(): void {
         <span>猜答案時間（秒）</span>
         <input v-model.number="guessTimeSeconds" type="number" min="10" max="120" step="1" :disabled="!isHost || !canConfigure" />
         <small>10–120 秒</small>
+      </label>
+      <label>
+        <span>公布答案時間（秒）</span>
+        <input v-model.number="revealTimeSeconds" type="number" min="10" max="180" step="1" :disabled="!isHost || !canConfigure" />
+        <small>10–180 秒；房主可以提前結束</small>
       </label>
     </form>
     <p class="draw-settings-note">

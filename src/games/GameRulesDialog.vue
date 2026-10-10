@@ -100,6 +100,7 @@ const content = computed<RulesContent>(() => {
       const roundsPerPlayer = settingNumber('roundsPerPlayer', 1)
       const drawTimeSeconds = settingNumber('drawTimeSeconds', 60)
       const guessTimeSeconds = settingNumber('guessTimeSeconds', 30)
+      const revealTimeSeconds = settingNumber('revealTimeSeconds', 10)
       const isQuestionBank = props.gameSettings.questionMode === 'bank'
       const showHints = props.gameSettings.showHints !== false
       return {
@@ -114,6 +115,8 @@ const content = computed<RulesContent>(() => {
                 : `每位玩家輪流當繪圖者 ${roundsPerPlayer} 輪；繪圖者先輸入題目與選填提示，再於 ${drawTimeSeconds} 秒內作畫。`,
               `繪畫期間即可猜題，${showHints ? '畫面會顯示提示和答案字數' : '不顯示提示，但答案字數一律會顯示'}；猜中會立即加分，完成繪圖後公布本題結果。`,
               `繪圖完成後，仍未猜中的玩家可再用 ${guessTimeSeconds} 秒猜答案；繪圖者不能猜自己的題目。`,
+              `答案公布 ${revealTimeSeconds} 秒後自動進入下一題；房主可以提前結束公布。`,
+              '猜題者可以放棄本題，放棄後不會再看到猜題輸入。',
               '繪圖者離線或跳過時，該回合會跳過並輪到下一位玩家。',
             ],
           },

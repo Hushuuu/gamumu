@@ -11,7 +11,6 @@ import type { GameActionResult, GameModule, GameRoomContext } from '../types'
 import type { StoredDrawGuess } from './types'
 
 const ANSWER_SETUP_MS = 30_000
-const REVEAL_DURATION_MS = 3_000
 const MAX_ANSWER_LENGTH = 60
 const MAX_HINT_LENGTH = 100
 const MAX_STROKE_POINTS = 24
@@ -20,6 +19,7 @@ const DEFAULT_SETTINGS: DrawGuessSettings = {
   drawTimeSeconds: 60,
   roundsPerPlayer: 1,
   guessTimeSeconds: 30,
+  revealTimeSeconds: 10,
   questionMode: 'free',
   questionCategory: 'all',
   showHints: true,
@@ -57,6 +57,7 @@ function normalizeSettings(value: unknown): DrawGuessSettings {
     drawTimeSeconds: numberSetting('drawTimeSeconds', DEFAULT_SETTINGS.drawTimeSeconds, 15, 180),
     roundsPerPlayer: numberSetting('roundsPerPlayer', DEFAULT_SETTINGS.roundsPerPlayer, 1, 5),
     guessTimeSeconds: numberSetting('guessTimeSeconds', DEFAULT_SETTINGS.guessTimeSeconds, 10, 120),
+    revealTimeSeconds: numberSetting('revealTimeSeconds', DEFAULT_SETTINGS.revealTimeSeconds, 10, 180),
     questionMode: source.questionMode === 'bank' ? 'bank' : 'free',
     questionCategory: isDrawGuessQuestionCategory(source.questionCategory)
       ? source.questionCategory
@@ -75,6 +76,9 @@ function upgradeStoredGame(game: StoredDrawGuess): void {
   }
   if (!Array.isArray(game.usedPromptIds)) {
     game.usedPromptIds = []
+  }
+  if (!Array.isArray(game.passedPlayerIds)) {
+    game.passedPlayerIds = []
   }
 }
 
@@ -104,6 +108,7 @@ function beginTurn(room: GameRoomContext, game: StoredDrawGuess, turnIndex: numb
         game.hint = prompt.hint
       }
       game.correctPlayerIds = []
+      game.passedPlayerIds = []
       game.drawerScored = false
       return true
     }
@@ -141,7 +146,7 @@ function startDrawing(game: StoredDrawGuess, now: number): void {
 }
 
 function finishDrawing(room: GameRoomContext, game: StoredDrawGuess, now: number): void {
-  if (allOnlineGuessersCorrect(room, game)) {
+  if (allOnlineGuessersResolved(room, game)) {
     enterReveal(game, now)
   } else {
     enterGuessing(game, now)
@@ -155,7 +160,7 @@ function enterGuessing(game: StoredDrawGuess, now: number): void {
 
 function enterReveal(game: StoredDrawGuess, now: number): void {
   game.phase = 'reveal'
-  game.phaseEndsAt = now + REVEAL_DURATION_MS
+  game.phaseEndsAt = now + game.settings.revealTimeSeconds * 1_000
 }
 
 function advanceExpiredPhase(room: GameRoomContext, game: StoredDrawGuess, now: number): boolean {
@@ -212,9 +217,11 @@ function isStrokePayload(payload: Record<string, unknown>): payload is StrokePay
   )
 }
 
-function allOnlineGuessersCorrect(room: GameRoomContext, game: StoredDrawGuess): boolean {
+function allOnlineGuessersResolved(room: GameRoomContext, game: StoredDrawGuess): boolean {
   const guessers = room.players.filter((player) => player.online && player.id !== game.drawerId)
-  return guessers.length > 0 && guessers.every((player) => game.correctPlayerIds.includes(player.id))
+  return guessers.length > 0 && guessers.every((player) => {
+    return game.correctPlayerIds.includes(player.id) || game.passedPlayerIds.includes(player.id)
+  })
 }
 
 function handleAction(
@@ -233,6 +240,15 @@ function handleAction(
   if (game.phaseEndsAt <= now) {
     advanceExpiredPhase(room, game, now)
     return failure('TURN_EXPIRED', '本階段時間已到。', true)
+  }
+
+  if (action === 'finish_reveal') {
+    if (playerId !== room.hostId || game.phase !== 'reveal') {
+      return failure('CANNOT_FINISH_REVEAL', '只有房主能提前結束答案公布階段。')
+    }
+
+    beginTurn(room, game, game.turnIndex + 1, now)
+    return { ok: true, changed: true }
   }
 
   if (action === 'set_answer') {
@@ -327,6 +343,27 @@ function handleAction(
     }
   }
 
+  if (action === 'pass_guess') {
+    if (game.phase !== 'drawing' && game.phase !== 'guessing') {
+      return failure('GUESSING_CLOSED', '目前不能放棄猜題。')
+    }
+    if (playerId === game.drawerId) {
+      return failure('DRAWER_CANNOT_GUESS', '繪圖者不能猜自己的題目。')
+    }
+    if (game.correctPlayerIds.includes(playerId)) {
+      return failure('ALREADY_GUESSED', '你已經猜中這題了。')
+    }
+    if (game.passedPlayerIds.includes(playerId)) {
+      return failure('GUESSING_PASSED', '你已放棄本題猜測。')
+    }
+
+    game.passedPlayerIds.push(playerId)
+    if (game.phase === 'guessing' && allOnlineGuessersResolved(room, game)) {
+      enterReveal(game, now)
+    }
+    return { ok: true, changed: true }
+  }
+
   if (action === 'submit_guess') {
     if (game.phase !== 'drawing' && game.phase !== 'guessing') {
       return failure('GUESSING_CLOSED', '目前不是猜答案階段。')
@@ -336,6 +373,9 @@ function handleAction(
     }
     if (game.correctPlayerIds.includes(playerId)) {
       return failure('ALREADY_GUESSED', '你已經猜中這題了。')
+    }
+    if (game.passedPlayerIds.includes(playerId)) {
+      return failure('GUESSING_PASSED', '你已放棄本題猜測。')
     }
 
     const guess = payload.answer
@@ -374,7 +414,7 @@ function handleAction(
       game.drawerScored = true
     }
 
-    if (game.phase === 'guessing' && allOnlineGuessersCorrect(room, game)) {
+    if (game.phase === 'guessing' && allOnlineGuessersResolved(room, game)) {
       enterReveal(game, now)
     }
 
@@ -398,7 +438,7 @@ export const drawGuessGame: GameModule = {
     if (!isDrawGuessSettings(settings)) {
       return failure(
         'INVALID_GAME_SETTINGS',
-        '繪畫時間需為 15–180 秒、每人輪數需為 1–5、猜答案時間需為 10–120 秒。',
+        '繪畫時間需為 15–180 秒、每人輪數需為 1–5、猜答案時間需為 10–120 秒、答案公布時間需為 10–180 秒。',
       )
     }
 
@@ -407,6 +447,7 @@ export const drawGuessGame: GameModule = {
       current.drawTimeSeconds === settings.drawTimeSeconds &&
       current.roundsPerPlayer === settings.roundsPerPlayer &&
       current.guessTimeSeconds === settings.guessTimeSeconds &&
+      current.revealTimeSeconds === settings.revealTimeSeconds &&
       current.questionMode === settings.questionMode &&
       current.questionCategory === settings.questionCategory &&
       current.showHints === settings.showHints
@@ -439,6 +480,8 @@ export const drawGuessGame: GameModule = {
         answer: game.answer,
         hint: game.settings.showHints ? game.hint ?? '' : '',
         answerLength: game.answerLength ?? answerLength(game.answer),
+        turnNumber: game.turnIndex + 1,
+        phaseEndsAt: game.phaseEndsAt,
       },
     }
   },
@@ -458,6 +501,7 @@ export const drawGuessGame: GameModule = {
       hint: null,
       usedPromptIds: [],
       correctPlayerIds: [],
+      passedPlayerIds: [],
       drawerScored: false,
     }
     room.status = 'playing'
@@ -496,7 +540,7 @@ export const drawGuessGame: GameModule = {
       return beginTurn(room, game, game.turnIndex + 1, now)
     }
 
-    if (game.phase === 'guessing' && allOnlineGuessersCorrect(room, game)) {
+    if (game.phase === 'guessing' && allOnlineGuessersResolved(room, game)) {
       enterReveal(game, now)
       return true
     }
@@ -504,8 +548,12 @@ export const drawGuessGame: GameModule = {
   },
   playerFlags(room, playerId) {
     const game = room.game
+    if (game?.gameId === 'draw-guess') {
+      upgradeStoredGame(game)
+    }
     const correct = game?.gameId === 'draw-guess' && game.correctPlayerIds.includes(playerId)
-    return { answered: correct, correct }
+    const passed = game?.gameId === 'draw-guess' && game.passedPlayerIds.includes(playerId)
+    return { answered: correct || passed, correct }
   },
   toView(room): DrawGuessView | null {
     const game = room.game
@@ -528,6 +576,7 @@ export const drawGuessGame: GameModule = {
       hint: !game.settings.showHints || game.phase === 'answering' ? null : game.hint,
       settings: game.settings,
       correctPlayerIds: [...game.correctPlayerIds],
+      passedPlayerIds: [...game.passedPlayerIds],
     }
   },
 }
