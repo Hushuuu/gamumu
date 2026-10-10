@@ -9,6 +9,7 @@ import { createInterface } from 'node:readline/promises'
 const PACKAGED_API_URL = ''
 const PACKAGED_BETA_CODE = ''
 const isPackagedExecutable = typeof process.pkg !== 'undefined'
+const MAX_RECONNECT_ATTEMPTS = 3
 
 async function promptForBotOptions() {
   const prompt = createInterface({ input: process.stdin, output: process.stdout })
@@ -614,6 +615,8 @@ function findRummikubMove(game, hand) {
 class Bot {
   constructor(name, credentials, betaToken) {
     this.name = name
+    this.credentials = credentials
+    this.betaToken = betaToken
     this.id = credentials.playerId
     this.state = null
     this.priv = null
@@ -621,17 +624,91 @@ class Bot {
     this.lastKey = ''
     this.lastAvalonKey = ''
     this.lastRummikubTurnKey = ''
-    this.ws = new WebSocket(
-      `${API.replace(/^http/, 'ws')}/api/rooms/${credentials.code}/ws`,
-      ['gamumu-beta', `gamumu-beta.${betaToken}`],
-    )
-    this.ws.onopen = () => this.send({ type: 'authenticate', token: credentials.token })
-    this.ws.onmessage = (event) => this.onMessage(JSON.parse(event.data))
-    this.ws.onclose = () => console.log(`[${this.name}] 連線中斷`)
+    this.ws = null
+    this.reconnectAttempts = 0
+    this.reconnectTimer = null
+    this.stopReconnecting = false
+    this.hasAuthenticated = false
+    this.connect()
+  }
+
+  connect() {
+    if (this.stopReconnecting) return
+
+    try {
+      const ws = new WebSocket(
+        `${API.replace(/^http/, 'ws')}/api/rooms/${this.credentials.code}/ws`,
+        ['gamumu-beta', `gamumu-beta.${this.betaToken}`],
+      )
+      this.ws = ws
+      ws.onopen = () => {
+        if (this.ws !== ws || this.stopReconnecting) return
+        ws.send(JSON.stringify({ type: 'authenticate', token: this.credentials.token }))
+      }
+      ws.onmessage = (event) => {
+        if (this.ws !== ws || typeof event.data !== 'string') return
+        try {
+          this.onMessage(JSON.parse(event.data), ws)
+        } catch (error) {
+          console.error(`[${this.name}] 處理伺服器訊息失敗：${error.message}`)
+        }
+      }
+      ws.onerror = (event) => {
+        if (this.ws === ws) {
+          console.error(`[${this.name}] WebSocket 錯誤`, event.error ?? event.message ?? '')
+        }
+      }
+      ws.onclose = (event) => {
+        if (this.ws === ws) this.ws = null
+        console.log(
+          `[${this.name}] 連線中斷 code=${event.code} reason=${event.reason || '(空)'} clean=${event.wasClean}`,
+        )
+
+        if (this.stopReconnecting) return
+        if ([4001, 4401, 4403, 4404].includes(event.code)) {
+          this.stopReconnecting = true
+          console.log(`[${this.name}] 此連線狀態無法重連，停止嘗試。`)
+          return
+        }
+
+        this.scheduleReconnect()
+      }
+    } catch (error) {
+      this.ws = null
+      console.error(`[${this.name}] 建立 WebSocket 失敗：${error.message}`)
+      this.scheduleReconnect()
+    }
+  }
+
+  scheduleReconnect() {
+    if (this.stopReconnecting || this.reconnectTimer) return
+    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      this.stopReconnecting = true
+      console.log(`[${this.name}] 已重連 ${MAX_RECONNECT_ATTEMPTS} 次仍未成功，停止嘗試。`)
+      return
+    }
+
+    const baseDelay = Math.min(1_000 * 2 ** Math.min(this.reconnectAttempts, 4), 15_000)
+    const delay = baseDelay + Math.random() * Math.min(baseDelay, 1_000)
+    this.reconnectAttempts += 1
+    console.log(`[${this.name}] ${Math.ceil(delay / 1_000)} 秒後嘗試第 ${this.reconnectAttempts} 次重連。`)
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      this.connect()
+    }, delay)
+  }
+
+  shutdown() {
+    this.stopReconnecting = true
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    this.send({ type: 'leave_room' })
   }
 
   send(message) {
-    if (this.ws.readyState === WebSocket.OPEN) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message))
     }
   }
@@ -640,8 +717,21 @@ class Bot {
     this.send({ type: 'game_action', gameId, action, payload })
   }
 
-  onMessage(message) {
-    if (message.type === 'state') {
+  onMessage(message, ws) {
+    if (message.type === 'authenticated') {
+      this.reconnectAttempts = 0
+      this.priv = null
+      this.avalonPriv = null
+      this.lastKey = ''
+      this.lastAvalonKey = ''
+      this.lastRummikubTurnKey = ''
+      console.log(`[${this.name}] ${this.hasAuthenticated ? '已重新連線' : '已連線'}`)
+      this.hasAuthenticated = true
+    } else if (message.type === 'auth_error') {
+      console.error(`[${this.name}] 驗證失敗：${message.message}`)
+      this.stopReconnecting = true
+      ws.close()
+    } else if (message.type === 'state') {
       this.state = message.state
       this.think()
     } else if (
@@ -660,7 +750,8 @@ class Bot {
       this.think(message.event)
     } else if (message.type === 'kicked' || message.type === 'room_expired') {
       console.log(`[${this.name}] ${message.type}`)
-      this.ws.close()
+      this.stopReconnecting = true
+      ws.close()
     }
   }
 
@@ -909,6 +1000,6 @@ for (let index = 1; index <= count; index += 1) {
 console.log('機器人會自動 Ready；請在瀏覽器中選擇遊戲並開始。Ctrl+C 結束並離開房間。')
 
 process.on('SIGINT', () => {
-  for (const bot of bots) bot.send({ type: 'leave_room' })
+  for (const bot of bots) bot.shutdown()
   setTimeout(() => process.exit(0), 400)
 })
