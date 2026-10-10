@@ -14,7 +14,7 @@ import {
 import type { GameEvent, PlayerView } from '../../../shared/protocol'
 import PlayerPicker from './components/PlayerPicker.vue'
 import RoleCard from './components/RoleCard.vue'
-import WerewolfHistoryDialog from './components/WerewolfHistoryDialog.vue'
+import WerewolfActivitySection from './components/WerewolfActivitySection.vue'
 import WerewolfMomentOverlay from './components/WerewolfMomentOverlay.vue'
 import WerewolfPhaseIllustration from './components/WerewolfPhaseIllustration.vue'
 import WerewolfRoleIcon from './components/WerewolfRoleIcon.vue'
@@ -527,14 +527,6 @@ function endDiscussion(): void {
         </div>
       </div>
 
-      <WerewolfHistoryDialog
-        :events="view.publicHistory"
-        :players="props.players"
-        button-label="歷史紀錄"
-        eyebrow="遊戲資訊"
-        dialog-title="本局歷史紀錄"
-      />
-
       <RoleCard :role="priv?.role ?? null" :teammate-names="teammateNames" />
 
       <p v-if="priv && !priv.alive" class="ww-notice ww-notice-dead" role="status">
@@ -834,6 +826,8 @@ function endDiscussion(): void {
         @role-drop="dropRoleGuess"
         @clear-guess="clearRoleGuess"
       />
+
+      <WerewolfActivitySection :events="view.publicHistory" :players="props.players" />
 
       <section class="ww-panel" aria-label="本局角色配置">
         <div class="ww-role-guess-heading">
