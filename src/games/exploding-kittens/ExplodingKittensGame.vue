@@ -239,6 +239,42 @@ const turnMessage = computed(() => {
       return '本局已結束。'
   }
 })
+const pendingActionMessage = computed(() => {
+  const pending = game.value?.pending
+  if (!pending) {
+    return ''
+  }
+
+  const actor = playerName(pending.actorId)
+  const target = pending.targetId ? playerName(pending.targetId) : '指定玩家'
+  if (pending.kind === 'defuse') {
+    return `${actor} 抽到爆炸貓，正在拆除並選擇放回位置。`
+  }
+  if (pending.kind === 'favor') {
+    return `${actor} 對 ${target} 使用恩惠，等待對方交出一張手牌。`
+  }
+  if (pending.kind !== 'nope') {
+    return ''
+  }
+
+  let action: string
+  if (pending.playKind === 'pair') {
+    action = `${actor} 對 ${target} 使用連擊`
+  } else if (pending.playKind === 'triple') {
+    action = `${actor} 對 ${target} 使用三條，指定${pending.namedType ? cardName(pending.namedType) : '牌名'}`
+  } else if (pending.playKind === 'five') {
+    action = `${actor} 使用五彩繽紛，指定從棄牌區取回${pending.namedType ? cardName(pending.namedType) : '牌'}`
+  } else if (pending.cardTypes[0] === 'attack') {
+    const nextPlayer = nextAliveSeatAfter(pending.actorId)
+    action = `${actor} 使用攻擊卡；若效果生效，下家${nextPlayer ? ` ${nextPlayer.name}` : ''}將連續行動兩回合`
+  } else if (pending.cardTypes[0] === 'favor' && pending.targetId) {
+    action = `${actor} 對 ${target} 使用恩惠，要求交出一張手牌`
+  } else {
+    action = `${actor} 打出${formatCardList(pending.cardTypes)}`
+  }
+
+  return `${action}；等待休想判定（${nopeOutcomeLabel(pending.nopeCount)}）。`
+})
 
 watch(() => props.gameEvent, (event) => {
   if (
@@ -287,6 +323,22 @@ function playerName(id: string): string {
   return game.value?.seats.find((seat) => seat.id === id)?.name
     ?? props.players.find((player) => player.id === id)?.name
     ?? '玩家'
+}
+
+function nextAliveSeatAfter(playerId: string) {
+  const seats = game.value?.seats ?? []
+  const currentIndex = seats.findIndex((seat) => seat.id === playerId)
+  if (currentIndex === -1) {
+    return null
+  }
+
+  for (let step = 1; step <= seats.length; step += 1) {
+    const seat = seats[(currentIndex + step) % seats.length]
+    if (seat?.status === 'alive') {
+      return seat
+    }
+  }
+  return null
 }
 
 function toggleCard(cardId: string): void {
@@ -375,6 +427,7 @@ function placeDefuse(): void {
 
     <div class="ek-turn-banner" role="status">
       <strong>{{ turnMessage }}</strong>
+      <span v-if="pendingActionMessage">目前出牌：{{ pendingActionMessage }}</span>
       <span v-if="game.phase === 'nope' && game.pending">
         {{ game.pending.nopeCount }} 張休想 · 判定倒數 {{ remaining }} 秒
       </span>
@@ -401,7 +454,12 @@ function placeDefuse(): void {
       </article>
     </section>
 
-    <section class="ek-board" aria-label="棄牌區">
+    <section class="ek-board" aria-label="抽牌堆與棄牌區">
+      <div class="ek-draw-pile" :aria-label="`抽牌堆剩餘 ${game.drawPileCount} 張`">
+        <span>抽牌堆剩餘</span>
+        <strong>{{ game.drawPileCount }}</strong>
+        <span>張</span>
+      </div>
       <div class="ek-discard-area">
         <div class="ek-discard-heading">
           <strong>棄牌區</strong>
@@ -772,8 +830,38 @@ function placeDefuse(): void {
 }
 
 .ek-board {
-  display: block;
+  display: grid;
   min-width: 0;
+  grid-template-columns: minmax(120px, 0.55fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px;
+}
+
+.ek-draw-pile {
+  display: grid;
+  min-width: 0;
+  min-height: 92px;
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid #ded9ff;
+  border-radius: 12px;
+  background: #f5f3ff;
+  color: var(--purple-dark);
+  text-align: center;
+}
+
+.ek-draw-pile span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.ek-draw-pile strong {
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
 }
 
 .ek-discard-area {
@@ -1222,6 +1310,21 @@ function placeDefuse(): void {
 
   .ek-seats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ek-board {
+    grid-template-columns: minmax(78px, 0.35fr) minmax(0, 1fr);
+    gap: 9px;
+    padding: 11px;
+  }
+
+  .ek-draw-pile {
+    min-height: 82px;
+    padding: 8px 5px;
+  }
+
+  .ek-draw-pile strong {
+    font-size: 24px;
   }
 
   .ek-hand {

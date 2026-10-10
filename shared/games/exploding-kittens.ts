@@ -133,6 +133,7 @@ export interface ExplodingKittensView {
   seats: ExplodingKittensSeat[]
   currentPlayerId: string | null
   turnsLeft: number
+  drawPileCount: number
   discard: ExplodingKittensCardType[]
   turnPlays: ExplodingKittensPlay[]
   lastTurnPlays: ExplodingKittensPlay[]
@@ -289,6 +290,7 @@ export function isExplodingKittensView(value: unknown): value is ExplodingKitten
     isOptionalSeat(value.currentPlayerId) &&
     isOptionalSeat(value.winnerId) &&
     isCount(value.turnsLeft, 2) &&
+    isCount(value.drawPileCount, EXPLODING_KITTENS_MAX_CARDS) &&
     isCardTypeList(value.discard, EXPLODING_KITTENS_MAX_CARDS) &&
     Array.isArray(value.turnPlays) &&
     value.turnPlays.every((play) => isExplodingKittensPlay(play, isSeat)) &&

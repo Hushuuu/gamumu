@@ -166,6 +166,7 @@ export const explodingKittensGame: GameModule = {
       })),
       currentPlayerId: game.currentPlayerId,
       turnsLeft: game.turnsLeft,
+      drawPileCount: game.drawPile.length,
       discard: [...game.discard],
       turnPlays: game.turnPlays.map((play) => ({ ...play, cardTypes: [...play.cardTypes] })),
       lastTurnPlays: game.lastTurnPlays.map((play) => ({ ...play, cardTypes: [...play.cardTypes] })),

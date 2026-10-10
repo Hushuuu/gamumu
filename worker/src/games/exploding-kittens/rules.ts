@@ -239,6 +239,7 @@ function readCardIds(value: unknown): string[] | null {
 
 function playAnnouncement(
   game: StoredExplodingKittens,
+  actorId: string,
   actorName: string,
   kind: ExplodingKittensPlayKind,
   types: ExplodingKittensCardType[],
@@ -247,16 +248,19 @@ function playAnnouncement(
 ): string {
   const targetName = targetId ? nameOf(game, targetId) : ''
   if (kind === 'pair') {
-    return `${actorName} 使用成雙成對，要從 ${targetName} 偷一張手牌`
+    return `${actorName} 對 ${targetName} 使用連擊，等待判定後偷取一張手牌`
   }
   if (kind === 'triple') {
-    return `${actorName} 使用三條，指定${namedType ? label(namedType) : ''}，要從 ${targetName} 取走`
+    return `${actorName} 對 ${targetName} 使用三條，指定${namedType ? label(namedType) : ''}`
   }
   if (kind === 'five') {
-    return `${actorName} 使用五彩繽紛，要從棄牌區取回${namedType ? label(namedType) : ''}`
+    return `${actorName} 使用五彩繽紛，指定從棄牌區取回${namedType ? label(namedType) : ''}`
   }
   if (types[0] === 'favor' && targetId) {
-    return `${actorName} 打出恩惠，要求 ${targetName} 交出一張牌`
+    return `${actorName} 對 ${targetName} 使用恩惠，要求交出一張牌`
+  }
+  if (types[0] === 'attack') {
+    return `${actorName} 打出攻擊卡；若效果生效，${nameOf(game, nextAliveId(game, actorId))} 將連續行動兩回合`
   }
   return `${actorName} 打出了${types.map(label).join('、')}`
 }
@@ -332,7 +336,7 @@ function playCards(
   }
   game.phase = 'nope'
   game.phaseEndsAt = now + nopeWindowMs(game)
-  announce(game, playAnnouncement(game, actor.name, kind, types, targetId, namedType))
+  announce(game, playAnnouncement(game, actorId, actor.name, kind, types, targetId, namedType))
   return succeed()
 }
 
