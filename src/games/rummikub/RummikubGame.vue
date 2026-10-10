@@ -36,6 +36,13 @@ interface DraftMeld {
   tiles: RummikubBoardTile[]
 }
 
+interface DraftUndoStep {
+  hand: RummikubTile[]
+  melds: DraftMeld[]
+  selectedTileIds: number[]
+  nextDraftMeldId: number
+}
+
 type BoardJoker = Extract<RummikubBoardTile, { kind: 'joker' }>
 type RackSortMode = 'color' | 'number'
 
@@ -124,6 +131,7 @@ const isEditing = ref(false)
 const draftHand = ref<RummikubTile[]>([])
 const draftMelds = ref<DraftMeld[]>([])
 const selectedTileIds = ref<number[]>([])
+const draftUndoHistory = ref<DraftUndoStep[]>([])
 const originalHand = ref<RummikubTile[]>([])
 const originalMelds = ref<RummikubMeld[]>([])
 const originalHandTileIds = ref(new Set<number>())
@@ -454,6 +462,7 @@ const previousTurnCombo = computed(() => {
   return playerName ? { combo, playerName } : null
 })
 const selectedTileCount = computed(() => selectedTileIds.value.length)
+const canUndoDraft = computed(() => draftUndoHistory.value.length > 0)
 const canReturnSelectedTiles = computed(() => {
   const handTileIds = new Set(draftHand.value.map((tile) => tile.id))
   return selectedTileIds.value.some((tileId) => {
@@ -685,6 +694,35 @@ function isMeldPreviewChanged(meld: DraftMeld): boolean {
   )
 }
 
+function saveDraftUndoStep(): void {
+  draftUndoHistory.value.push({
+    hand: draftHand.value.map((tile) => ({ ...tile })),
+    melds: draftMelds.value.map((meld) => ({
+      id: meld.id,
+      tiles: meld.tiles.map(cloneBoardTile),
+    })),
+    selectedTileIds: [...selectedTileIds.value],
+    nextDraftMeldId,
+  })
+}
+
+function undoLastDraftOperation(): void {
+  if (!isEditing.value || !props.canInteract) {
+    return
+  }
+
+  const previousStep = draftUndoHistory.value.pop()
+  if (!previousStep) {
+    return
+  }
+
+  draftHand.value = previousStep.hand
+  draftMelds.value = previousStep.melds
+  selectedTileIds.value = previousStep.selectedTileIds
+  nextDraftMeldId = previousStep.nextDraftMeldId
+  publishComboPreview()
+}
+
 function beginEdit(): void {
   const currentGame = game.value
   if (!canAct.value || !currentGame) {
@@ -706,6 +744,7 @@ function beginEdit(): void {
     tiles: meld.tiles.map(cloneBoardTile),
   }))
   selectedTileIds.value = []
+  draftUndoHistory.value = []
   isEditing.value = true
   publishComboPreview(true)
 }
@@ -721,6 +760,7 @@ function cancelEdit(syncComboPreview = true): void {
   draftHand.value = []
   draftMelds.value = []
   selectedTileIds.value = []
+  draftUndoHistory.value = []
   originalHand.value = []
   originalHandTileIds.value = new Set()
   originalMelds.value = []
@@ -797,6 +837,14 @@ function toggleTileSelection(tileId: number, isHandTile: boolean): void {
     : [...selectedTileIds.value, tileId]
 }
 
+function clearSelectedTiles(): void {
+  if (!isEditing.value || !props.canInteract) {
+    return
+  }
+
+  selectedTileIds.value = []
+}
+
 function toBoardTile(tile: RummikubTile): RummikubBoardTile {
   return tile.kind === 'joker'
     ? { id: tile.id, kind: 'joker', representedAs: { color: 'red', value: 1 } }
@@ -823,6 +871,7 @@ function transferSelectedTiles(targetMeldId: string | null): void {
     return
   }
 
+  saveDraftUndoStep()
   const movedTiles: RummikubBoardTile[] = []
   for (const tileId of selectedTileIds.value) {
     const handIndex = draftHand.value.findIndex((tile) => tile.id === tileId)
@@ -871,10 +920,11 @@ function moveSelectedToNewMeld(): void {
 }
 
 function returnSelectedTilesToHand(): void {
-  if (!isEditing.value || selectedTileIds.value.length === 0) {
+  if (!isEditing.value || selectedTileIds.value.length === 0 || !canReturnSelectedTiles.value) {
     return
   }
 
+  saveDraftUndoStep()
   const selectedIds = new Set(selectedTileIds.value)
   const returnedTiles: RummikubTile[] = []
   for (const meld of draftMelds.value) {
@@ -899,6 +949,15 @@ function returnSelectedTilesToHand(): void {
 }
 
 function updateJokerFace(tileId: number, face: RummikubFace): void {
+  const joker = visibleJokers.value.find((tile) => tile.id === tileId)
+  if (
+    !joker ||
+    (joker.representedAs.color === face.color && joker.representedAs.value === face.value)
+  ) {
+    return
+  }
+
+  saveDraftUndoStep()
   draftMelds.value = draftMelds.value.map((meld) => ({
     ...meld,
     tiles: meld.tiles.map((tile) => {
@@ -946,6 +1005,18 @@ function submitTurn(): void {
     melds: move.melds,
     jokers: move.jokers,
   })
+}
+
+function confirmCancelEdit(): void {
+  if (!isEditing.value || !props.canInteract) {
+    return
+  }
+
+  if (!window.confirm('確定要全部取消嗎？目前這回合的牌面調整會全部還原。')) {
+    return
+  }
+
+  cancelEdit()
 }
 
 function drawOrPass(): void {
@@ -1280,6 +1351,22 @@ function drawOrPass(): void {
             <button
               class="button button-secondary"
               type="button"
+              :disabled="!props.canInteract || !canUndoDraft"
+              @click="undoLastDraftOperation"
+            >
+              返回上一步
+            </button>
+            <button
+              class="button button-secondary"
+              type="button"
+              :disabled="!props.canInteract || selectedTileCount === 0"
+              @click="clearSelectedTiles"
+            >
+              取消所選牌
+            </button>
+            <button
+              class="button button-secondary"
+              type="button"
               :disabled="!props.canInteract || selectedTileCount === 0"
               @click="moveSelectedToNewMeld"
             >
@@ -1407,7 +1494,7 @@ function drawOrPass(): void {
           class="button button-secondary"
           type="button"
           :disabled="!props.canInteract"
-          @click="cancelEdit()"
+          @click="confirmCancelEdit"
         >
           全部取消
         </button>
