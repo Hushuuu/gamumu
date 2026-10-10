@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import {
   DEFAULT_EXPLODING_KITTENS_SETTINGS,
   type ExplodingKittensSettings,
@@ -19,6 +19,14 @@ const emit = defineEmits<{
 const turnTimeSeconds = ref(DEFAULT_EXPLODING_KITTENS_SETTINGS.turnTimeSeconds)
 const nopeWindowSeconds = ref(DEFAULT_EXPLODING_KITTENS_SETTINGS.nopeWindowSeconds)
 const turnNoticeSeconds = ref(DEFAULT_EXPLODING_KITTENS_SETTINGS.turnNoticeSeconds)
+const hasLocalEdits = ref(false)
+let applySettingsTimer: number | undefined
+
+onBeforeUnmount(() => {
+  if (applySettingsTimer !== undefined) {
+    window.clearTimeout(applySettingsTimer)
+  }
+})
 
 const isValid = computed(() => {
   return (
@@ -41,9 +49,25 @@ watch(
     () => props.settings.turnNoticeSeconds,
   ],
   ([turnTime, nopeWindow, turnNotice]) => {
-    turnTimeSeconds.value = settingNumber(turnTime, DEFAULT_EXPLODING_KITTENS_SETTINGS.turnTimeSeconds)
-    nopeWindowSeconds.value = settingNumber(nopeWindow, DEFAULT_EXPLODING_KITTENS_SETTINGS.nopeWindowSeconds)
-    turnNoticeSeconds.value = settingNumber(turnNotice, DEFAULT_EXPLODING_KITTENS_SETTINGS.turnNoticeSeconds)
+    const serverTurnTime = settingNumber(turnTime, DEFAULT_EXPLODING_KITTENS_SETTINGS.turnTimeSeconds)
+    const serverNopeWindow = settingNumber(nopeWindow, DEFAULT_EXPLODING_KITTENS_SETTINGS.nopeWindowSeconds)
+    const serverTurnNotice = settingNumber(turnNotice, DEFAULT_EXPLODING_KITTENS_SETTINGS.turnNoticeSeconds)
+
+    if (hasLocalEdits.value) {
+      if (
+        serverTurnTime === turnTimeSeconds.value &&
+        serverNopeWindow === nopeWindowSeconds.value &&
+        serverTurnNotice === turnNoticeSeconds.value
+      ) {
+        hasLocalEdits.value = false
+      } else {
+        return
+      }
+    }
+
+    turnTimeSeconds.value = serverTurnTime
+    nopeWindowSeconds.value = serverNopeWindow
+    turnNoticeSeconds.value = serverTurnNotice
   },
   { immediate: true },
 )
@@ -52,16 +76,58 @@ function settingNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) ? value : fallback
 }
 
+function queueApplySettings(): void {
+  hasLocalEdits.value = true
+  if (applySettingsTimer !== undefined) {
+    window.clearTimeout(applySettingsTimer)
+  }
+  applySettingsTimer = window.setTimeout(() => {
+    applySettingsTimer = undefined
+    void nextTick(applySettings)
+  }, 300)
+}
+
 function applySettings(): void {
+  if (applySettingsTimer !== undefined) {
+    window.clearTimeout(applySettingsTimer)
+    applySettingsTimer = undefined
+  }
+
   if (!props.isHost || !props.canConfigure || !isValid.value) {
     return
   }
 
-  emit('configure-game', {
+  const settings = {
     turnTimeSeconds: turnTimeSeconds.value,
     nopeWindowSeconds: nopeWindowSeconds.value,
     turnNoticeSeconds: turnNoticeSeconds.value,
-  })
+  }
+  const currentSettings = {
+    turnTimeSeconds: settingNumber(
+      props.settings.turnTimeSeconds,
+      DEFAULT_EXPLODING_KITTENS_SETTINGS.turnTimeSeconds,
+    ),
+    nopeWindowSeconds: settingNumber(
+      props.settings.nopeWindowSeconds,
+      DEFAULT_EXPLODING_KITTENS_SETTINGS.nopeWindowSeconds,
+    ),
+    turnNoticeSeconds: settingNumber(
+      props.settings.turnNoticeSeconds,
+      DEFAULT_EXPLODING_KITTENS_SETTINGS.turnNoticeSeconds,
+    ),
+  }
+
+  if (
+    settings.turnTimeSeconds === currentSettings.turnTimeSeconds &&
+    settings.nopeWindowSeconds === currentSettings.nopeWindowSeconds &&
+    settings.turnNoticeSeconds === currentSettings.turnNoticeSeconds
+  ) {
+    hasLocalEdits.value = false
+    return
+  }
+
+  hasLocalEdits.value = true
+  emit('configure-game', settings)
 }
 </script>
 
@@ -87,6 +153,7 @@ function applySettings(): void {
             max="100"
             step="1"
             :disabled="!isHost || !canConfigure"
+            @input="queueApplySettings"
           />
           <small>秒（5–100）</small>
         </div>
@@ -101,6 +168,7 @@ function applySettings(): void {
             max="10"
             step="1"
             :disabled="!isHost || !canConfigure"
+            @input="queueApplySettings"
           />
           <small>秒（3–10）</small>
         </div>
@@ -115,6 +183,7 @@ function applySettings(): void {
             max="20"
             step="1"
             :disabled="!isHost || !canConfigure"
+            @input="queueApplySettings"
           />
           <small>秒（5–20）</small>
         </div>
