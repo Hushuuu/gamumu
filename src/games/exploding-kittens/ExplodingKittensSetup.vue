@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { ExplodingKittensSettings } from '../../../shared/games'
+import {
+  DEFAULT_EXPLODING_KITTENS_SETTINGS,
+  type ExplodingKittensSettings,
+} from '../../../shared/games'
 
 const props = defineProps<{
   settings: Record<string, unknown>
@@ -13,29 +16,37 @@ const emit = defineEmits<{
   'configure-game': [settings: ExplodingKittensSettings]
 }>()
 
-const turnTimeSeconds = ref(20)
-const nopeWindowSeconds = ref(5)
-const turnNoticeSeconds = ref(5)
+const turnTimeSeconds = ref(DEFAULT_EXPLODING_KITTENS_SETTINGS.turnTimeSeconds)
+const nopeWindowSeconds = ref(DEFAULT_EXPLODING_KITTENS_SETTINGS.nopeWindowSeconds)
+const turnNoticeSeconds = ref(DEFAULT_EXPLODING_KITTENS_SETTINGS.turnNoticeSeconds)
 
 const isValid = computed(() => {
   return (
     Number.isInteger(turnTimeSeconds.value) &&
     turnTimeSeconds.value >= 5 &&
-    turnTimeSeconds.value <= 120 &&
+    turnTimeSeconds.value <= 100 &&
     Number.isInteger(nopeWindowSeconds.value) &&
     nopeWindowSeconds.value >= 3 &&
-    nopeWindowSeconds.value <= 25 &&
+    nopeWindowSeconds.value <= 10 &&
     Number.isInteger(turnNoticeSeconds.value) &&
     turnNoticeSeconds.value >= 5 &&
     turnNoticeSeconds.value <= 20
   )
 })
 
-watch(() => props.settings, (settings) => {
-  turnTimeSeconds.value = settingNumber(settings.turnTimeSeconds, 30)
-  nopeWindowSeconds.value = settingNumber(settings.nopeWindowSeconds, 15)
-  turnNoticeSeconds.value = settingNumber(settings.turnNoticeSeconds, 8)
-}, { deep: true, immediate: true })
+watch(
+  [
+    () => props.settings.turnTimeSeconds,
+    () => props.settings.nopeWindowSeconds,
+    () => props.settings.turnNoticeSeconds,
+  ],
+  ([turnTime, nopeWindow, turnNotice]) => {
+    turnTimeSeconds.value = settingNumber(turnTime, DEFAULT_EXPLODING_KITTENS_SETTINGS.turnTimeSeconds)
+    nopeWindowSeconds.value = settingNumber(nopeWindow, DEFAULT_EXPLODING_KITTENS_SETTINGS.nopeWindowSeconds)
+    turnNoticeSeconds.value = settingNumber(turnNotice, DEFAULT_EXPLODING_KITTENS_SETTINGS.turnNoticeSeconds)
+  },
+  { immediate: true },
+)
 
 function settingNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) ? value : fallback
@@ -73,11 +84,11 @@ function applySettings(): void {
             v-model.number="turnTimeSeconds"
             type="number"
             min="5"
-            max="120"
+            max="100"
             step="1"
             :disabled="!isHost || !canConfigure"
           />
-          <small>秒（5–120）</small>
+          <small>秒（5–100）</small>
         </div>
       </label>
       <label>
@@ -87,11 +98,11 @@ function applySettings(): void {
             v-model.number="nopeWindowSeconds"
             type="number"
             min="3"
-            max="25"
+            max="10"
             step="1"
             :disabled="!isHost || !canConfigure"
           />
-          <small>秒（3–25）</small>
+          <small>秒（3–10）</small>
         </div>
       </label>
       <label>
