@@ -448,6 +448,250 @@
   color: #c5c0cf;
 }
 
+/* Keep Avalon labels and state cards readable after their surfaces turn dark. */
+:root[data-theme='dark'] .avalon-game .avalon-current-phase,
+:root[data-theme='dark'] .avalon-game .avalon-stage-banner,
+:root[data-theme='dark'] .avalon-game .avalon-history-tab.is-active .avalon-history-tab-count {
+  border-color: #65573a;
+  background: #393220;
+  color: #f0d38b;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-mission-track::before {
+  background: #4a4455;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-mission-marker:not(.is-success):not(.is-failure),
+:root[data-theme='dark'] .avalon-game .avalon-phase-summary,
+:root[data-theme='dark'] .avalon-game .avalon-public-marker,
+:root[data-theme='dark'] .avalon-game .avalon-history-tab,
+:root[data-theme='dark'] .avalon-game .avalon-role-card-intro p,
+:root[data-theme='dark'] .avalon-game .avalon-known-players small,
+:root[data-theme='dark'] .avalon-game .avalon-role-guess-heading p,
+:root[data-theme='dark'] .avalon-game .avalon-role-guess-option strong,
+:root[data-theme='dark'] .avalon-game .avalon-guess-status,
+:root[data-theme='dark'] .avalon-game .avalon-role-guess-card > .avalon-guess-status,
+:root[data-theme='dark'] .avalon-game .avalon-role-guess-target strong,
+:root[data-theme='dark'] .avalon-game .avalon-player-guess-empty,
+:root[data-theme='dark'] .avalon-game .avalon-guess-clear,
+:root[data-theme='dark'] .avalon-game .avalon-stage > p,
+:root[data-theme='dark'] .avalon-game .avalon-history-card > p,
+:root[data-theme='dark'] .avalon-game .avalon-action-row,
+:root[data-theme='dark'] .avalon-game .avalon-player-button strong,
+:root[data-theme='dark'] .avalon-game .avalon-vote-history > li > small,
+:root[data-theme='dark'] .avalon-game .avalon-vote-history-team,
+:root[data-theme='dark'] .avalon-game .avalon-mission-results small,
+:root[data-theme='dark'] .avalon-game .avalon-mission-results li > span,
+:root[data-theme='dark'] .avalon-results .avalon-result-explanation,
+:root[data-theme='dark'] .avalon-results .avalon-result-missions > li > span,
+:root[data-theme='dark'] .avalon-results .avalon-results-section ol small,
+:root[data-theme='dark'] .avalon-results .avalon-results-list small,
+:root[data-theme='dark'] .avalon-results .avalon-result-votes strong,
+:root[data-theme='dark'] .avalon-results .avalon-result-votes small,
+:root[data-theme='dark'] .avalon-results .avalon-result-votes ul li,
+:root[data-theme='dark'] .avalon-results .avalon-results-section > p {
+  color: #c5c0cf;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-role-card:not(.is-masked):not(.is-evil) {
+  border-color: #477457;
+  background: linear-gradient(135deg, #292d35, #253d31);
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-role-card.is-evil {
+  border-color: #76414d;
+  background: linear-gradient(135deg, #302733, #472a34);
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-role-card-hold > span {
+  border-color: #625b6e;
+  background: rgb(33 30 42 / 94%);
+  color: #f0ecdf;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-role-icon,
+:root[data-theme='dark'] .avalon-results .avalon-finish-icon {
+  border-color: #4a4455;
+  background: #393443;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-player-button.is-selected,
+:root[data-theme='dark'] .avalon-game .avalon-role-guess-target.is-targeting,
+:root[data-theme='dark'] .avalon-game .avalon-role-guess-target strong.avalon-player-guess {
+  border-color: #8c7541;
+  background: #393220;
+  color: #f0d38b;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-player-button.is-selected strong {
+  color: #f0d38b;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-role-guess-option.is-selected {
+  border-color: #9384e8;
+  background: #39334f;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-history-tab-count {
+  background: #39334f;
+  color: #d0c7ff;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-role-ready-count,
+:root[data-theme='dark'] .avalon-game .avalon-camp-badge.is-good,
+:root[data-theme='dark'] .avalon-game .avalon-role-guess-camp {
+  border-color: #477457;
+  background: #253d31;
+  color: #a8dfc3;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-camp-badge.is-evil,
+:root[data-theme='dark'] .avalon-game .avalon-role-guess-option.is-evil .avalon-role-guess-camp {
+  background: #472a34;
+  color: #f0b0b5;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-lake-badge {
+  background: #244044;
+  color: #9cdddd;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-team-list li,
+:root[data-theme='dark'] .avalon-game .avalon-mission-results li.is-success,
+:root[data-theme='dark'] .avalon-results .avalon-result-missions > li.is-success,
+:root[data-theme='dark'] .avalon-results .avalon-results-list > li.is-winner {
+  border-color: #477457;
+  background: #253d31;
+  color: #a8dfc3;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-mission-results li.is-failure,
+:root[data-theme='dark'] .avalon-results .avalon-result-missions > li.is-failure {
+  border-color: #76414d;
+  background: #472a34;
+  color: #f0b0b5;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-vote-history summary,
+:root[data-theme='dark'] .avalon-results .avalon-result-votes summary {
+  color: #f0d38b;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-vote-list strong:not(.is-approve):not(.is-reject) {
+  color: #aaa4b5;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-vote-list strong.is-approve,
+:root[data-theme='dark'] .avalon-game .avalon-vote-stamp.is-accepted {
+  color: #a8dfc3;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-vote-list strong.is-reject,
+:root[data-theme='dark'] .avalon-game .avalon-vote-stamp.is-rejected {
+  color: #f0b0b5;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-vote-stamp.is-accepted {
+  background: #253d31;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-vote-stamp.is-rejected {
+  background: #472a34;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-warning,
+:root[data-theme='dark'] .avalon-setup .avalon-role-warning {
+  border-color: #684d35;
+  color: #edc285 !important;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-private-status {
+  color: #9cdddd !important;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-stage .avalon-action-row .button-primary {
+  border-color: #8c7541;
+  background: #e6c575;
+  color: #302d3d;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-vote-actions .button-primary,
+:root[data-theme='dark'] .avalon-game .avalon-mission-actions .button-primary {
+  border-color: #477457;
+  background: #3f805e;
+  color: #f0ecdf;
+}
+
+:root[data-theme='dark'] .avalon-game .avalon-vote-actions .button-secondary,
+:root[data-theme='dark'] .avalon-game .avalon-mission-actions .button-secondary {
+  border-color: #76414d;
+  background: #472a34;
+  color: #f0b0b5;
+}
+
+:root[data-theme='dark'] .avalon-setup.draw-settings-panel {
+  --avalon-parchment: #211e2a;
+  --avalon-paper: #2b2737;
+  --avalon-ink: #f0ecdf;
+  --avalon-good: #7ec99b;
+  --avalon-good-soft: #253d31;
+  --avalon-evil: #e1929d;
+  --avalon-evil-soft: #472a34;
+  --avalon-gold: #e6c575;
+  --avalon-lake: #75c2c6;
+  --avalon-lake-soft: #244044;
+  border-color: #4a4455;
+  background: linear-gradient(135deg, #2b2737, #211e2a);
+}
+
+:root[data-theme='dark'] .avalon-setup .draw-settings-icon {
+  border-color: #65573a;
+  background: #393220;
+}
+
+:root[data-theme='dark'] .avalon-setup .avalon-setting-option {
+  border-color: #4a4455;
+}
+
+:root[data-theme='dark'] .avalon-setup .avalon-setting-option small,
+:root[data-theme='dark'] .avalon-setup .draw-settings-note {
+  color: #c5c0cf;
+}
+
+:root[data-theme='dark'] .avalon-player-identity img {
+  background: #393443;
+}
+
+:root[data-theme='dark'] .avalon-player-avatar-placeholder,
+:root[data-theme='dark'] .avalon-player-status.is-on-team {
+  background: #253d31;
+  color: #a8dfc3;
+}
+
+:root[data-theme='dark'] .avalon-player-name.is-evil {
+  color: #f0b0b5;
+}
+
+:root[data-theme='dark'] .avalon-player-status.is-leader {
+  background: #393220;
+  color: #f0d38b;
+}
+
+:root[data-theme='dark'] .avalon-player-status.is-lake-holder {
+  background: #244044;
+  color: #9cdddd;
+}
+
+:root[data-theme='dark'] .avalon-ending-dialog.is-good {
+  --avalon-ending-accent: #7ec99b;
+  --avalon-ending-art-background: radial-gradient(circle at 50% 38%, #393220, #253d31 76%);
+}
+
+:root[data-theme='dark'] .avalon-ending-dialog.is-evil {
+  --avalon-ending-accent: #e1929d;
+  --avalon-ending-art-background: radial-gradient(circle at 50% 38%, #393443, #472a34 76%);
+}
+
 /* Werewolf night scenes and game art retain their original contrast and meaning. */
 :root[data-theme='dark'] .ww-panel:not(.ww-panel-night),
 :root[data-theme='dark'] .ww-role-guess-card,
