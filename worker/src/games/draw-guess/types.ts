@@ -10,6 +10,9 @@ export interface StoredDrawGuess {
   phase: DrawGuessPhase
   phaseEndsAt: number
   answer: string | null
+  answerLength: number | null
+  hint: string | null
+  usedPromptIds: string[]
   correctPlayerIds: string[]
   drawerScored: boolean
 }

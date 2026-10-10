@@ -42,7 +42,8 @@
 }
 
 :root[data-theme='dark'] .text-input:disabled,
-:root[data-theme='dark'] .draw-settings-form input:disabled {
+:root[data-theme='dark'] .draw-settings-form input:disabled,
+:root[data-theme='dark'] .draw-settings-form select:disabled {
   background: var(--surface-muted);
   color: var(--muted);
 }

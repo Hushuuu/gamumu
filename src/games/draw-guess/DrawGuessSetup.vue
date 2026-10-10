@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { DrawGuessSettings } from '../../../shared/games/draw-guess'
+import {
+  DRAW_GUESS_QUESTION_CATEGORIES,
+  type DrawGuessQuestionCategory,
+  type DrawGuessQuestionMode,
+  type DrawGuessSettings,
+} from '../../../shared/games/draw-guess'
 
 const props = defineProps<{
   settings: Record<string, unknown>
@@ -16,6 +21,8 @@ const emit = defineEmits<{
 const drawTimeSeconds = ref(60)
 const roundsPerPlayer = ref(1)
 const guessTimeSeconds = ref(30)
+const questionMode = ref<DrawGuessQuestionMode>('free')
+const questionCategory = ref<DrawGuessQuestionCategory>('all')
 
 const isValid = computed(() => {
   return (
@@ -27,7 +34,9 @@ const isValid = computed(() => {
     roundsPerPlayer.value <= 5 &&
     Number.isInteger(guessTimeSeconds.value) &&
     guessTimeSeconds.value >= 10 &&
-    guessTimeSeconds.value <= 120
+    guessTimeSeconds.value <= 120 &&
+    ['free', 'bank'].includes(questionMode.value) &&
+    DRAW_GUESS_QUESTION_CATEGORIES.some(({ id }) => id === questionCategory.value)
   )
 })
 
@@ -35,6 +44,10 @@ watch(() => props.settings, (settings) => {
   drawTimeSeconds.value = settingNumber(settings.drawTimeSeconds, 60)
   roundsPerPlayer.value = settingNumber(settings.roundsPerPlayer, 1)
   guessTimeSeconds.value = settingNumber(settings.guessTimeSeconds, 30)
+  questionMode.value = settings.questionMode === 'bank' ? 'bank' : 'free'
+  questionCategory.value = DRAW_GUESS_QUESTION_CATEGORIES.some(({ id }) => id === settings.questionCategory)
+    ? settings.questionCategory as DrawGuessQuestionCategory
+    : 'all'
 }, { deep: true, immediate: true })
 
 function settingNumber(value: unknown, fallback: number): number {
@@ -50,6 +63,8 @@ function applySettings(): void {
     drawTimeSeconds: drawTimeSeconds.value,
     roundsPerPlayer: roundsPerPlayer.value,
     guessTimeSeconds: guessTimeSeconds.value,
+    questionMode: questionMode.value,
+    questionCategory: questionCategory.value,
   })
 }
 </script>
@@ -60,7 +75,7 @@ function applySettings(): void {
       <div>
         <p class="eyebrow">本局設定</p>
         <h3 id="draw-settings-title">你畫我猜</h3>
-        <p>每位玩家依序繪畫指定輪數；繪圖者可跳過。</p>
+        <p>選擇自由出題，或從分類題庫抽題；繪圖者可跳過。</p>
       </div>
     </div>
 
@@ -69,6 +84,23 @@ function applySettings(): void {
       @change="applySettings"
       @submit.prevent="applySettings"
     >
+      <label>
+        <span>出題模式</span>
+        <select v-model="questionMode" :disabled="!isHost || !canConfigure">
+          <option value="free">自由出題</option>
+          <option value="bank">分類題庫</option>
+        </select>
+        <small>{{ questionMode === 'bank' ? '題目與固定提示由題庫提供' : '繪圖者自行輸入題目與提示' }}</small>
+      </label>
+      <label v-if="questionMode === 'bank'">
+        <span>題庫分類</span>
+        <select v-model="questionCategory" :disabled="!isHost || !canConfigure">
+          <option v-for="category in DRAW_GUESS_QUESTION_CATEGORIES" :key="category.id" :value="category.id">
+            {{ category.label }}
+          </option>
+        </select>
+        <small>每題會從分類中抽選，題目不會重複直到抽完</small>
+      </label>
       <label>
         <span>繪畫時間（秒）</span>
         <input v-model.number="drawTimeSeconds" type="number" min="15" max="180" step="1" :disabled="!isHost || !canConfigure" />

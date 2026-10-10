@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { DRAW_GUESS_PEN_COLORS } from '../../../shared/games/draw-guess'
 import type { GameEvent } from '../../../shared/protocol'
 
 type DrawTool = 'pen' | 'eraser'
@@ -17,12 +18,14 @@ const emit = defineEmits<{
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const tool = ref<DrawTool>('pen')
+const penColor = ref<string>(DRAW_GUESS_PEN_COLORS[0].value)
 const remoteLastPoints = new Map<string, DrawPoint>()
 
 let resizeObserver: ResizeObserver | undefined
 let activePointerId: number | null = null
 let activeStrokeId = ''
 let activeStrokeTool: DrawTool = 'pen'
+let activeStrokeColor: string = DRAW_GUESS_PEN_COLORS[0].value
 let activeStrokeWidth = 4
 let localLastPoint: DrawPoint | null = null
 let pendingPoints: DrawPoint[] = []
@@ -136,7 +139,7 @@ function normalizedPoint(event: PointerEvent): DrawPoint | null {
   return [x, y]
 }
 
-function drawPoint(point: DrawPoint, previous: DrawPoint | null, selectedTool: DrawTool, width: number): void {
+function drawPoint(point: DrawPoint, previous: DrawPoint | null, selectedTool: DrawTool, color: string, width: number): void {
   const element = canvas.value
   const context = element?.getContext('2d')
   if (!element || !context) {
@@ -148,8 +151,8 @@ function drawPoint(point: DrawPoint, previous: DrawPoint | null, selectedTool: D
   const y = point[1] * bounds.height
   context.save()
   context.globalCompositeOperation = selectedTool === 'eraser' ? 'destination-out' : 'source-over'
-  context.strokeStyle = '#302d42'
-  context.fillStyle = '#302d42'
+  context.strokeStyle = color
+  context.fillStyle = color
   context.lineWidth = width
   context.lineCap = 'round'
   context.lineJoin = 'round'
@@ -180,6 +183,7 @@ function startStroke(event: PointerEvent): void {
   element.setPointerCapture(event.pointerId)
   activeStrokeId = crypto.randomUUID()
   activeStrokeTool = tool.value
+  activeStrokeColor = penColor.value
   activeStrokeWidth = activeStrokeTool === 'eraser' ? 24 : 4
   localLastPoint = null
   pendingPoints = []
@@ -203,7 +207,7 @@ function moveStroke(event: PointerEvent): void {
 }
 
 function addPoint(point: DrawPoint): void {
-  drawPoint(point, localLastPoint, activeStrokeTool, activeStrokeWidth)
+  drawPoint(point, localLastPoint, activeStrokeTool, activeStrokeColor, activeStrokeWidth)
   localLastPoint = point
   pendingPoints.push(point)
 }
@@ -246,6 +250,7 @@ function flushPoints(endsStroke: boolean): void {
     emit('game-action', 'stroke', {
       strokeId: activeStrokeId,
       tool: activeStrokeTool,
+      color: activeStrokeColor,
       width: activeStrokeWidth,
       points,
       startsStroke: startsStroke && isFirstChunk,
@@ -261,10 +266,12 @@ function applyGameEvent(event: GameEvent | null): void {
     return
   }
 
-  const { strokeId, tool: selectedTool, width, points, startsStroke: begins, endsStroke: ends } = event.payload
+  const { strokeId, tool: selectedTool, color, width, points, startsStroke: begins, endsStroke: ends } = event.payload
   if (
     typeof strokeId !== 'string' ||
     (selectedTool !== 'pen' && selectedTool !== 'eraser') ||
+    typeof color !== 'string' ||
+    !DRAW_GUESS_PEN_COLORS.some((option) => option.value === color) ||
     typeof width !== 'number' ||
     !Array.isArray(points) ||
     !points.every(isDrawPoint) ||
@@ -276,7 +283,7 @@ function applyGameEvent(event: GameEvent | null): void {
 
   let previous = begins ? null : remoteLastPoints.get(strokeId) ?? null
   for (const point of points) {
-    drawPoint(point, previous, selectedTool, width)
+    drawPoint(point, previous, selectedTool, color, width)
     previous = point
   }
 
@@ -328,6 +335,20 @@ function isDrawPoint(value: unknown): value is DrawPoint {
           ▱ 橡皮擦
         </button>
       </div>
+      <div class="draw-color-palette" role="group" aria-label="畫筆顏色">
+        <button
+          v-for="color in DRAW_GUESS_PEN_COLORS"
+          :key="color.value"
+          class="draw-color-button"
+          :class="{ 'is-selected': penColor === color.value }"
+          type="button"
+          :disabled="!canDraw"
+          :aria-label="`畫筆顏色：${color.label}`"
+          :aria-pressed="penColor === color.value"
+          :style="{ '--swatch-color': color.value }"
+          @click="penColor = color.value"
+        ></button>
+      </div>
       <span class="draw-board-hint">{{ canDraw ? '在畫布上繪圖' : '等待繪圖者' }}</span>
     </div>
     <div class="draw-canvas-frame">
@@ -360,6 +381,30 @@ function isDrawPoint(value: unknown): value is DrawPoint {
 .draw-tools {
   display: flex;
   gap: 6px;
+}
+
+.draw-color-palette {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.draw-color-button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--swatch-color);
+  box-shadow: 0 0 0 1px #d9d6e4;
+}
+
+.draw-color-button.is-selected {
+  box-shadow: 0 0 0 2px #8f80e8;
+}
+
+.draw-color-button:disabled {
+  cursor: default;
 }
 
 .draw-tool-button {

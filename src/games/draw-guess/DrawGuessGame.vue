@@ -18,8 +18,10 @@ const emit = defineEmits<{
 }>()
 
 const answerInput = ref('')
+const hintInput = ref('')
 const guessInput = ref('')
 const secretAnswer = ref('')
+const secretHint = ref('')
 const guessFeedback = ref('')
 const now = ref(Date.now())
 let clockTimer: number | undefined
@@ -39,7 +41,7 @@ const canDraw = computed(() => {
 const canGuess = computed(() => {
   return Boolean(
     props.canInteract &&
-    game.value?.phase === 'guessing' &&
+    (game.value?.phase === 'drawing' || game.value?.phase === 'guessing') &&
     !isDrawer.value &&
     !alreadyGuessed.value &&
     guessInput.value.trim(),
@@ -54,8 +56,10 @@ const correctPlayers = computed(() => {
 
 watch(() => game.value?.turnNumber, () => {
   answerInput.value = ''
+  hintInput.value = ''
   guessInput.value = ''
   secretAnswer.value = ''
+  secretHint.value = ''
   guessFeedback.value = ''
 })
 
@@ -64,8 +68,13 @@ watch(() => props.gameEvent, (event) => {
     return
   }
 
-  if (event.event === 'answer-prompt' && typeof event.payload.answer === 'string') {
-    secretAnswer.value = event.payload.answer
+  if (event.event === 'answer-prompt') {
+    if (typeof event.payload.answer === 'string') {
+      secretAnswer.value = event.payload.answer
+    }
+    if (typeof event.payload.hint === 'string') {
+      secretHint.value = event.payload.hint
+    }
   }
   if (event.event === 'guess-result' && typeof event.payload.correct === 'boolean') {
     guessFeedback.value = event.payload.correct
@@ -93,7 +102,14 @@ function setAnswer(): void {
   }
 
   secretAnswer.value = answer
-  emit('game-action', 'set_answer', { answer })
+  secretHint.value = hintInput.value.normalize('NFKC').trim()
+  emit('game-action', 'set_answer', { answer, hint: secretHint.value })
+}
+
+function startBankDrawing(): void {
+  if (props.canInteract && isDrawer.value && secretAnswer.value) {
+    emit('game-action', 'start_drawing', {})
+  }
 }
 
 function skipTurn(): void {
@@ -130,7 +146,7 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
         </div>
         <div class="timer-badge" :class="{ 'timer-low': remainingSeconds <= 5 }" role="timer">
           <strong>{{ remainingSeconds }}</strong>
-          <span>{{ game.phase === 'answering' ? '秒內設定題目' : game.phase === 'drawing' ? '繪畫秒數' : game.phase === 'guessing' ? '猜答案秒數' : '秒後下一題' }}</span>
+          <span>{{ game.phase === 'answering' ? '秒內準備題目' : game.phase === 'drawing' ? '繪畫秒數' : game.phase === 'guessing' ? '猜答案秒數' : '秒後下一題' }}</span>
         </div>
       </div>
 
@@ -138,17 +154,19 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
         <strong>{{ drawer?.name ?? '繪圖者' }}</strong>
         <span>
           {{ game.phase === 'answering'
-            ? (isDrawer ? '請先輸入要畫的答案。' : '正在設定題目，答案只有繪圖者看得到。')
+            ? (isDrawer
+              ? (game.settings.questionMode === 'bank' ? '題庫已抽出本題，查看題目後開始繪圖。' : '請先輸入要畫的答案和提示。')
+              : '正在準備題目，答案只有繪圖者看得到。')
             : game.phase === 'drawing'
               ? (isDrawer ? `你的題目：${secretAnswer || '重新連線後載入題目'}` : '正在繪圖，想想看這幅畫代表什麼。')
               : game.phase === 'guessing'
-                ? (isDrawer ? '其他玩家正在猜你的畫。' : '輸入答案，猜中可得 50 分。')
+                ? (isDrawer ? '其他玩家正在猜你的畫。' : '繪圖已完成，輸入答案，猜中可得 50 分。')
                 : `答案是「${game.answer ?? ''}」` }}
         </span>
       </div>
 
       <template v-if="game.phase === 'answering'">
-        <form v-if="isDrawer" class="draw-answer-form" @submit.prevent="setAnswer">
+        <form v-if="isDrawer && game.settings.questionMode === 'free'" class="draw-answer-form" @submit.prevent="setAnswer">
           <label class="field-label" for="draw-answer-input">設定本題答案</label>
           <div class="answer-form">
             <input
@@ -165,10 +183,35 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
               開始畫
             </button>
           </div>
+          <label class="field-label draw-hint-label" for="draw-hint-input">提示（選填，其他玩家看得到）</label>
+          <input
+            id="draw-hint-input"
+            v-model="hintInput"
+            class="text-input answer-input"
+            type="text"
+            autocomplete="off"
+            maxlength="100"
+            placeholder="例如：一種會在夜晚出現的動物"
+            :disabled="!canInteract"
+          />
           <button class="draw-skip-button" type="button" :disabled="!canInteract" @click="skipTurn">跳過這題</button>
         </form>
+        <div v-else-if="isDrawer && game.settings.questionMode === 'bank'" class="draw-answer-form bank-prompt-card">
+          <p class="field-label">題庫題目</p>
+          <strong>{{ secretAnswer || '題目載入中…' }}</strong>
+          <p v-if="secretHint" class="bank-prompt-hint">提示：{{ secretHint }}</p>
+          <button
+            class="button button-primary answer-button"
+            type="button"
+            :disabled="!canInteract || !secretAnswer"
+            @click="startBankDrawing"
+          >
+            開始畫
+          </button>
+          <button class="draw-skip-button" type="button" :disabled="!canInteract" @click="skipTurn">跳過這題</button>
+        </div>
         <p v-else class="draw-wait-message">
-          {{ drawerOnline ? '等待繪圖者設定答案。' : '繪圖者離線，設定時間結束後會自動跳過。' }}
+          {{ drawerOnline ? '等待繪圖者準備題目。' : '繪圖者離線，設定時間結束後會自動跳過。' }}
         </p>
       </template>
 
@@ -180,9 +223,16 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
           @game-action="sendGameAction"
         />
 
+        <div v-if="game.phase !== 'reveal' && game.answerLength !== null" class="draw-answer-meta">
+          答案共 <strong>{{ game.answerLength }}</strong> 個字
+        </div>
+        <p v-if="game.phase !== 'reveal' && game.hint" class="draw-public-hint">
+          提示：{{ game.hint }}
+        </p>
+
         <div v-if="game.phase === 'drawing'" class="draw-phase-controls">
           <p v-if="!drawerOnline" class="draw-wait-message">
-            繪圖者離線，時間結束後會進入猜答案階段。
+            繪圖者離線，時間結束後會公布本題結果。
           </p>
           <div v-if="isDrawer" class="draw-action-buttons">
             <button class="draw-skip-button" type="button" :disabled="!canInteract" @click="skipTurn">
@@ -199,10 +249,11 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
           </div>
           <p v-if="isDrawer && secretAnswer" class="draw-secret-answer">
             本題答案：<strong>{{ secretAnswer }}</strong>
+            <span v-if="secretHint"> · 提示：{{ secretHint }}</span>
           </p>
         </div>
 
-        <template v-else-if="game.phase === 'guessing'">
+        <template v-if="game.phase === 'drawing' || game.phase === 'guessing'">
           <form v-if="!isDrawer && !alreadyGuessed" class="draw-guess-form" @submit.prevent="submitGuess">
             <label class="field-label" for="draw-guess-input">你猜答案是？</label>
             <div class="answer-form">
@@ -221,14 +272,15 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
               </button>
             </div>
             <p v-if="guessFeedback" class="guess-feedback" role="status">{{ guessFeedback }}</p>
+            <p v-else-if="game.phase === 'drawing'" class="guess-helper">可以邊看繪圖邊猜；猜中立即得分，等繪圖完成後公布結果。</p>
             <p v-else class="guess-helper">答錯可以繼續猜；每位猜中的玩家都得 50 分。</p>
           </form>
           <p v-else class="draw-wait-message">
-            {{ isDrawer ? '等待其他玩家猜答案。' : '你已猜中，等待本題結束。' }}
+            {{ isDrawer ? '等待其他玩家猜答案。' : '你已猜中並取得分數，等待本題繪圖完成。' }}
           </p>
         </template>
 
-        <div v-else class="draw-reveal-card">
+        <div v-if="game.phase === 'reveal'" class="draw-reveal-card">
           <span class="reveal-label">本題答案</span>
           <strong>{{ game.answer }}</strong>
           <p v-if="correctPlayers.length">猜中：{{ correctPlayers.join('、') }}</p>
@@ -268,6 +320,49 @@ function sendGameAction(action: string, payload: Record<string, unknown>): void 
 
 .draw-answer-form, .draw-guess-form {
   margin-top: 13px;
+}
+
+.draw-hint-label {
+  display: block;
+  margin: 10px 0 6px;
+}
+
+.bank-prompt-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 12px;
+  border: 1px solid #e8e3ff;
+  border-radius: 12px;
+  background: #fbfaff;
+}
+
+.bank-prompt-card > strong {
+  color: var(--purple-dark);
+  font-size: 18px;
+}
+
+.bank-prompt-hint {
+  margin: 5px 0 8px;
+  color: #77738e;
+  font-size: 10px;
+}
+
+.draw-answer-meta {
+  margin-top: 9px;
+  color: #77738e;
+  font-size: 10px;
+}
+
+.draw-answer-meta strong {
+  color: var(--purple-dark);
+  font-size: 13px;
+}
+
+.draw-public-hint {
+  margin: 4px 0 9px;
+  color: #77738e;
+  font-size: 10px;
 }
 
 .draw-skip-button {

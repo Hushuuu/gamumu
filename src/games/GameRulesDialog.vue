@@ -100,23 +100,27 @@ const content = computed<RulesContent>(() => {
       const roundsPerPlayer = settingNumber('roundsPerPlayer', 1)
       const drawTimeSeconds = settingNumber('drawTimeSeconds', 60)
       const guessTimeSeconds = settingNumber('guessTimeSeconds', 30)
+      const isQuestionBank = props.gameSettings.questionMode === 'bank'
       return {
         title: `${gameName.value}規則`,
-        description: '玩家輪流設定題目並作畫，其餘玩家看畫猜答案。',
+        description: '玩家輪流作畫，其餘玩家看畫猜答案；可使用自由出題或分類題庫。',
         sections: [
           {
             title: '遊戲流程',
             items: [
-              `每位玩家輪流當繪圖者 ${roundsPerPlayer} 輪；每輪有 30 秒設定題目，再於 ${drawTimeSeconds} 秒內作畫，逾時會跳過。`,
-              `作畫完成後，其他玩家有 ${guessTimeSeconds} 秒猜答案；繪圖者不能猜自己的題目。`,
+              isQuestionBank
+                ? `每位玩家輪流當繪圖者 ${roundsPerPlayer} 輪；題目從已選分類的題庫抽出，查看固定提示後開始作畫。`
+                : `每位玩家輪流當繪圖者 ${roundsPerPlayer} 輪；繪圖者先輸入題目與選填提示，再於 ${drawTimeSeconds} 秒內作畫。`,
+              `繪畫期間即可猜題，畫面會顯示提示和答案字數；猜中會立即加分，完成繪圖後公布本題結果。`,
+              `繪圖完成後，仍未猜中的玩家可再用 ${guessTimeSeconds} 秒猜答案；繪圖者不能猜自己的題目。`,
               '繪圖者離線或跳過時，該回合會跳過並輪到下一位玩家。',
             ],
           },
           {
             title: '得分方式',
             items: [
-              '每位猜中的玩家得 50 分；該輪第一位玩家猜中時，繪圖者也得 50 分。',
-              '猜錯不扣分，可在猜答案階段繼續嘗試。',
+              '每位猜中的玩家得 50 分；第一位玩家猜中時，繪圖者也得 50 分。',
+              '猜錯不扣分，可在繪圖期間和後續猜題時間繼續嘗試。',
             ],
           },
         ],

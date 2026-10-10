@@ -1,5 +1,9 @@
 import {
+  DRAW_GUESS_PEN_COLORS,
+  DRAW_GUESS_QUESTION_BANK,
+  isDrawGuessQuestionCategory,
   isDrawGuessSettings,
+  type DrawGuessPrompt,
   type DrawGuessSettings,
   type DrawGuessView,
 } from '../../../../shared/games/draw-guess'
@@ -9,12 +13,15 @@ import type { StoredDrawGuess } from './types'
 const ANSWER_SETUP_MS = 30_000
 const REVEAL_DURATION_MS = 3_000
 const MAX_ANSWER_LENGTH = 60
+const MAX_HINT_LENGTH = 100
 const MAX_STROKE_POINTS = 24
 
 const DEFAULT_SETTINGS: DrawGuessSettings = {
   drawTimeSeconds: 60,
   roundsPerPlayer: 1,
   guessTimeSeconds: 30,
+  questionMode: 'free',
+  questionCategory: 'all',
 }
 
 type DrawTool = 'pen' | 'eraser'
@@ -23,6 +30,7 @@ type DrawPoint = [number, number]
 interface StrokePayload extends Record<string, unknown> {
   strokeId: string
   tool: DrawTool
+  color: string
   width: number
   points: DrawPoint[]
   startsStroke: boolean
@@ -30,9 +38,42 @@ interface StrokePayload extends Record<string, unknown> {
 }
 
 function currentSettings(room: GameRoomContext): DrawGuessSettings {
-  return isDrawGuessSettings(room.gameSettings)
-    ? { ...room.gameSettings }
-    : { ...DEFAULT_SETTINGS }
+  return normalizeSettings(room.gameSettings)
+}
+
+function normalizeSettings(value: unknown): DrawGuessSettings {
+  const source = typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+  const numberSetting = (key: string, fallback: number, min: number, max: number): number => {
+    const candidate = source[key]
+    return typeof candidate === 'number' && Number.isInteger(candidate) && candidate >= min && candidate <= max
+      ? candidate
+      : fallback
+  }
+
+  return {
+    drawTimeSeconds: numberSetting('drawTimeSeconds', DEFAULT_SETTINGS.drawTimeSeconds, 15, 180),
+    roundsPerPlayer: numberSetting('roundsPerPlayer', DEFAULT_SETTINGS.roundsPerPlayer, 1, 5),
+    guessTimeSeconds: numberSetting('guessTimeSeconds', DEFAULT_SETTINGS.guessTimeSeconds, 10, 120),
+    questionMode: source.questionMode === 'bank' ? 'bank' : 'free',
+    questionCategory: isDrawGuessQuestionCategory(source.questionCategory)
+      ? source.questionCategory
+      : 'all',
+  }
+}
+
+function upgradeStoredGame(game: StoredDrawGuess): void {
+  game.settings = normalizeSettings(game.settings)
+  if (!Number.isInteger(game.answerLength) || Number(game.answerLength) < 0) {
+    game.answerLength = game.answer === null ? null : answerLength(game.answer)
+  }
+  if (typeof game.hint !== 'string') {
+    game.hint = null
+  }
+  if (!Array.isArray(game.usedPromptIds)) {
+    game.usedPromptIds = []
+  }
 }
 
 function failure(code: string, message: string, changed = false): GameActionResult {
@@ -52,6 +93,14 @@ function beginTurn(room: GameRoomContext, game: StoredDrawGuess, turnIndex: numb
       game.phase = 'answering'
       game.phaseEndsAt = now + ANSWER_SETUP_MS
       game.answer = null
+      game.answerLength = null
+      game.hint = null
+      if (game.settings.questionMode === 'bank') {
+        const prompt = chooseBankPrompt(game)
+        game.answer = prompt.answer
+        game.answerLength = answerLength(prompt.answer)
+        game.hint = prompt.hint
+      }
       game.correctPlayerIds = []
       game.drawerScored = false
       return true
@@ -62,6 +111,39 @@ function beginTurn(room: GameRoomContext, game: StoredDrawGuess, turnIndex: numb
   room.status = 'finished'
   room.game = null
   return true
+}
+
+function chooseBankPrompt(game: StoredDrawGuess): DrawGuessPrompt {
+  const categoryPrompts = DRAW_GUESS_QUESTION_BANK.filter((prompt) => {
+    return game.settings.questionCategory === 'all' || prompt.category === game.settings.questionCategory
+  })
+  const candidates = categoryPrompts.length > 0 ? categoryPrompts : DRAW_GUESS_QUESTION_BANK
+  let available = candidates.filter((prompt) => !game.usedPromptIds.includes(prompt.id))
+  if (available.length === 0) {
+    game.usedPromptIds = game.usedPromptIds.filter((id) => !candidates.some((prompt) => prompt.id === id))
+    available = candidates
+  }
+
+  const prompt = available[Math.floor(Math.random() * available.length)] ?? candidates[0]!
+  game.usedPromptIds.push(prompt.id)
+  return prompt
+}
+
+function answerLength(value: string): number {
+  return Array.from(value.normalize('NFKC').replace(/\s+/g, '')).length
+}
+
+function startDrawing(game: StoredDrawGuess, now: number): void {
+  game.phase = 'drawing'
+  game.phaseEndsAt = now + game.settings.drawTimeSeconds * 1_000
+}
+
+function finishDrawing(room: GameRoomContext, game: StoredDrawGuess, now: number): void {
+  if (allOnlineGuessersCorrect(room, game)) {
+    enterReveal(game, now)
+  } else {
+    enterGuessing(game, now)
+  }
 }
 
 function enterGuessing(game: StoredDrawGuess, now: number): void {
@@ -80,7 +162,7 @@ function advanceExpiredPhase(room: GameRoomContext, game: StoredDrawGuess, now: 
     case 'reveal':
       return beginTurn(room, game, game.turnIndex + 1, now)
     case 'drawing':
-      enterGuessing(game, now)
+      finishDrawing(room, game, now)
       return true
     case 'guessing':
       enterReveal(game, now)
@@ -113,6 +195,8 @@ function isStrokePayload(payload: Record<string, unknown>): payload is StrokePay
     payload.strokeId.length > 0 &&
     payload.strokeId.length <= 80 &&
     (payload.tool === 'pen' || payload.tool === 'eraser') &&
+    typeof payload.color === 'string' &&
+    DRAW_GUESS_PEN_COLORS.some((color) => color.value === payload.color) &&
     typeof payload.width === 'number' &&
     Number.isFinite(payload.width) &&
     payload.width >= 1 &&
@@ -142,6 +226,7 @@ function handleAction(
   if (room.status !== 'playing' || game?.gameId !== 'draw-guess') {
     return failure('GAME_NOT_STARTED', '你畫我猜尚未開始。')
   }
+  upgradeStoredGame(game)
 
   if (game.phaseEndsAt <= now) {
     advanceExpiredPhase(room, game, now)
@@ -149,7 +234,11 @@ function handleAction(
   }
 
   if (action === 'set_answer') {
-    if (playerId !== game.drawerId || game.phase !== 'answering') {
+    if (
+      playerId !== game.drawerId ||
+      game.phase !== 'answering' ||
+      game.settings.questionMode !== 'free'
+    ) {
       return failure('NOT_SETTING_ANSWER', '目前不是你的設定題目階段。')
     }
 
@@ -162,9 +251,29 @@ function handleAction(
       return failure('INVALID_ANSWER', `題目請填 1 到 ${MAX_ANSWER_LENGTH} 個字元。`)
     }
 
+    const hint = payload.hint === undefined ? '' : payload.hint
+    if (typeof hint !== 'string' || Array.from(hint.trim()).length > MAX_HINT_LENGTH) {
+      return failure('INVALID_HINT', `提示不可超過 ${MAX_HINT_LENGTH} 個字元。`)
+    }
+
     game.answer = answer.normalize('NFKC').trim().replace(/\s+/g, ' ')
-    game.phase = 'drawing'
-    game.phaseEndsAt = now + game.settings.drawTimeSeconds * 1_000
+    game.answerLength = answerLength(game.answer)
+    game.hint = hint.normalize('NFKC').trim() || null
+    startDrawing(game, now)
+    return { ok: true, changed: true }
+  }
+
+  if (action === 'start_drawing') {
+    if (
+      playerId !== game.drawerId ||
+      game.phase !== 'answering' ||
+      game.settings.questionMode !== 'bank' ||
+      game.answer === null
+    ) {
+      return failure('CANNOT_START_DRAWING', '目前不能開始繪圖。')
+    }
+
+    startDrawing(game, now)
     return { ok: true, changed: true }
   }
 
@@ -185,7 +294,7 @@ function handleAction(
       return failure('NOT_DRAWING', '目前不能結束繪圖階段。')
     }
 
-    enterGuessing(game, now)
+    finishDrawing(room, game, now)
     return { ok: true, changed: true }
   }
 
@@ -206,6 +315,7 @@ function handleAction(
         payload: {
           strokeId: payload.strokeId,
           tool: payload.tool,
+          color: payload.color,
           width: payload.width,
           points: payload.points,
           startsStroke: payload.startsStroke,
@@ -216,7 +326,7 @@ function handleAction(
   }
 
   if (action === 'submit_guess') {
-    if (game.phase !== 'guessing') {
+    if (game.phase !== 'drawing' && game.phase !== 'guessing') {
       return failure('GUESSING_CLOSED', '目前不是猜答案階段。')
     }
     if (playerId === game.drawerId) {
@@ -262,7 +372,7 @@ function handleAction(
       game.drawerScored = true
     }
 
-    if (allOnlineGuessersCorrect(room, game)) {
+    if (game.phase === 'guessing' && allOnlineGuessersCorrect(room, game)) {
       enterReveal(game, now)
     }
 
@@ -294,7 +404,9 @@ export const drawGuessGame: GameModule = {
     if (
       current.drawTimeSeconds === settings.drawTimeSeconds &&
       current.roundsPerPlayer === settings.roundsPerPlayer &&
-      current.guessTimeSeconds === settings.guessTimeSeconds
+      current.guessTimeSeconds === settings.guessTimeSeconds &&
+      current.questionMode === settings.questionMode &&
+      current.questionCategory === settings.questionCategory
     ) {
       return { ok: true, changed: false }
     }
@@ -303,10 +415,14 @@ export const drawGuessGame: GameModule = {
     return { ok: true, changed: true }
   },
   publicSettings: (room) => ({ ...currentSettings(room) }),
+  pushPrivateState: true,
   privateState(room, playerId) {
     const game = room.game
+    if (game?.gameId !== 'draw-guess') {
+      return null
+    }
+    upgradeStoredGame(game)
     if (
-      game?.gameId !== 'draw-guess' ||
       game.drawerId !== playerId ||
       game.answer === null ||
       game.phase === 'reveal'
@@ -314,7 +430,14 @@ export const drawGuessGame: GameModule = {
       return null
     }
 
-    return { name: 'answer-prompt', payload: { answer: game.answer } }
+    return {
+      name: 'answer-prompt',
+      payload: {
+        answer: game.answer,
+        hint: game.hint ?? '',
+        answerLength: game.answerLength ?? answerLength(game.answer),
+      },
+    }
   },
   start(room, now) {
     const settings = currentSettings(room)
@@ -328,6 +451,9 @@ export const drawGuessGame: GameModule = {
       phase: 'answering',
       phaseEndsAt: now,
       answer: null,
+      answerLength: null,
+      hint: null,
+      usedPromptIds: [],
       correctPlayerIds: [],
       drawerScored: false,
     }
@@ -350,6 +476,7 @@ export const drawGuessGame: GameModule = {
     ) {
       return false
     }
+    upgradeStoredGame(game)
     return advanceExpiredPhase(room, game, now)
   },
   onPlayerLeave(room, playerId, now) {
@@ -357,6 +484,7 @@ export const drawGuessGame: GameModule = {
     if (room.status !== 'playing' || game?.gameId !== 'draw-guess') {
       return false
     }
+    upgradeStoredGame(game)
 
     if (
       game.drawerId === playerId &&
@@ -381,6 +509,7 @@ export const drawGuessGame: GameModule = {
     if (game?.gameId !== 'draw-guess') {
       return null
     }
+    upgradeStoredGame(game)
 
     return {
       gameId: 'draw-guess',
@@ -392,6 +521,8 @@ export const drawGuessGame: GameModule = {
       drawerId: game.drawerId,
       phaseEndsAt: game.phaseEndsAt,
       answer: game.phase === 'reveal' ? game.answer : null,
+      answerLength: game.phase === 'answering' ? null : game.answerLength,
+      hint: game.phase === 'answering' ? null : game.hint,
       settings: game.settings,
       correctPlayerIds: [...game.correctPlayerIds],
     }

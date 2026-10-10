@@ -335,7 +335,8 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   font-weight: 700;
 }
 
-.draw-settings-form input {
+.draw-settings-form input,
+.draw-settings-form select {
   width: 100%;
   min-width: 0;
   height: 38px;
@@ -347,7 +348,8 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   font: inherit;
 }
 
-.draw-settings-form input:disabled {
+.draw-settings-form input:disabled,
+.draw-settings-form select:disabled {
   background: #f6f5f9;
   color: #77738e;
 }

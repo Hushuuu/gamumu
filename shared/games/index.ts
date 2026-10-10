@@ -43,7 +43,14 @@ export type {
   AvalonView,
   AvalonVoteResult,
 } from './avalon'
-export { isDrawGuessSettings, isDrawGuessView } from './draw-guess'
+export {
+  DRAW_GUESS_PEN_COLORS,
+  DRAW_GUESS_QUESTION_BANK,
+  DRAW_GUESS_QUESTION_CATEGORIES,
+  isDrawGuessQuestionCategory,
+  isDrawGuessSettings,
+  isDrawGuessView,
+} from './draw-guess'
 export {
   canPlayExplodingKittensAlone,
   DEFAULT_EXPLODING_KITTENS_SETTINGS,
@@ -155,7 +162,14 @@ export {
 export type { GameId, GameOption } from './catalog'
 export { isWordGuessView } from './word-guess'
 export type { BlankGameView } from './blank'
-export type { DrawGuessPhase, DrawGuessSettings, DrawGuessView } from './draw-guess'
+export type {
+  DrawGuessPhase,
+  DrawGuessPrompt,
+  DrawGuessQuestionCategory,
+  DrawGuessQuestionMode,
+  DrawGuessSettings,
+  DrawGuessView,
+} from './draw-guess'
 export type { GameView } from './types'
 export type { WordGuessView } from './word-guess'
 
