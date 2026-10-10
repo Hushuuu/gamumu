@@ -35,7 +35,7 @@ const isValid = computed(() => {
     turnTimeSeconds.value <= 100 &&
     Number.isInteger(nopeWindowSeconds.value) &&
     nopeWindowSeconds.value >= 3 &&
-    nopeWindowSeconds.value <= 10 &&
+    nopeWindowSeconds.value <= 30 &&
     Number.isInteger(turnNoticeSeconds.value) &&
     turnNoticeSeconds.value >= 5 &&
     turnNoticeSeconds.value <= 20
@@ -165,12 +165,12 @@ function applySettings(): void {
             v-model.number="nopeWindowSeconds"
             type="number"
             min="3"
-            max="10"
+            max="30"
             step="1"
             :disabled="!isHost || !canConfigure"
             @input="queueApplySettings"
           />
-          <small>秒（3–10）</small>
+          <small>秒（3–30）</small>
         </div>
       </label>
       <label>

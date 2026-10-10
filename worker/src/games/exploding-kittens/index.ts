@@ -52,7 +52,7 @@ export const explodingKittensGame: GameModule = {
       return failure('NOT_HOST', '只有房主可以調整本局設定。')
     }
     if (!isExplodingKittensSettings(settings)) {
-      return failure('INVALID_GAME_SETTINGS', '每回合需為 5–100 秒，休想判定需為 3–10 秒，回合通知需為 5–20 秒。')
+      return failure('INVALID_GAME_SETTINGS', '每回合需為 5–100 秒，休想判定需為 3–30 秒，回合通知需為 5–20 秒。')
     }
 
     const current = currentSettings(room)

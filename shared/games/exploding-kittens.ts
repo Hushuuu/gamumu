@@ -221,7 +221,7 @@ export function isExplodingKittensSettings(value: unknown): value is ExplodingKi
     Number(value.turnTimeSeconds) <= 100 &&
     Number.isInteger(value.nopeWindowSeconds) &&
     Number(value.nopeWindowSeconds) >= 3 &&
-    Number(value.nopeWindowSeconds) <= 10 &&
+    Number(value.nopeWindowSeconds) <= 30 &&
     Number.isInteger(value.turnNoticeSeconds ?? 5) &&
     Number(value.turnNoticeSeconds ?? 5) >= 5 &&
     Number(value.turnNoticeSeconds ?? 5) <= 20
