@@ -1,7 +1,9 @@
 import {
   canPlayExplodingKittensAlone,
   EXPLODING_KITTENS_ANNOUNCEMENT_LIMIT,
+  EXPLODING_KITTENS_CARD_COPIES_PER_DECK,
   EXPLODING_KITTENS_CARD_NAMES,
+  EXPLODING_KITTENS_CARD_TYPES,
   EXPLODING_KITTENS_MAX_PLAYERS,
   isExplodingKittensCardType,
   isExplodingKittensComboType,
@@ -20,21 +22,6 @@ import type {
   StoredExplodingKittensSeat,
 } from './types'
 
-const DECK_COPIES: ReadonlyArray<readonly [ExplodingKittensCardType, number]> = [
-  ['exploding-kitten', 4],
-  ['defuse', 6],
-  ['nope', 5],
-  ['attack', 4],
-  ['skip', 4],
-  ['favor', 4],
-  ['shuffle', 4],
-  ['see-the-future', 5],
-  ['cat-pudding', 4],
-  ['cat-taro', 4],
-  ['cat-matcha', 4],
-  ['cat-peach', 4],
-  ['cat-mochi', 4],
-]
 const SINGLE_DECK_MAX_PLAYERS = 5
 const DEAL_SIZE = 7
 const MAX_PLAY_CARDS = 5
@@ -857,7 +844,8 @@ export function createExplodingKittensGame(
 
   const pool: ExplodingKittensCardType[] = []
   for (let deck = 0; deck < deckCount; deck += 1) {
-    for (const [type, copies] of DECK_COPIES) {
+    for (const type of EXPLODING_KITTENS_CARD_TYPES) {
+      const copies = EXPLODING_KITTENS_CARD_COPIES_PER_DECK[type]
       for (let copy = 0; copy < copies; copy += 1) {
         pool.push(type)
       }

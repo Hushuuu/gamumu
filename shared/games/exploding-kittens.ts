@@ -42,6 +42,42 @@ export const EXPLODING_KITTENS_CARD_NAMES: Record<ExplodingKittensCardType, stri
   'cat-mochi': '麻糬貓',
 }
 
+export const EXPLODING_KITTENS_CARD_COPIES_PER_DECK: Record<ExplodingKittensCardType, number> = {
+  'exploding-kitten': 4,
+  defuse: 6,
+  nope: 5,
+  attack: 4,
+  skip: 4,
+  favor: 4,
+  shuffle: 4,
+  'see-the-future': 5,
+  'cat-pudding': 4,
+  'cat-taro': 4,
+  'cat-matcha': 4,
+  'cat-peach': 4,
+  'cat-mochi': 4,
+}
+
+export function getExplodingKittensStartingCardCounts(
+  playerCount: number,
+): ExplodingKittensCardTypeCount[] {
+  if (
+    !Number.isInteger(playerCount) ||
+    playerCount < 2 ||
+    playerCount > EXPLODING_KITTENS_MAX_PLAYERS
+  ) {
+    return []
+  }
+
+  const deckCount = playerCount > 5 ? 2 : 1
+  return EXPLODING_KITTENS_CARD_TYPES.map((type) => ({
+    type,
+    count: type === 'exploding-kitten'
+      ? playerCount - 1
+      : EXPLODING_KITTENS_CARD_COPIES_PER_DECK[type] * deckCount,
+  }))
+}
+
 export const EXPLODING_KITTENS_PHASES = ['turn', 'nope', 'favor', 'defuse', 'finished'] as const
 export type ExplodingKittensPhase = (typeof EXPLODING_KITTENS_PHASES)[number]
 
@@ -97,8 +133,6 @@ export interface ExplodingKittensView {
   seats: ExplodingKittensSeat[]
   currentPlayerId: string | null
   turnsLeft: number
-  drawPileCount: number
-  drawPileCounts: ExplodingKittensCardTypeCount[]
   discard: ExplodingKittensCardType[]
   turnPlays: ExplodingKittensPlay[]
   lastTurnPlays: ExplodingKittensPlay[]
@@ -159,41 +193,6 @@ function isStringList(value: unknown, max: number): value is string[] {
 
 export function isExplodingKittensCardType(value: unknown): value is ExplodingKittensCardType {
   return isOneOf(EXPLODING_KITTENS_CARD_TYPES, value)
-}
-
-function isExplodingKittensCardTypeCount(
-  value: unknown,
-): value is ExplodingKittensCardTypeCount {
-  return (
-    isRecord(value) &&
-    isExplodingKittensCardType(value.type) &&
-    isCount(value.count, EXPLODING_KITTENS_MAX_CARDS) &&
-    Number(value.count) > 0
-  )
-}
-
-function isExplodingKittensCardTypeCountList(
-  value: unknown,
-  expectedTotal: unknown,
-): value is ExplodingKittensCardTypeCount[] {
-  if (
-    !Array.isArray(value) ||
-    value.length > EXPLODING_KITTENS_CARD_TYPES.length ||
-    !isCount(expectedTotal, EXPLODING_KITTENS_MAX_CARDS)
-  ) {
-    return false
-  }
-
-  const types = new Set<ExplodingKittensCardType>()
-  let total = 0
-  for (const entry of value) {
-    if (!isExplodingKittensCardTypeCount(entry) || types.has(entry.type)) {
-      return false
-    }
-    types.add(entry.type)
-    total += entry.count
-  }
-  return total === Number(expectedTotal)
 }
 
 export function canPlayExplodingKittensAlone(type: ExplodingKittensCardType): boolean {
@@ -290,7 +289,6 @@ export function isExplodingKittensView(value: unknown): value is ExplodingKitten
     isOptionalSeat(value.currentPlayerId) &&
     isOptionalSeat(value.winnerId) &&
     isCount(value.turnsLeft, 2) &&
-    isExplodingKittensCardTypeCountList(value.drawPileCounts, value.drawPileCount) &&
     isCardTypeList(value.discard, EXPLODING_KITTENS_MAX_CARDS) &&
     Array.isArray(value.turnPlays) &&
     value.turnPlays.every((play) => isExplodingKittensPlay(play, isSeat)) &&

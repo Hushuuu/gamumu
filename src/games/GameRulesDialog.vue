@@ -17,6 +17,12 @@ import { gameAssetUrl } from './gameAssets'
 interface RuleSection {
   title: string
   items: string[]
+  cards?: RuleCard[]
+}
+
+interface RuleCard {
+  name: string
+  effect: string
 }
 
 interface RuleImage {
@@ -137,26 +143,56 @@ const content = computed<RulesContent>(() => {
         description: '避開爆炸貓、適時使用拆除牌，成為最後存活的玩家。',
         sections: [
           {
-            title: '開局與勝利',
+            title: '回合與勝利',
             items: [
               '每位玩家取得 7 張手牌及 1 張拆除牌；牌堆加入比玩家數少 1 張的爆炸貓。',
               '2–5 人使用一副牌；6–9 人使用兩副牌。最後存活的玩家獲勝。',
+              '輪到你時，可打出任意張可用手牌；抽一張牌便結束本回合。',
             ],
           },
           {
-            title: '回合與卡牌',
-            items: [
-              '輪到你時可出任意張可用的手牌；結束回合時抽一張牌。',
-              '攻擊讓下一位玩家連續進行兩回合；跳過結束一回合，受到攻擊時每張跳過只抵一回合。',
-              '恩惠由目標選擇交出的手牌；洗混會重新洗牌堆；預見未來私下查看牌堆頂三張。',
-              '出牌者不需回覆；其餘存活玩家無論有無休想卡都會收到彈窗。有休想卡可打出或跳過，無卡者確認即可；全員回覆後立即結算，逾時亦會結算。休想可反制另一張休想，每次反制都會重新倒數；奇數張取消原效果、偶數張仍生效。爆炸貓與拆除不受休想影響。',
+            title: '生存與反制牌',
+            items: [],
+            cards: [
+              { name: '爆炸貓', effect: '抽到時立刻觸發爆炸；若沒有拆除牌，就會淘汰。' },
+              { name: '拆除', effect: '抽到爆炸貓時使用，避免淘汰，並把爆炸貓放回牌堆指定位置或隨機位置。' },
+              { name: '休想', effect: '取消一般卡牌或連擊效果；不能取消爆炸貓與拆除。休想也能反制另一張休想。' },
             ],
           },
           {
-            title: '爆炸貓與特殊連擊',
+            title: '行動牌',
+            items: [],
+            cards: [
+              { name: '攻擊', effect: '結束自己的回合，讓下一位玩家連續進行兩個回合。' },
+              { name: '跳過', effect: '立即結束自己的回合；受到攻擊時，每張跳過只抵銷一個回合。' },
+              { name: '恩惠', effect: '指定一位玩家，由對方選一張手牌交給你。' },
+              { name: '洗混', effect: '重新洗混抽牌堆。' },
+              { name: '預見未來', effect: '私下查看抽牌堆頂端三張牌。' },
+            ],
+          },
+          {
+            title: '貓咪牌',
+            items: [],
+            cards: [
+              { name: '布丁貓', effect: '單張沒有特殊效果，可與其他可組合牌一起打出連擊。' },
+              { name: '芋頭貓', effect: '單張沒有特殊效果，可與其他可組合牌一起打出連擊。' },
+              { name: '抹茶貓', effect: '單張沒有特殊效果，可與其他可組合牌一起打出連擊。' },
+              { name: '蜜桃貓', effect: '單張沒有特殊效果，可與其他可組合牌一起打出連擊。' },
+              { name: '麻糬貓', effect: '單張沒有特殊效果，可與其他可組合牌一起打出連擊。' },
+            ],
+          },
+          {
+            title: '特殊連擊',
             items: [
-              '抽到爆炸貓時必須使用拆除牌，並將爆炸貓放回牌堆指定位置或隨機位置；沒有拆除牌便會淘汰。',
-              '兩張相同可隨機偷一張手牌；三張相同可指定牌名索取；五張不同可從棄牌區取回一張指定牌。',
+              '兩張相同：隨機取得目標玩家一張手牌；三張相同：指定牌名向目標索取，對方沒有該牌時效果無效。',
+              '五張不同：從棄牌區取回一張指定牌。連擊可使用除爆炸貓與拆除外的牌種，不限貓咪牌。',
+            ],
+          },
+          {
+            title: '休想判定',
+            items: [
+              '出牌者以外的存活玩家都要回覆：有休想卡可打出或跳過，沒有的人確認即可。全員回覆後立即結算，逾時也會自動處理。',
+              '每次打出休想都會重新倒數；奇數張休想會取消原效果，偶數張則讓原效果生效。',
             ],
           },
           {
@@ -400,9 +436,20 @@ onUnmounted(() => {
           <p class="game-rules-description">{{ content.description }}</p>
           <section v-for="section in content.sections" :key="section.title" class="game-rules-section">
             <h3>{{ section.title }}</h3>
-            <ul>
+            <ul v-if="section.items.length">
               <li v-for="(item, index) in section.items" :key="index">{{ item }}</li>
             </ul>
+            <div v-if="section.cards?.length" class="game-rules-cards" role="list">
+              <article
+                v-for="card in section.cards"
+                :key="card.name"
+                class="game-rules-card"
+                role="listitem"
+              >
+                <h4>{{ card.name }}</h4>
+                <p>{{ card.effect }}</p>
+              </article>
+            </div>
           </section>
           <div v-if="content.images.length" class="game-rules-images" role="group" aria-label="規則插圖">
             <img
@@ -509,6 +556,33 @@ onUnmounted(() => {
   padding-left: 20px;
   color: #55516b;
   font-size: 11px;
+  line-height: 1.6;
+}
+
+.game-rules-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 8px;
+}
+
+.game-rules-card {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid #eceaf3;
+  border-radius: 12px;
+  background: #fbfaff;
+}
+
+.game-rules-card h4 {
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.game-rules-card p {
+  margin: 0;
+  color: #55516b;
+  font-size: 10px;
   line-height: 1.6;
 }
 

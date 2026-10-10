@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   EXPLODING_KITTENS_PRIVATE_EVENT,
+  getExplodingKittensStartingCardCounts,
   isExplodingKittensPrivateState,
   type ExplodingKittensCardType,
   type ExplodingKittensPrivateState,
@@ -115,6 +116,12 @@ const possibleTargets = computed(() => {
   return game.value ? targetCandidates(game.value.seats, props.playerId) : []
 })
 const discardTypes = computed(() => countCardTypes(game.value?.discard ?? []))
+const gameCardCounts = computed(() => {
+  return game.value ? getExplodingKittensStartingCardCounts(game.value.startingPlayerCount) : []
+})
+const gameCardTotal = computed(() => {
+  return gameCardCounts.value.reduce((total, entry) => total + entry.count, 0)
+})
 const namedOptions = computed(() => {
   const kind = playAnalysis.value.kind
   if (kind !== 'five') {
@@ -503,7 +510,7 @@ function placeDefuse(): void {
             打出所選牌
           </button>
           <button class="button button-secondary" type="button" :disabled="!canTakeTurn" @click="drawCard">
-            抽牌並結束回合（牌堆 {{ game.drawPileCount }} 張）
+            抽牌並結束回合
           </button>
         </div>
       </div>
@@ -512,17 +519,18 @@ function placeDefuse(): void {
     <section class="ek-card-counts-panel" aria-labelledby="ek-card-counts-heading">
       <div class="ek-section-heading">
         <div>
-          <p class="eyebrow">抽牌堆剩餘</p>
-          <h3 id="ek-card-counts-heading">牌種數量 <span>({{ game.drawPileCount }} 張)</span></h3>
+          <p class="eyebrow">本局起始牌組</p>
+          <h3 id="ek-card-counts-heading">牌組組成 <span>（共 {{ gameCardTotal }} 張）</span></h3>
         </div>
       </div>
-      <div v-if="game.drawPileCounts.length" class="ek-card-counts" aria-label="抽牌堆各牌種與數量">
-        <span v-for="entry in game.drawPileCounts" :key="entry.type" class="ek-card-count">
+      <p class="ek-empty-copy">依玩家人數計算，包含起始牌與抽牌堆；數量不隨抽牌變動。</p>
+      <div v-if="gameCardCounts.length" class="ek-card-counts" aria-label="本局牌組各牌種與總數">
+        <span v-for="entry in gameCardCounts" :key="entry.type" class="ek-card-count">
           {{ cardName(entry.type) }}
           <strong>× {{ entry.count }}</strong>
         </span>
       </div>
-      <p v-else class="ek-empty-copy">抽牌堆已空。</p>
+      <p v-else class="ek-empty-copy">目前沒有牌組資訊。</p>
     </section>
 
     <section class="ek-announcements" aria-label="遊戲近況">
