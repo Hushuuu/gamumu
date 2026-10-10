@@ -973,6 +973,8 @@ function placeDefuse(): void {
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 104px), 1fr));
   gap: 8px;
   padding: 4px 2px 10px;
+  max-height: min(45dvh, 400px);
+  overflow-y: auto;
 }
 
 .ek-hand-card {
@@ -1220,6 +1222,29 @@ function placeDefuse(): void {
 
   .ek-seats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ek-hand {
+    grid-template-columns: repeat(auto-fill, minmax(68px, 80px));
+    justify-content: start;
+    gap: 6px;
+    max-height: min(35dvh, 280px);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  .ek-hand-card {
+    max-height: 132px;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .ek-hand-card img {
+    max-height: 102px;
+  }
+
+  .ek-hand-card span {
+    font-size: 9px;
   }
 
   .ek-section-heading {
