@@ -573,7 +573,7 @@ function placeDefuse(): void {
     </section>
 
     <section class="ek-announcements" aria-label="遊戲近況">
-      <h3>最新公告</h3>
+      <h3>最近出牌</h3>
       <ol>
         <li v-for="(announcement, index) in [...game.announcements].reverse()" :key="`${index}-${announcement}`">
           {{ announcement }}

@@ -23,6 +23,22 @@
   color: var(--ink);
 }
 
+:root[data-theme='dark'] .ek-hand-card {
+  color: #302b43;
+}
+
+:root[data-theme='dark'] .ek-hand-card.is-selected {
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .ek-announcements h3 {
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .ek-announcements ol {
+  color: var(--ink-soft);
+}
+
 :root[data-theme='dark'] .field-label,
 :root[data-theme='dark'] .draw-settings-form label {
   color: var(--ink-soft);
@@ -31,6 +47,8 @@
 :root[data-theme='dark'] .text-input,
 :root[data-theme='dark'] .draw-settings-form input,
 :root[data-theme='dark'] .draw-settings-form select,
+:root[data-theme='dark'] .ek-inline-field select,
+:root[data-theme='dark'] .ek-defuse-controls select,
 :root[data-theme='dark'] .dev-role-selection select {
   border-color: var(--line);
   background: var(--surface-soft);
@@ -43,7 +61,9 @@
 
 :root[data-theme='dark'] .text-input:disabled,
 :root[data-theme='dark'] .draw-settings-form input:disabled,
-:root[data-theme='dark'] .draw-settings-form select:disabled {
+:root[data-theme='dark'] .draw-settings-form select:disabled,
+:root[data-theme='dark'] .ek-inline-field select:disabled,
+:root[data-theme='dark'] .ek-defuse-controls select:disabled {
   background: var(--surface-muted);
   color: var(--muted);
 }
